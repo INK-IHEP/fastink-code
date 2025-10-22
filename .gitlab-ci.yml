@@ -1,0 +1,30 @@
+stages:
+  - trigger
+
+trigger_dev:
+  stage: trigger
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+  trigger:
+    project: INK/fastink-dev
+    branch: main
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  variables:
+    TARGET_JOB: "deploy-dev-job"
+
+trigger_prod:
+  stage: trigger
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+  trigger:
+    project: INK/fastink-dev
+    branch: main
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  variables:
+    TARGET_JOB: "deploy-prod-job"
