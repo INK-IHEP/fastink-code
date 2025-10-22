@@ -103,7 +103,7 @@ class HTC_Scheduler(SchedulerBase):
 
     def _generate_condor_query_command(self, job_type: str) -> str:
         
-        BASE_CMD = f"condor_q {quote(self.USERNAME)} -name {quote(self.SCHEDD_HOST)} -limit 1"
+        BASE_CMD = f"condor_q {quote(self.USERNAME)} -name {quote(self.SCHEDD_HOST)} "
         BASE_ATTRS = [
             "Owner", "ClusterId", "ProcId", "HepJob_RealGroup", "Qdate",
             "JobStatus", "JobStartDate", "RemoteHost", "HepJob_JobType", "HepJob_RequestOS"
