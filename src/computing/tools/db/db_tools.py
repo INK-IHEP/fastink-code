@@ -157,6 +157,9 @@ def update_job_status(uid, jobid, job_status, clusterid):
 def update_connect_status(uid, jobid, connect_sign, clusterid):
     return update_jobinfo_db(uid, jobid, clusterid, 'connect_sign', connect_sign) 
 
+def update_start_time(uid, jobid, starttime, clusterid):
+    return update_jobinfo_db(uid, jobid, clusterid, 'job_start_time', starttime) 
+
 @read_session
 def find_completed_jobs(uid, jobtype, *, session:Session):
     
@@ -177,6 +180,53 @@ def find_completed_jobs(uid, jobtype, *, session:Session):
         results = session.execute(stmt).scalars()
     except Exception as e:
         raise Exception(f"ERR : {e} in find completed jobs for for user({uid})")
+    
+    for result in results:
+        job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]
+        
+    return job_list
+
+
+@read_session
+def find_completed_jobs(uid, jobtype, *, session:Session):
+    
+    job_list = {}
+    stmt = select(models.JobInfo)
+
+    if uid:
+        stmt = stmt.where(models.JobInfo.uid == uid)
+    if jobtype:
+        if jobtype == 'all':
+            stmt = stmt.where(models.JobInfo.clusterid == 'htcondor')
+        else:
+            stmt = stmt.where(models.JobInfo.job_type == jobtype)
+
+    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "CANCELED"]))
+    
+    try:
+        results = session.execute(stmt).scalars()
+    except Exception as e:
+        raise Exception(f"ERR : {e} in find completed jobs for for user({uid})")
+    
+    for result in results:
+        job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]
+        
+    return job_list
+
+
+@read_session
+def needto_change_status_jobs(*, session:Session):
+    
+    job_list = {}
+    stmt = select(models.JobInfo)
+    stmt = stmt.where(models.JobInfo.clusterid == 'htcondor')
+
+    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "CANCELED"]))
+    
+    try:
+        results = session.execute(stmt).scalars()
+    except Exception as e:
+        raise Exception(f"ERR : {e} in change_status_job func.")
     
     for result in results:
         job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]

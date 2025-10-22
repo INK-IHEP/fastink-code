@@ -248,8 +248,10 @@ class HTC_Scheduler(SchedulerBase):
         command = self._generate_condor_query_command(job_type)
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.info(f"Get user({self.USERNAME}) cluster jobs: {stdout}")
-        
+
         lines = stdout.decode().strip().split('\n')
+        logger.info(f"Query result: {lines}")
+
         if lines != ['']:
             for line in lines:
                 job_param_list = line.split()
@@ -302,6 +304,7 @@ class HTC_Scheduler(SchedulerBase):
                                 except:
                                     connect_sign = "False"
                             update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
+                            update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
                             
                 elif job_param_list[5] == '4':
                     job_status = "COMPLETED"
