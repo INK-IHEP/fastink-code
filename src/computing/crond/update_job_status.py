@@ -63,6 +63,9 @@ async def update_completed_jobs():
                 "Query user jobs failed.", "Query user jobs timeout."
             )
             lines = stdout.decode().strip().splitlines()
+            logger.info(f"The history query results: {lines}")
+
+
             date, time_, job_type, job_user = lines[0].split()
             job_end_time = f"{date} {time_}"    
             # 你自己的映射
