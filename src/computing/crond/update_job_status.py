@@ -78,9 +78,10 @@ async def update_completed_jobs():
                     logger.info(f"The history result: {history_job_lines}")
 
                     if history_job_lines != [""]:
-                        job_end_time = f"{history_job_lines[0][0]} {history_job_lines[0][1]}" 
-                        job_type = history_job_lines[0][2]
-                        job_user = history_job_lines[0][3]
+                        job_param_list = history_job_lines[0].split()
+                        job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+                        job_type = job_param_list[2]
+                        job_user = job_param_list[3]
                         job_uid = change_username_to_uid(job_user)
                         logger.info(f"The job_end_time: {job_end_time}, jobType: {job_type}, job_user: {job_user}")
 
