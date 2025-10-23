@@ -242,14 +242,12 @@ class HTC_Scheduler(SchedulerBase):
         
     async def query_job(self, job_type):
         job_list = []
-        #user_completed_jobs = find_completed_jobs(self.UID, job_type)
-        #logger.info(f"{self.USERNAME} need to be completed jobs: {user_completed_jobs}")
+        iptables_jobtype = get_config("computing", "iptables_jobtype")
         
         command = self._generate_condor_query_command(job_type)
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.info(f"Get user({self.USERNAME}) cluster jobs: {stdout}")
         lines = stdout.decode().strip().split('\n')
-        #logger.info(f"Query result: {lines}")
 
         if lines != ['']:
             for line in lines:
@@ -262,9 +260,6 @@ class HTC_Scheduler(SchedulerBase):
                 job_remote_host = " "
                 hold_reason = ""
                 job_requestos = job_param_list[9]
-            
-                #if job_clusterid in user_completed_jobs.keys():
-                #    del user_completed_jobs[job_clusterid]
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -297,7 +292,7 @@ class HTC_Scheduler(SchedulerBase):
                             "Elapsed time" in output_content
                         ):
                             connect_sign = "True"
-                            if HepJob_JobType == "enode" or HepJob_JobType == "compile":
+                            if HepJob_JobType in iptables_jobtype:
                                 try:
                                     create_iptables(self.UID, job_clusterid, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
                                 except:
