@@ -77,20 +77,21 @@ async def update_completed_jobs():
                     history_job_lines = stdout.decode().strip().split('\n')
                     logger.info(f"The history result: {history_job_lines}")
 
-                    job_end_time = f"{history_job_lines[0][0]} {history_job_lines[0][1]}" 
-                    job_type = history_job_lines[0][2]
-                    job_user = history_job_lines[0][3]
-                    job_uid = change_username_to_uid(job_user)
-                    logger.info(f"The job_end_time: {job_end_time}, jobType: {job_type}, job_user: {job_user}")
+                    if history_job_lines != [""]:
+                        job_end_time = f"{history_job_lines[0][0]} {history_job_lines[0][1]}" 
+                        job_type = history_job_lines[0][2]
+                        job_user = history_job_lines[0][3]
+                        job_uid = change_username_to_uid(job_user)
+                        logger.info(f"The job_end_time: {job_end_time}, jobType: {job_type}, job_user: {job_user}")
 
-                    if job_type in iptables_jobtype:
-                        gateway_port = need_change_status_jobs[key][1]
-                        sshd_job_iptables_clean = need_change_status_jobs[key][2]
-                        if gateway_port != 0 and sshd_job_iptables_clean == 0:
-                            delete_iptables(job_uid, key, gateway_port, "htcondor")
-                    update_job_status(job_uid, key, 'COMPLETED', "htcondor")
-                    update_end_time(job_uid, key, job_end_time, "htcondor")
-                    logger.info(f"Update job {key} status to COMPLETED.")
+                        if job_type in iptables_jobtype:
+                            gateway_port = need_change_status_jobs[key][1]
+                            sshd_job_iptables_clean = need_change_status_jobs[key][2]
+                            if gateway_port != 0 and sshd_job_iptables_clean == 0:
+                                delete_iptables(job_uid, key, gateway_port, "htcondor")
+                        update_job_status(job_uid, key, 'COMPLETED', "htcondor")
+                        update_end_time(job_uid, key, job_end_time, "htcondor")
+                        logger.info(f"Update job {key} status to COMPLETED.")
     except Timeout:
         # 拿不到锁就直接跳过，避免把事件循环卡住
         logger.info("update_completed_jobs: lock busy, skip this tick")
