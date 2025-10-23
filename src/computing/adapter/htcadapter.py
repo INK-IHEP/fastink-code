@@ -331,8 +331,6 @@ class HTC_Scheduler(SchedulerBase):
                     "hold_reason": hold_reason
                 })
 
-        #self._change_completed_jobs_status(user_completed_jobs)
-
         return job_list
 
     
