@@ -42,6 +42,9 @@ def get_condor_history_command(job_id: str) -> str:
     ]
     attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
     command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
+
+    logger.info(f"The history command: {command}")
+
     return command
 
 
@@ -72,7 +75,7 @@ async def update_completed_jobs():
                     query_history_command = get_condor_history_command(key)
                     stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
                     history_job_lines = stdout.decode().strip().split('\n')
-                    logger.info(f"The history command result: {history_job_lines}")
+                    logger.info(f"The history result: {history_job_lines}")
 
                     job_end_time = f"{history_job_lines[0][0]} {history_job_lines[0][1]}" 
                     job_type = history_job_lines[0][2]
