@@ -1,4 +1,3 @@
-import datetime
 from shlex import quote
 from fastapi import FastAPI
 from filelock import FileLock
@@ -90,3 +89,11 @@ async def update_completed_jobs():
                 update_job_status(job_uid, key, 'COMPLETED', "htcondor")
                 update_end_time(job_uid, key, job_end_time, "htcondor")
                 logger.info(f"Update job {key} status to COMPLETED.")
+
+
+
+
+@app.on_event("startup")
+@repeat_every(seconds=10)
+async def test_task():
+    logger.info("测试任务正在运行")

@@ -248,9 +248,8 @@ class HTC_Scheduler(SchedulerBase):
         command = self._generate_condor_query_command(job_type)
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.info(f"Get user({self.USERNAME}) cluster jobs: {stdout}")
-
         lines = stdout.decode().strip().split('\n')
-        logger.info(f"Query result: {lines}")
+        #logger.info(f"Query result: {lines}")
 
         if lines != ['']:
             for line in lines:
