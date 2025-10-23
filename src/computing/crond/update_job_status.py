@@ -31,7 +31,7 @@ def query_cluster_jobs():
 
     return command
 
-async def get_condor_history_command(job_id: str) -> str:
+def get_condor_history_command(job_id: str) -> str:
 
     SCHEDD_HOST = get_config("computing", "schedd_host")
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 1"
