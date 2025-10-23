@@ -39,6 +39,7 @@ setup(
         "sqlalchemy",
         "ujson",
         "uvicorn",
-        "websockets"
+        "websockets",
+        "filelock"
     ],
 )
