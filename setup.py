@@ -40,6 +40,7 @@ setup(
         "ujson",
         "uvicorn",
         "websockets",
-        "filelock"
+        "filelock",
+        "fastapi_utils"
     ],
 )
