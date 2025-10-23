@@ -50,7 +50,7 @@ def get_condor_history_command(job_id: str) -> str:
 
 LOCK_PATH = Path("src") / "computing" / "crond" / "lockfile"
 @router.on_event("startup")
-@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=300, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH), timeout=0.1)  
     try:
@@ -68,7 +68,6 @@ async def update_completed_jobs():
                 
                     if job_clusterid in need_change_status_jobs.keys():
                         del need_change_status_jobs[job_clusterid]
-
 
             if need_change_status_jobs:
                 for key in need_change_status_jobs:
@@ -94,14 +93,6 @@ async def update_completed_jobs():
                         update_end_time(job_uid, key, job_end_time, "htcondor")
                         logger.info(f"Update job {key} status to COMPLETED.")
     except Timeout:
-        # 拿不到锁就直接跳过，避免把事件循环卡住
         logger.info("update_completed_jobs: lock busy, skip this tick")
     except Exception:
-        # raise_exceptions=False + 打完整堆栈，不影响服务继续跑
         logger.exception("update_completed_jobs: failed")
-
-
-@router.on_event("startup")
-@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
-async def test_task():
-    logger.info("测试任务正在运行")
