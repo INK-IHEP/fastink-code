@@ -39,6 +39,9 @@ setup(
         "sqlalchemy",
         "ujson",
         "uvicorn",
-        "websockets"
+        "websockets",
+        "filelock",
+        "fastapi_utils",
+        "typing-inspect"
     ],
 )

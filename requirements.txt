@@ -21,3 +21,4 @@ sqlalchemy
 ujson
 uvicorn
 websockets
+filelock
