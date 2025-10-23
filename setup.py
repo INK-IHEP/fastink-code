@@ -41,6 +41,7 @@ setup(
         "uvicorn",
         "websockets",
         "filelock",
-        "fastapi_utils"
+        "fastapi_utils",
+        "typing-inspect"
     ],
 )
