@@ -1,5 +1,5 @@
 from shlex import quote
-from fastapi import FastAPI
+from fastapi import APIRouter
 from filelock import FileLock
 from src.common.logger import logger
 from src.common.config import get_config
@@ -8,7 +8,7 @@ from src.computing.tools.db.db_tools import needto_change_status_jobs
 from src.computing.tools.db.db_tools import update_end_time, update_job_status
 from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
 
-app = FastAPI()
+router = APIRouter()
 
 def query_cluster_jobs():
 
@@ -49,8 +49,8 @@ async def get_condor_history_command(job_id: str) -> str:
 
 
 
-@app.on_event("startup")
-@repeat_every(seconds=60)
+@router.on_event("startup")
+@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     with FileLock("src\computing\crond\lockfile"):
         iptables_jobtype = get_config("computing", "iptables_jobtype")
@@ -93,7 +93,7 @@ async def update_completed_jobs():
 
 
 
-@app.on_event("startup")
-@repeat_every(seconds=10)
+@router.on_event("startup")
+@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
 async def test_task():
     logger.info("测试任务正在运行")

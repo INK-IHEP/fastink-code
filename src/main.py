@@ -45,6 +45,9 @@ app.include_router(service_manager_v2.router, prefix="/api/v2")
 app.include_router(elk_onlinemon_router.router, prefix="/api/v2")
 app.include_router(share_manager_v2.router, prefix="/api/v2")
 
+from src.computing.crond.update_job_status import router as computing_crond_router
+app.include_router(computing_crond_router)
+
 
 # 参数验证失败，自定义错误响应
 @app.exception_handler(RequestValidationError)
