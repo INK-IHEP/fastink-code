@@ -350,10 +350,13 @@ class HTC_Scheduler(SchedulerBase):
         job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
 
         iptables_jobtype = get_config("computing", "iptables_jobtype")
-        
+
         if job_type in iptables_jobtype:
             if job_iptables_status != 0 and job_iptables_clean == 0:
                 delete_iptables(self.UID, job_id, job_iptables_status, self.CLUSTER_TYPE)
         update_job_status(self.UID, job_id, 'COMPLETED', self.CLUSTER_TYPE)
+
+        job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        update_end_time(self.UID, job_id, job_end_time, "htcondor")
         
         
