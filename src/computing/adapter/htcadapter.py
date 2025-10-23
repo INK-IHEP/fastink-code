@@ -242,8 +242,8 @@ class HTC_Scheduler(SchedulerBase):
         
     async def query_job(self, job_type):
         job_list = []
-        user_completed_jobs = find_completed_jobs(self.UID, job_type)
-        logger.info(f"{self.USERNAME} need to be completed jobs: {user_completed_jobs}")
+        #user_completed_jobs = find_completed_jobs(self.UID, job_type)
+        #logger.info(f"{self.USERNAME} need to be completed jobs: {user_completed_jobs}")
         
         command = self._generate_condor_query_command(job_type)
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
@@ -264,8 +264,8 @@ class HTC_Scheduler(SchedulerBase):
                 hold_reason = ""
                 job_requestos = job_param_list[9]
             
-                if job_clusterid in user_completed_jobs.keys():
-                    del user_completed_jobs[job_clusterid]
+                #if job_clusterid in user_completed_jobs.keys():
+                #    del user_completed_jobs[job_clusterid]
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -337,7 +337,7 @@ class HTC_Scheduler(SchedulerBase):
                     "hold_reason": hold_reason
                 })
 
-        self._change_completed_jobs_status(user_completed_jobs)
+        #self._change_completed_jobs_status(user_completed_jobs)
 
         return job_list
 

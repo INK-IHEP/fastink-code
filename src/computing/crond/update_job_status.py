@@ -5,8 +5,9 @@ from filelock import FileLock
 from src.common.logger import logger
 from src.common.config import get_config
 from fastapi_utils.tasks import repeat_every
-from src.computing.tools.common.utils import sub_command
 from src.computing.tools.db.db_tools import needto_change_status_jobs
+from src.computing.tools.db.db_tools import update_end_time, update_job_status
+from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
 
 app = FastAPI()
 
@@ -35,7 +36,8 @@ async def get_condor_history_command(job_id: str) -> str:
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 1"
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
-        "HepJob_JobType"
+        "HepJob_JobType",
+        "Owner"
     ]
     
     command = (
@@ -48,40 +50,43 @@ async def get_condor_history_command(job_id: str) -> str:
 
 
 
-# @app.on_event("startup")
-# @repeat_every(seconds=1800)
-# async def update_completed_jobs():
-#     with FileLock("src\computing\crond\lockfile"):
-#         need_change_status_jobs = needto_change_status_jobs()
-#         query_command = query_cluster_jobs()
-#         stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
-#         lines = stdout.decode().strip().split('\n')
+@app.on_event("startup")
+@repeat_every(seconds=1800)
+async def update_completed_jobs():
+    with FileLock("src\computing\crond\lockfile"):
+        iptables_jobtype = get_config("computing", "iptables_jobtype")
+        need_change_status_jobs = needto_change_status_jobs()
+        query_command = query_cluster_jobs()
+        stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
+        lines = stdout.decode().strip().split('\n')
         
-#         if lines != ['']:
-#             for line in lines:
-#                 job_param_list = line.split()
-#                 job_clusterid = int(job_param_list[1])
+        if lines != ['']:
+            for line in lines:
+                job_param_list = line.split()
+                job_clusterid = int(job_param_list[1])
             
-#                 if job_clusterid in need_change_status_jobs.keys():
-#                     del need_change_status_jobs[job_clusterid]
+                if job_clusterid in need_change_status_jobs.keys():
+                    del need_change_status_jobs[job_clusterid]
 
 
-#         if need_change_status_jobs:
-#             for key in need_change_status_jobs:
-#                 query_history_command = get_condor_history_command(key)
-#                 stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
-#                 history_job_lines = stdout.decode().strip().split('\n')
-#                 logger.info(f"The history command result: {history_job_lines}")
+        if need_change_status_jobs:
+            for key in need_change_status_jobs:
+                query_history_command = get_condor_history_command(key)
+                stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
+                history_job_lines = stdout.decode().strip().split('\n')
+                logger.info(f"The history command result: {history_job_lines}")
 
-#                 if history_job_lines != ['']:
-                    
-                
+                job_end_time = history_job_lines[0][0]
+                job_type = history_job_lines[0][1]
+                job_user = history_job_lines[0][2]
+                job_uid = change_username_to_uid(job_user)
+                logger.info(f"The job_end_time: {job_end_time}, jobType: {job_type}, job_user: {job_user}")
 
-#                 complete_job_type = user_completed_jobs[key][0]
-#                 if complete_job_type == "enode" or complete_job_type == "compile":
-#                     gateway_port = user_completed_jobs[key][1]
-#                     sshd_job_iptables_clean = user_completed_jobs[key][2]
-#                     if gateway_port != 0 and sshd_job_iptables_clean == 0:
-#                         _ = delete_iptables(self.UID, key, gateway_port, self.CLUSTER_TYPE)
-#                 update_job_status(self.UID, key, 'COMPLETED', self.CLUSTER_TYPE)
-#                 logger.info(f"Update job {key} status to COMPLETED.")
+                if job_type in iptables_jobtype:
+                    gateway_port = need_change_status_jobs[key][1]
+                    sshd_job_iptables_clean = need_change_status_jobs[key][2]
+                    if gateway_port != 0 and sshd_job_iptables_clean == 0:
+                        delete_iptables(job_uid, key, gateway_port, "htcondor")
+                update_job_status(job_uid, key, 'COMPLETED', "htcondor")
+                update_end_time(job_uid, key, job_end_time, "htcondor")
+                logger.info(f"Update job {key} status to COMPLETED.")

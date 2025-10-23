@@ -160,6 +160,9 @@ def update_connect_status(uid, jobid, connect_sign, clusterid):
 def update_start_time(uid, jobid, starttime, clusterid):
     return update_jobinfo_db(uid, jobid, clusterid, 'job_start_time', starttime) 
 
+def update_end_time(uid, jobid, endtime, clusterid):
+    return update_jobinfo_db(uid, jobid, clusterid, 'job_end_time', endtime) 
+
 @read_session
 def find_completed_jobs(uid, jobtype, *, session:Session):
     
