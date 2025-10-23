@@ -31,22 +31,17 @@ def query_cluster_jobs():
 
     return command
 
-def get_condor_history_command(job_id: str) -> str:
 
+def get_condor_history_command(job_id: str) -> str:
     SCHEDD_HOST = get_config("computing", "schedd_host")
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 1"
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
         "HepJob_JobType",
-        "Owner"
+        "Owner",
     ]
-    
-    command = (
-        f"{BASE_CMD} "
-        f"{job_id} "
-        f"-af {' '.join(ATTRS)}"
-    )
-
+    attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
+    command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
     return command
 
 
