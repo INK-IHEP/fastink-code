@@ -63,13 +63,10 @@ async def update_completed_jobs():
                 "Query user jobs failed.", "Query user jobs timeout."
             )
             lines = stdout.decode().strip().splitlines()
-
-            if lines and lines != ['']:
-                for line in lines:
-                    parts = line.split()
-                    if len(parts) >= 2:
-                        job_clusterid = int(parts[1])
-                        need_change_status_jobs.pop(job_clusterid, None)
+            date, time_, job_type, job_user = lines.split()
+            job_end_time = f"{date} {time_}"    
+            # 你自己的映射
+            job_uid = change_username_to_uid(job_user)
 
             if need_change_status_jobs:
                 for key, v in need_change_status_jobs.items():
@@ -91,6 +88,10 @@ async def update_completed_jobs():
                         continue
 
                     job_end_time, job_type, job_user = cols[0], cols[1], cols[2]
+
+
+
+
                     job_uid = change_username_to_uid(job_user)
 
                     if job_type in iptables_jobtype:
