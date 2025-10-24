@@ -74,7 +74,7 @@ def _generate_tgt(username: str, password: str, ccachefile: str) -> bool:
                 logger.error(logs)
                 raise ValueError(logs)
             elif index == 2:
-                logs = f"AFS account for {username} does not exist."
+                logs = f"AFS account for {username} is expired."
                 logger.error(logs)
                 raise ValueError(logs)
             elif index == 3:
