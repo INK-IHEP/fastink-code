@@ -27,17 +27,28 @@ def _jobtypes_from_config() -> List[str]:
 
 async def get_job_stack_data() -> Optional[Tuple[Dict[str, Any], ...]]:
     r = redis_connect()
-
     jobtypes = _jobtypes_from_config()
     keys = [f"{jt}_list_new" for jt in jobtypes]
     #keys = ['jupyter_list','vscode_list','vnc_list','rootbrowse_list','enode_list','gpu_list', "npu_list"]
-    raw_vals = await r.mget(*keys)   
-    parsed = [_safe_json_load(raw, {}) for raw in raw_vals]
+    try:
+        raw_vals = await r.mget(*keys)   
+    finally:
+        r.aclose()
+    
+    result: Dict[str, Dict[str, int]] = {}
+    for jt, raw in zip(jobtypes, raw_vals):
+        result[jt] = _safe_json_load(raw, {})
 
-    if any(v == {} for v in parsed):
-        return None
+    # parsed = [_safe_json_load(raw, {}) for raw in raw_vals]
 
-    return tuple(parsed)
+    # if any(v == {} for v in parsed):
+    #     return None
+
+    # return tuple(parsed)
+
+    return result
+
+    
 
 
 async def get_cluster_stack_data(cluster_id: str, query_type: str) -> Optional[Any]:
