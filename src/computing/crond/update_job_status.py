@@ -6,7 +6,7 @@ from src.common.config import get_config
 from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.computing.tools.db.db_tools import needto_change_status_jobs
-from src.computing.tools.db.db_tools import update_end_time, update_job_status
+from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time
 from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
 
 
@@ -39,6 +39,7 @@ def get_condor_history_command(job_id: str) -> str:
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
         "HepJob_JobType",
         "Owner",
+        "JobStartDate"
     ]
     attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
     command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
@@ -81,8 +82,8 @@ async def update_completed_jobs():
                         job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
                         job_type = job_param_list[2]
                         job_user = job_param_list[3]
+                        job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
                         job_uid = change_username_to_uid(job_user)
-                        logger.info(f"The job_end_time: {job_end_time}, jobType: {job_type}, job_user: {job_user}")
 
                         if job_type in iptables_jobtype:
                             gateway_port = need_change_status_jobs[key][1]
@@ -90,9 +91,12 @@ async def update_completed_jobs():
                             if gateway_port != 0 and sshd_job_iptables_clean == 0:
                                 delete_iptables(job_uid, key, gateway_port, "htcondor")
                         update_job_status(job_uid, key, 'COMPLETED', "htcondor")
+                        update_start_time(job_uid, key, job_start_time, "htcondor")
                         update_end_time(job_uid, key, job_end_time, "htcondor")
                         logger.info(f"Update job {key} status to COMPLETED.")
+
     except Timeout:
         logger.info("update_completed_jobs: lock busy, skip this tick")
+    
     except Exception:
         logger.exception("update_completed_jobs: failed")
