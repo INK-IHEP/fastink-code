@@ -18,10 +18,13 @@ setup(
     python_requires=">=3.9",
     install_requires=[
         "async_timeout",
+        "concurrent-log-handler",
         "cryptography",
         "datetime",
         "elasticsearch==8.18.0",
         "fastapi",
+        "fastapi_utils",
+        "filelock",
         "htcondor",
         "httpx",
         "influxdb",
@@ -37,11 +40,9 @@ setup(
         "requests",
         "sh",
         "sqlalchemy",
+        "typing-inspect",
         "ujson",
         "uvicorn",
         "websockets",
-        "filelock",
-        "fastapi_utils",
-        "typing-inspect"
     ],
 )

@@ -1,6 +1,6 @@
 import logging
 from logging.config import dictConfig
-from logging.handlers import RotatingFileHandler
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 
 from src.common.config import get_config
 
@@ -17,7 +17,10 @@ def _setup_logger() -> logging.Logger:
         "disable_existing_loggers": False,
         "formatters": {
             "detailed": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s (line %(lineno)d): %(message)s",
+                "format": (
+                    "%(asctime)s - %(name)s - %(levelname)s - "
+                    "%(module)s.%(funcName)s (line %(lineno)d): %(message)s"
+                ),
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
         },
@@ -28,10 +31,12 @@ def _setup_logger() -> logging.Logger:
                 "stream": "ext://sys.stdout",
             },
             "file": {
-                "()": lambda: RotatingFileHandler(
-                    filename=log_path, maxBytes=100000000, backupCount=10
-                ),
+                "class": "concurrent_log_handler.ConcurrentRotatingFileHandler",
                 "formatter": "detailed",
+                "filename": log_path,
+                "maxBytes": 100_000_000,  # 100MB
+                "backupCount": 10,
+                "encoding": "utf-8",
             },
         },
         "loggers": {
@@ -42,11 +47,9 @@ def _setup_logger() -> logging.Logger:
             },
         },
     }
-    dictConfig(LOGGING_CONFIG)
-    logger = logging.getLogger("ink")
 
-    if len(logger.handlers) >= 2:
-        return logger
+    dictConfig(LOGGING_CONFIG)
+    return logging.getLogger("ink")
 
 
 logger = _setup_logger()
