@@ -4,7 +4,7 @@ from influxdb import InfluxDBClient
 from datetime import datetime, timedelta, date
 from src.inkdb.inkredis import *
 from src.common.logger import logger
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 
 
 def _safe_json_load(raw: str, default):
@@ -16,9 +16,21 @@ def _safe_json_load(raw: str, default):
         return default
 
 
+EXCLUDE_JOBTYPES = set()
+
+def _jobtypes_from_config() -> List[str]:
+    """按配置文件顺序返回 jobtype 列表。"""
+    cfg = get_config("jobtype")
+    jobtypes = [jt for jt in cfg.keys() if jt not in EXCLUDE_JOBTYPES]
+    return jobtypes
+
+
 async def get_job_stack_data() -> Optional[Tuple[Dict[str, Any], ...]]:
     r = redis_connect()
-    keys = ['jupyter_list','vscode_list','vnc_list','rootbrowse_list','enode_list','gpu_list', "npu_list"]
+
+    jobtypes = _jobtypes_from_config()
+    keys = [f"{jt}_list_new" for jt in jobtypes]
+    #keys = ['jupyter_list','vscode_list','vnc_list','rootbrowse_list','enode_list','gpu_list', "npu_list"]
     raw_vals = await r.mget(*keys)   
     parsed = [_safe_json_load(raw, {}) for raw in raw_vals]
 
