@@ -1,0 +1,84 @@
+stages:
+  - trigger
+  - release
+
+trigger_dev:
+  stage: trigger
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+  trigger:
+    project: INK/fastink-dev
+    branch: main
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  variables:
+    TARGET_JOB: "deploy-dev-job"
+
+trigger_prod:
+  stage: trigger
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+  trigger:
+    project: INK/fastink-dev
+    branch: main
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  variables:
+    TARGET_JOB: "deploy-prod-job"
+
+# -------------------------------
+# 仅当存在 Release（非普通 tag）时，同步 release 源码到 GitHub
+# -------------------------------
+sync_release_to_github:
+  stage: release
+  tags:
+    - fastink-test
+  rules:
+    # 只有打 tag 时才考虑运行
+    - if: $CI_COMMIT_TAG
+      when: always
+    - when: never
+  script:
+    - echo "=== Checking if tag '$CI_COMMIT_TAG' has a GitLab Release ==="
+    # 检查是否存在 release
+    - |
+      set -e
+      RELEASE_API_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}"
+      if ! curl -sSf -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" "$RELEASE_API_URL" > /dev/null 2>&1; then
+        echo "No release found for tag ${CI_COMMIT_TAG}. Skipping sync."
+        exit 0
+      fi
+      echo "✅ Release exists. Proceeding to download release archive..."
+    # 下载 release 源码
+    - |
+      WORKDIR=$(mktemp -d)
+      ARCHIVE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/archive?sha=${CI_COMMIT_TAG}"
+      curl -sL -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" "$ARCHIVE_URL" -o "$WORKDIR/release.tar.gz"
+      tar -xzf "$WORKDIR/release.tar.gz" -C "$WORKDIR" --strip-components=1
+    # 初始化 Git 并推送到 GitHub
+    - |
+      export http_proxy=${GITHUB_HTTP_PROXY}
+      export https_proxy=${GITHUB_HTTP_PROXY}
+      cd "$WORKDIR"
+      git init
+      git config user.name "gitlab-ci"
+      git config user.email "ci@${CI_SERVER_HOST}"
+      git checkout -b main || git checkout -b master || true
+      git add -A
+      git commit -m "Import release ${CI_COMMIT_TAG} from ${CI_PROJECT_PATH}"
+      git tag "${CI_COMMIT_TAG}"
+      GITHUB_REPO="https://oauth2:${GITHUB_TOKEN}@github.com/INK-IHEP/fastink-code.git"
+      echo "🚀 Pushing to GitHub repository..."
+      git push --force "${GITHUB_REPO}" HEAD:main
+      git push --force "${GITHUB_REPO}" --tags
+    - echo "✅ Sync completed successfully."
+  after_script:
+    - |
+      rm -rf "$WORKDIR" || true
+      if [ -z "$GITLAB_API_TOKEN" ] || [ -z "$GITHUB_TOKEN" ]; then
+        echo "⚠️  GITLAB_API_TOKEN or GITHUB_TOKEN not set!"
+      fi
