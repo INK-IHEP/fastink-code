@@ -33,7 +33,7 @@ async def get_job_stack_data() -> Optional[Tuple[Dict[str, Any], ...]]:
     try:
         raw_vals = await r.mget(*keys)   
     finally:
-        r.aclose()
+        await r.aclose()
     
     result: Dict[str, Dict[str, int]] = {}
     for jt, raw in zip(jobtypes, raw_vals):
