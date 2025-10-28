@@ -137,19 +137,18 @@ async def resert_start_end_time():
             if history_jobs_lines != [""]:
                 for job_line in history_jobs_lines:
                     job_param_list = job_line.split()
-                    logger.info(f"job_param_list: {job_param_list}")
+                    if len(job_param_list) > 4: 
+                        logger.info(f"job_param_list: {job_param_list}")
+                        job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+                        job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
+                        job_user = job_param_list[4]
+                        job_clusterid = job_param_list[5]
+                        job_uid = change_username_to_uid(job_user)
 
-                    job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
-                    job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
-                    job_user = job_param_list[4]
-                    job_clusterid = job_param_list[5]
-                    job_uid = change_username_to_uid(job_user)
-
-                    if job_clusterid in time_null_jobs:
-                        logger.info(f"{job_clusterid} start time: {job_start_time}, end time: {job_end_time}")
+                        if job_clusterid in time_null_jobs:
+                            logger.info(f"{job_clusterid} start time: {job_start_time}, end time: {job_end_time}")
                         #update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
                         #update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
-
 
     except Timeout:
             logger.info("update_completed_jobs: lock busy, skip this tick")
