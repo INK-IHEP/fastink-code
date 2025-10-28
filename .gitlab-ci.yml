@@ -61,6 +61,8 @@ sync_release_to_github:
       tar -xzf "$WORKDIR/release.tar.gz" -C "$WORKDIR" --strip-components=1
     # 初始化 Git 并推送到 GitHub
     - |
+      export http_proxy=${GITHUB_HTTP_PROXY}
+      export https_proxy=${GITHUB_HTTP_PROXY}
       cd "$WORKDIR"
       git init
       git config user.name "gitlab-ci"
