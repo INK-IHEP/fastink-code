@@ -104,7 +104,7 @@ async def update_completed_jobs():
 
 
 
-def gen_history_list_command(job_id: str) -> str:
+def gen_history_list_command() -> str:
     SCHEDD_HOST = get_config("computing", "schedd_host")
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 200"
     ATTRS = [
@@ -113,8 +113,8 @@ def gen_history_list_command(job_id: str) -> str:
         "Owner",
         "ClusterId"
     ]
-    attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
-    command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
+    attrs_quoted = " ".join(quote(a) for a in ATTRS)
+    command = f"{BASE_CMD} -af {attrs_quoted}"
 
     logger.info(f"The history command: {command}")
 
