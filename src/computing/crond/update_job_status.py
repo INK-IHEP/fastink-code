@@ -137,7 +137,7 @@ async def resert_start_end_time():
             if history_jobs_lines != [""]:
                 for job_line in history_jobs_lines:
                     job_param_list = job_line.split()
-                    if len(job_param_list) > 4: 
+                    if len(job_param_list) == 6: 
                         logger.info(f"job_param_list: {job_param_list}")
                         job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
                         job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
