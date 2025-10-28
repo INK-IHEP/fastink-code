@@ -6,8 +6,8 @@ from src.common.config import get_config
 from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.computing.tools.db.db_tools import needto_change_status_jobs
-from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time
 from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
+from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times
 
 
 router = APIRouter()
@@ -39,7 +39,7 @@ def get_condor_history_command(job_id: str) -> str:
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
         "HepJob_JobType",
         "Owner",
-        "JobStartDate"
+        'formatTime(JobStartDate,"%Y-%m-%d %H:%M:%S")'
     ]
     attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
     command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
@@ -49,11 +49,11 @@ def get_condor_history_command(job_id: str) -> str:
     return command
 
 
-LOCK_PATH = Path("src") / "computing" / "crond" / "lockfile"
+LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
 @router.on_event("startup")
 @repeat_every(seconds=300, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
-    lock = FileLock(str(LOCK_PATH), timeout=0.1)  
+    lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     try:
         with lock:
             iptables_jobtype = get_config("computing", "iptables_jobtype")
@@ -100,3 +100,60 @@ async def update_completed_jobs():
     
     except Exception:
         logger.exception("update_completed_jobs: failed")
+
+
+
+
+def gen_history_list_command(job_id: str) -> str:
+    SCHEDD_HOST = get_config("computing", "schedd_host")
+    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 200"
+    ATTRS = [
+        'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
+        'formatTime(JobStartDate,"%Y-%m-%d %H:%M:%S")',
+        "Owner",
+        "ClusterId"
+    ]
+    attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
+    command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
+
+    logger.info(f"The history command: {command}")
+
+    return command
+
+
+
+LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
+@router.on_event("startup")
+@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
+async def resert_start_end_time():
+    lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
+    try:
+        with lock:
+            time_null_jobs = get_jobs_with_null_times()
+            query_command = gen_history_list_command()
+            stdout = await sub_command(query_command, 10, "Query history jobs failed.", "Query history jobs timeout.")
+            history_jobs_lines = stdout.decode().strip().split('\n')
+
+            if history_jobs_lines != [""]:
+                for job_line in history_jobs_lines:
+                    job_param_list = job_line.split()
+                    job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+                    job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
+                    job_user = job_param_list[4]
+                    job_clusterid = job_param_list[5]
+                    job_uid = change_username_to_uid(job_user)
+
+                    if job_clusterid in time_null_jobs:
+                        logger.info(f"{job_clusterid} start time: {job_start_time}, end time: {job_end_time}")
+                        #update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
+                        #update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
+
+
+    except Timeout:
+            logger.info("update_completed_jobs: lock busy, skip this tick")
+    
+    except Exception:
+        logger.exception("update_completed_jobs: failed")
+
+    
+

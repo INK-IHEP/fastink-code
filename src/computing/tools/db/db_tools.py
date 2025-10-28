@@ -163,32 +163,6 @@ def update_start_time(uid, jobid, starttime, clusterid):
 def update_end_time(uid, jobid, endtime, clusterid):
     return update_jobinfo_db(uid, jobid, clusterid, 'job_end_time', endtime) 
 
-@read_session
-def find_completed_jobs(uid, jobtype, *, session:Session):
-    
-    job_list = {}
-    stmt = select(models.JobInfo)
-
-    if uid:
-        stmt = stmt.where(models.JobInfo.uid == uid)
-    if jobtype:
-        if jobtype == 'all':
-            stmt = stmt.where(models.JobInfo.clusterid == 'htcondor')
-        else:
-            stmt = stmt.where(models.JobInfo.job_type == jobtype)
-
-    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "CANCELED"]))
-    
-    try:
-        results = session.execute(stmt).scalars()
-    except Exception as e:
-        raise Exception(f"ERR : {e} in find completed jobs for for user({uid})")
-    
-    for result in results:
-        job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]
-        
-    return job_list
-
 
 @read_session
 def find_completed_jobs(uid, jobtype, *, session:Session):
@@ -235,3 +209,30 @@ def needto_change_status_jobs(*, session:Session):
         job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]
         
     return job_list
+
+
+from sqlalchemy import or_
+
+@read_session
+def get_jobs_with_null_times(
+    *,
+    session: Session,
+) -> list:
+
+    # 构建查询语句
+    stmt = select(models.JobInfo.jobid).where(
+        or_(
+            models.JobInfo.job_start_time.is_(None),
+            models.JobInfo.job_end_time.is_(None)
+        )
+    )
+    
+    try:
+        # 执行查询并获取所有结果
+        results = session.execute(stmt).scalars().all()
+        
+        # 将结果转换为字典列表
+        return results
+        
+    except Exception as e:
+        raise Exception(f"ERR : {e} in get job with null sql func.")
