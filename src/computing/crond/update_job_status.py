@@ -124,7 +124,7 @@ def gen_history_list_command() -> str:
 
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
-@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=1800, wait_first=False, raise_exceptions=True, logger=logger)
 async def resert_start_end_time():
     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
     try:
@@ -146,9 +146,9 @@ async def resert_start_end_time():
                         job_uid = change_username_to_uid(job_user)
 
                         if job_clusterid in time_null_jobs:
-                            logger.info(f"{job_clusterid} start time: {job_start_time}, end time: {job_end_time}")
-                        #update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
-                        #update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
+                            update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
+                            update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
+                            logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
 
     except Timeout:
             logger.info("update_completed_jobs: lock busy, skip this tick")
