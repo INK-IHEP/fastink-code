@@ -34,6 +34,7 @@ class InkStatus(str, Enum):
     # Service
     ACCESS_ROOTFILE_FAILURE = "S01"
     # File System
+    DIR_CREATE_ERROR = "F02"
     PATH_INVALID = "F03"
     EMPTY_PATH = "F04"
     PATH_NOT_EXIST = "F05"
