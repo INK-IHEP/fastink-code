@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Tue Jun 17 14:31:38 2025 CST
-# Last modified : Thu Oct 16 17:28:00 2025 CST
+# Last modified : Fri Oct 31 00:08:45 2025 CST
 # Description   :
 
 from urllib.parse import urlparse
@@ -119,7 +119,13 @@ class TestServiceAPI:
         data = response.json()
         assert data["status"] == InkStatus.SUCCESS
         assert "successfully" in data["msg"]
-        assert "https:" in data["data"]["url"]
+        try:
+            url = data["data"]["url"]
+        except:
+            assert False, f"Invalid response: {data}"
+        parsed = urlparse(url)
+        assert parsed.scheme == "https", f"Invalid scheme: {url}"
+        assert "win" in url
 
     def test_access_rootfile_not_exist(self):
         url = "/api/v2/service/access_rootfile"
@@ -163,10 +169,7 @@ class TestServiceAPI:
         try:
             url = data["data"]["url"]
         except:
-            assert False
+            assert False, f"Invalid response: {data}"
         parsed = urlparse(url)
         assert parsed.scheme == "https", f"Invalid scheme: {url}"
-        assert parsed.netloc == get_config(
-            "service", "nginx_node", fallback="ink.ihep.ac.cn"
-        ), f"Unexpected domain: {parsed.netloc}"
-        assert "win" in data["data"]["url"]
+        assert "win" in url

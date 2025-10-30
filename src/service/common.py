@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Mon Jun 16 10:44:24 2025 CST
-# Last modified : Mon Oct 13 14:29:44 2025 CST
+# Last modified : Thu Oct 30 23:59:14 2025 CST
 # Description   :
 
 import base64
@@ -92,10 +92,12 @@ async def create_krb5_file(username: str):
 
     time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    ink_dir = get_config("service", "ink_dir")
     xrootd_path = get_config("computing", "xrootd_path")
     user_group = query_pwd_group(username)
-    krb5_dir = f"{ink_dir}/{user_group}/{username}/.ink/envs/"
+    ink_dir = get_config("service", "ink_dir")
+    logger.info(f"ink_dir : {ink_dir}")
+    ink_dir = ink_dir.format(user_group=user_group, username=username)
+    krb5_dir = f"{ink_dir}/.ink/envs/"
     token_filename = f"/dev/shm/krb5cc_{username}_{time_stamp}"
 
     token = get_krb5(username)
@@ -127,7 +129,7 @@ async def create_krb5_file(username: str):
 
         await common.upload_file(
             src_data=krb5_decoded_bytes,
-            dst=f"{ink_dir}/{user_group}/{username}/.ink/envs/krb5cc_{username}",
+            dst=f"{ink_dir}/.ink/envs/krb5cc_{username}",
             username=username,
             mode="600",
             mgm=xrootd_path,
