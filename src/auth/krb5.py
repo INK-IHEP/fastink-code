@@ -23,7 +23,7 @@ def _generate_tgt(username: str, password: str, ccachefile: str) -> bool:
 
     try:
         # use `with` to manage `pexpect.spawn`, need python3.12+
-        with pexpect.spawn(f"kinit -c {ccachefile} {username}@IHEPKRB5") as child:
+        with pexpect.spawn(f"kinit -c {ccachefile} {username}") as child:
             try:
                 index = child.expect(
                     [
