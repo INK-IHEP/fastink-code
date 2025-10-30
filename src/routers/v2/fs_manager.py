@@ -60,7 +60,7 @@ async def mkdir( req: Request,
         return {"status": InkStatus.OK, "msg": f"{target_path} is created successfully.", "data": {}}
     except Exception as e:
         logger.error(f"Failed to create {target_path}. Err: {str(e)}")
-        return {"status": InkStatus.F02, "msg": f"Failed to create {target_path}. Err: {str(e)}", "data": None}
+        return {"status": InkStatus.DIR_CREATE_ERROR, "msg": f"Failed to create {target_path}. Err: {str(e)}", "data": None}
 
 @router.get("/list_path", response_class=UJSONResponse)
 async def fileList(workdir:str = Query(default=None, description = "Directory to list"),
