@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 if [ -n "${INKPATH:-}" ] && [ -n "${INKLDPATH:-}" ]; then
     export PATH="$INKPATH:$PATH"
     export APPTAINERENV_PATH="$INKPATH"

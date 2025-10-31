@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 APP_PATH=${1}
 APP_PORT=${2}
 APP_PASSWD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
