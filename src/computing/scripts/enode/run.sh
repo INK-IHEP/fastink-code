@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 APP_USER="`whoami`"
 APP_RUN_HOST="`hostname`"
 APP_PATH=${1}
