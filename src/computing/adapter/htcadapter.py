@@ -192,7 +192,7 @@ class HTC_Scheduler(SchedulerBase):
 
         if krb5_enabled:
             env_parts.insert(1, env_kv("KRB5CCNAME", quote(token_filename)))  # 放在 PATH 前后都可
-            env_parts.append("/usr/bin/aklog")
+            #env_parts.append("/usr/bin/aklog")
 
         submit_part = (
             "condor_submit "
