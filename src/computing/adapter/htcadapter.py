@@ -295,8 +295,9 @@ class HTC_Scheduler(SchedulerBase):
                             if HepJob_JobType in iptables_jobtype:
                                 try:
                                     create_iptables(self.UID, job_clusterid, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
-                                except:
+                                except Exception as e:
                                     connect_sign = "False"
+                                    logger.error(f"{job_clusterid} iptables set failed, the details: {e}")
                             update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
                             update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
                             
