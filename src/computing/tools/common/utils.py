@@ -219,16 +219,14 @@ async def connect_vnc_job(job_id, uid, clusterid):
         raise HTTPException(status_code=500, detail=str(e))    
     
 
-def create_iptables(uid, jobid, job_iptables_status, job_iptables_clean, clusterid):
+async def create_iptables(uid, jobid, job_iptables_status, job_iptables_clean, clusterid):
 
     if job_iptables_clean == 0 and job_iptables_status == 0:        
         job_path, = get_job_path(uid, jobid, clusterid)
         info_file = f"{job_path}/ssh_login.info"  
 
         try:
-            with open(info_file, 'r') as file:
-                login_info = file.read()
-
+            login_info = await read_file(uid, info_file)
             worker_host = parse_info(login_info, "HOST")
             worker_port = parse_info(login_info, "PORT")
 
