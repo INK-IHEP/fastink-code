@@ -21,6 +21,11 @@ fi
 
 export PATH="$HOME/.local/bin:$PATH"
 
+if grep -q "CentOS Linux release 7.9" /etc/redhat-release; then
+    export PATH=/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/bin:$PATH
+    export LD_LIBRARY_PATH=/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/lib:$LD_LIBRARY_PATH
+fi
+
 PYBIN="$(command -v python3 || command -v python || true)"
 if ! command -v websockify >/dev/null 2>&1; then
   if [ -n "$PYBIN" ]; then
@@ -37,10 +42,6 @@ if command -v websockify >/dev/null 2>&1; then
   export WEBSOCKIFY="$(command -v websockify)"
 fi
 
-if grep -q "CentOS Linux release 7.9" /etc/redhat-release; then
-    export PATH=/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/bin:$PATH
-    export LD_LIBRARY_PATH=/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/lib:$LD_LIBRARY_PATH
-fi
 
 APP_PORT=$(get_free_port)
 LISTEN_PORT=$(get_free_port)
