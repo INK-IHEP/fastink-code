@@ -58,22 +58,6 @@ async def get_omat_stack_jobs_info():
             "msg": "请求成功",
             "data": data_by_jobtype
         }
-
-        # jupyter_list, vscode_list, vnc_list, rootbrowse_list, enode_list, gpu_list, npu_list = await plugin.get_job_stack_data()
-        
-        # return {
-        #     "status": InkStatus.SUCCESS,
-        #     "msg": "请求成功",
-        #     "data":{
-        #         "Jupyter": jupyter_list,
-        #         "Vscode": vscode_list,
-        #         "Vnc": vnc_list,
-        #         "Rootbrowse": rootbrowse_list,
-        #         "Enode": enode_list,
-        #         "GPU": gpu_list,
-        #         "NPU": npu_list
-        #     }
-        # }
     
     except Exception as err:
         return {

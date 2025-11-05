@@ -76,11 +76,12 @@ async def connect_common_job(
                     "port": port,
                     "token": jupyter_token,
                     "url": jupyter_url,
-                    "jobId": job_id
+                    "jobId": job_id,
+                    "connect_type": "jupyter"
                 }
             }
         
-        elif job_type == "enode" or job_type == "compile":
+        elif job_type == "enode":
             gateway_node, gateway_port = await connect_sshd(job_id=job_id, uid=uid, clusterid=cluster_id)
             return {
                 "status": InkStatus.SUCCESS,
@@ -88,7 +89,8 @@ async def connect_common_job(
                 "data": {
                     "host": gateway_node,
                     "gateway_port": gateway_port,
-                    "jobId": job_id
+                    "jobId": job_id,
+                    "connect_type": "enode"
                 }
             }
         
@@ -102,11 +104,12 @@ async def connect_common_job(
                     "port": port,
                     "token": root_token,
                     "url": rootbrowse_url,
-                    "jobId": job_id
+                    "jobId": job_id,
+                    "connect_type": "rootbrowse"
                 }
             }
         
-        elif job_type == "vscode" or job_type == "npu":
+        elif job_type == "vscode" or job_type == "npu" or job_type == "compile":
             hostname, port, passwd = await connect_vscode_job(job_id=job_id, uid=uid, clusterid=cluster_id)
             return {
                 "status": InkStatus.SUCCESS,
@@ -115,11 +118,12 @@ async def connect_common_job(
                     "host": hostname,
                     "port": port,
                     "passwd": passwd,
-                    "jobId": job_id
+                    "jobId": job_id,
+                    "connect_type": "vscode"
                 }
             }
         
-        elif job_type == "vnc":
+        elif job_type == "vnc" or job_type == "ink_special":
             host, port, vnc_url = await connect_vnc_job(job_id=job_id, uid=uid, clusterid=cluster_id)
             return {
                 "status": InkStatus.SUCCESS,
@@ -128,20 +132,8 @@ async def connect_common_job(
                     "host": host,
                     "port": port,
                     "url": vnc_url,
-                    "jobId": job_id
-                }
-            }
-        
-        elif job_type == "ink_special":
-            host, port, vnc_url = await connect_vnc_job(job_id=job_id, uid=uid, clusterid=cluster_id)
-            return {
-                "status": InkStatus.SUCCESS,
-                "msg": "Request Success",
-                "data": {
-                    "host": host,
-                    "port": port,
-                    "url": vnc_url,
-                    "jobId": job_id
+                    "jobId": job_id,
+                    "connect_type": "vnc"
                 }
             }
                 
@@ -161,52 +153,6 @@ async def connect_common_job(
             "data": {}
         }
 
-# @router.post("/create_job")
-# async def create_common_job(
-#     req: Request,
-#     username: str = Depends(get_username),
-#     token: str = Depends(get_token),
-#     job_type: str = Body(..., description="Job type", embed=True),
-#     cluster_id : str = Body(...,description="Cluster ID", embed=True)
-# ):
-#     try: 
-#         logger.info(f"Get the create job request: {req}")
-#         uid = change_username_to_uid(username)
-        
-#         if cluster_id == "slurm":
-#             data = await req.json()
-#             job_request =  hpc_create_jobs.JobCreateRequest(**data)
-#             job_id, job_type, job_path = await hpc_create_jobs.create_job(request=job_request, job_type=job_type, uid=uid, cluster_id=cluster_id)
-#             logger.info(f"Create job finished, the jobid: {job_id}, jobpath: {job_path}, cluster: {cluster_id}, job_type: {job_type}")
-#         elif cluster_id == "htcondor":
-#             data = await req.json()
-#             job_request =  htc_create_jobs.HTC_JOB(**data)
-#             job_id, job_type, job_path = await htc_create_jobs.create_htc_job(request=job_request, job_type=job_type, uid=uid, clusterid=cluster_id)
-#             logger.info(f"Create job finished, the jobid: {job_id}, jobpath: {job_path}, cluster: {cluster_id}")
-#         else:
-#             return {
-#                 "status": InkStatus.RESOURCE_NOT_SUPPORT,
-#                 "msg": f"Create job failed with wrong cluster: {cluster_id}.",
-#                 "data": {}
-#             } 
-        
-#         return {
-#             "status": InkStatus.SUCCESS,
-#             "msg": f"Create job successfully, jobid: {job_id}, cluster: {cluster_id}.",
-#             "data": {
-#                 "jobId": job_id,
-#                 "jobType": job_type,
-#                 "jobPath": job_path
-#             }
-#         }
-    
-#     except Exception as e:
-#         logger.error(f"Create job failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
-#         return {
-#             "status": InkStatus.SERVER_INTERNAL_ERROR,
-#             "msg": f"Create job failed: {e}",
-#             "data": {}
-#         }
 
 @router.post("/create_job_with_path")
 async def create_job_with_path(
@@ -243,39 +189,6 @@ async def create_job_with_path(
             "data": {}
         }
 
-# @router.post("/delete_job")
-# async def delete_common_job(
-#     username: str = Depends(get_username),
-#     token: str = Depends(get_token),
-#     job_id: str = Body(..., description="Job ID",embed=True),
-#     cluster_id: str = Body(..., description="Cluster ID",embed=True)
-# ):
-#     try:
-#         uid = change_username_to_uid(username)
-#         if cluster_id == "slurm":
-#             await hpc_delete_job.delete_job(jobid=job_id, uid=uid)
-#         elif cluster_id == "htcondor":
-#             await htc_delete_job.delete_htc_job(job_id, uid=uid)
-#         else:
-#             return {
-#                 "status": InkStatus.RESOURCE_NOT_FOUND,
-#                 "msg": "Delete job failed with wrong cluster_id",
-#                 "data": {}
-#             }
-        
-#         return {
-#             "status": InkStatus.SUCCESS,
-#             "msg": f"Delete job {job_id} successfully.",
-#             "data": {}
-#         }
-        
-#     except Exception as e:
-#         logger.error(f"Delete job failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
-#         return {
-#             "status": InkStatus.SERVER_INTERNAL_ERROR,
-#             "msg": f"Delete job failed: {e}.",
-#             "data": {}
-#         }
 
 @router.get("/get_jobdetails")
 async def get_common_job_details(
@@ -357,73 +270,6 @@ async def get_common_user_assoc(
             "data": {}
         }
     
-
-# @router.get("/query_jobs")
-# async def query_user_jobs(
-#     username: str = Depends(get_username),
-#     token: str = Depends(get_token),
-#     cluster_id: str = Query(..., description="Cluster ID"),
-#     job_type: str = Query(None, description="Job type"),
-#     page: int = Query(1, description="Pangination page"),
-#     limit: int = Query(5000, description="lines of each page")
-# ):
-#     try: 
-#         uid = change_username_to_uid(username)
-        
-#         if cluster_id == "slurm":
-#             joblist = await hpc_query_jobs.get_user_jobs(uid=uid, job_type=job_type, cluster_id=cluster_id)
-        
-#         elif cluster_id == "htcondor":
-#             joblist = await htc_query_jobs.get_user_jobs(uid=uid, job_type=job_type, clusterid=cluster_id)
-        
-#         elif cluster_id == "all":
-#             try:
-#                 slurm_joblist = await hpc_query_jobs.get_user_jobs(uid=uid, job_type=job_type, cluster_id="slurm")
-#             except Exception as e:
-#                 return {
-#                     "status": InkStatus.SERVER_INTERNAL_ERROR,
-#                     "msg": f"Get user {username} SLURM jobs failed: {e}.",
-#                     "data": {}
-#                 }
-            
-#             try:
-#                 htcondor_joblist = await htc_query_jobs.get_user_jobs(uid=uid, job_type=job_type, clusterid="htcondor")
-#             except Exception as e:
-#                 return {
-#                     "status": InkStatus.SERVER_INTERNAL_ERROR,
-#                     "msg": f"Get user {username} HTCondor jobs failed: {e}.",
-#                     "data": {}
-#                 }
-            
-#             joblist = slurm_joblist + htcondor_joblist
-            
-#         else:
-#             return {
-#                 "status": InkStatus.RESOURCE_NOT_FOUND,
-#                 "msg": f"Get user {username} jobs failed with wrong cluster_id param.",
-#                 "data": {}
-#             }
-        
-#         start_idx = (page - 1) * limit
-#         end_idx = start_idx + limit
-#         job_list = joblist[start_idx:end_idx]
-
-#         return {
-#             "status": InkStatus.SUCCESS,
-#             "msg": f"Query user {username} jobs successfully.",
-#             "data": {
-#                 "job_list": job_list
-#             }
-#         }
-
-#     except Exception as e:
-#         logger.error(f"Get user jobs failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
-#         return {
-#             "status": InkStatus.SERVER_INTERNAL_ERROR,
-#             "msg": f"Get user {username} jobs failed: {e}.",
-#             "data": {}
-#         }
-
 
 
 @router.get("/get_systemjobs")

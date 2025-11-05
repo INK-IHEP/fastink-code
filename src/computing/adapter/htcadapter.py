@@ -130,10 +130,11 @@ class HTC_Scheduler(SchedulerBase):
     
 
     def _change_completed_jobs_status(self, user_completed_jobs) -> None:
+        iptables_jobtype = get_config("computing", "iptables_jobtype")
         if user_completed_jobs:
             for key in user_completed_jobs:
                 complete_job_type = user_completed_jobs[key][0]
-                if complete_job_type == "enode" or complete_job_type == "compile":
+                if complete_job_type in iptables_jobtype:
                     gateway_port = user_completed_jobs[key][1]
                     sshd_job_iptables_clean = user_completed_jobs[key][2]
                     if gateway_port != 0 and sshd_job_iptables_clean == 0:

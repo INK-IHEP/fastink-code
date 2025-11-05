@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 if [ -n "${INKPATH:-}" ] && [ -n "${INKLDPATH:-}" ]; then
     export PATH="$INKPATH:$PATH"
     export APPTAINERENV_PATH="$INKPATH"
@@ -17,7 +18,8 @@ function get_free_port() {
     done
 }
 
-
+# set the vscode env
+APP_PASSWD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 APP_PORT=$(get_free_port)
 APP_PATH="`/bin/pwd`"
 if [ -f "${APP_PATH}/krb5cc_${UID}" ]; then
@@ -28,4 +30,4 @@ if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; then
   /usr/bin/aklog
 fi
 
-./run.sh ${APP_PATH} ${APP_PORT}
+${APP_PATH}/run.sh ${APP_PATH} ${APP_PORT}
