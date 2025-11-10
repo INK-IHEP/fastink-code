@@ -203,6 +203,8 @@ class HTC_Scheduler(SchedulerBase):
         )
 
         command = su_prefix + '"' + " && ".join(env_parts + [submit_part]) + '"'
+        logger.info(f"User {self.USERNAME} submit command: {command}")
+
         return command
     
 
