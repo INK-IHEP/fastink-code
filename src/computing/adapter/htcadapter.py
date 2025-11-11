@@ -292,7 +292,7 @@ class HTC_Scheduler(SchedulerBase):
                         if (
                             re.search(r"Jupyter Server [\w.+-]+ is running at", output_content) or
                             "HTTP server listening on" in output_content or
-                            "Generating public/private rsa key pair" in output_content or
+                            "SSH server starting" in output_content or
                             "Navigate to this URL" in output_content or
                             "Elapsed time" in output_content
                         ):

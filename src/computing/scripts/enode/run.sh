@@ -48,9 +48,10 @@ EOL
 )
 
 /bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${APP_PORT}\"}" > ${APP_LOGIN_INFO}
-
+/bin/echo "SSH server starting on host ${APP_RUN_HOST} port ${APP_PORT}."
 
 nohup /usr/sbin/sshd -D -f ${APP_PATH}/sshd_config > sshd.log 2>&1 &
 SSHD_PID=$!
+
 wait $SSHD_PID
 
