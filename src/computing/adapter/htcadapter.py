@@ -169,11 +169,14 @@ class HTC_Scheduler(SchedulerBase):
         bash_like = user_shell in {"/bin/bash", "/bin/sh", "/bin/zsh"}
         special_job = job_type in {"jupyter", "npu"}
 
-        su_prefix = (
-            f"su -s /bin/bash {quote(self.USERNAME)} -c "
-            if special_job else
-            f"su - {quote(self.USERNAME)} -c "
-        )
+        if special_job:
+            if bash_like:
+                su_prefix = f"su -s /bin/bash {quote(self.USERNAME)} -c "
+            else:
+                su_prefix = f"su -s /bin/tcsh {quote(self.USERNAME)} -c "
+        else:
+            su_prefix = f"su - {quote(self.USERNAME)} -c "
+
 
         def env_kv(k: str, v: str) -> str:
             if bash_like:
@@ -193,7 +196,6 @@ class HTC_Scheduler(SchedulerBase):
 
         if krb5_enabled:
             env_parts.insert(1, env_kv("KRB5CCNAME", quote(token_filename)))  # 放在 PATH 前后都可
-            #env_parts.append("/usr/bin/aklog")
 
         submit_part = (
             "condor_submit "
