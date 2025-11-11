@@ -18,7 +18,7 @@ function get_free_port() {
     done
 }
 
-# set the vscode env
+# Configure VSCode environment
 APP_PASSWD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 APP_PORT=$(get_free_port)
 APP_PATH="`/bin/pwd`"
@@ -29,5 +29,7 @@ fi
 if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; then
   /usr/bin/aklog
 fi
+
+export VSCODE_BIN="/usr/bin/code-server"
 
 ${APP_PATH}/run.sh ${APP_PATH} ${APP_PORT}

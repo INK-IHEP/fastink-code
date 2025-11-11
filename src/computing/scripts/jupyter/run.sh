@@ -21,15 +21,6 @@ EOL
 )
 
 /bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${APP_PORT}\", \"TOKEN\": \"${APP_TOKEN}\"}" > ${APP_LOGIN_INFO}
-CVMFS_IPYK="/cvmfs/common.ihep.ac.cn/software/ipykernel"
-export JUPYTER_PATH=\
-"${CVMFS_IPYK}/fermiPy/fermiPy_1_4_0/share/jupyter/:"\
-"${CVMFS_IPYK}/Julia/Julia_1_11_5/share/jupyter/:"\
-"${CVMFS_IPYK}/ROOT/ROOT_6_34_4/share/jupyter/:"\
-"/cvmfs/slurm.ihep.ac.cn/alma9/junokernel/share/jupyter/:"\
-"$JUPYTER_PATH"
-
 unset PYTHONPATH
 
-#/cvmfs/slurm.ihep.ac.cn/alma9/anaconda3/envs/jupyter/bin/jupyter-lab --config=${APP_CONFIG_FILE} --notebook-dir=~ &> start-jupyterlab-token.sh.out
-/cvmfs/slurm.ihep.ac.cn/alma9/anaconda3/envs/jupyter/bin/jupyter-lab --config=${APP_CONFIG_FILE} --notebook-dir=~ 2>&1
+${JUPYTER_HOME}/bin/jupyter-lab --config=${APP_CONFIG_FILE} --notebook-dir=~ 2>&1

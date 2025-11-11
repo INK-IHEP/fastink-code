@@ -14,7 +14,7 @@ if [[ -z "${HOME:-}" ]]; then
   export HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
 fi
 export XAUTHORITY="$HOME/.Xauthority"
-VNC_CMD="/opt/TurboVNC/bin/vncserver"
+
 APP_LOGIN_INFO="app_login.info"
 APP_RUN_HOST=$(/bin/hostname | /bin/awk -F '.' '{print $1}')
 HOST_FULL_NAME=$(/bin/hostname)
@@ -34,4 +34,4 @@ fi
 ${VNC_CMD} -rfbport ${APP_PORT} -securitytypes OTP -otp 2>&1
 
 /bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${LISTEN_PORT}\"}" > ${APP_LOGIN_INFO}
-/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/novnc_proxy --vnc ${HOST_FULL_NAME}:${APP_PORT} --listen ${LISTEN_PORT} 2>&1
+${NOVNC_CMD} --vnc ${HOST_FULL_NAME}:${APP_PORT} --listen ${LISTEN_PORT} 2>&1

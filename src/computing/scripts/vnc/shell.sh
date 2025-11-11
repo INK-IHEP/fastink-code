@@ -21,9 +21,13 @@ fi
 
 export PATH="$HOME/.local/bin:$PATH"
 
+# Configure VNC CentOS7 ENV.
+
 if grep -q "CentOS Linux release 7.9" /etc/redhat-release; then
-    export PATH=/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/bin:$PATH
-    export LD_LIBRARY_PATH=/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/lib:$LD_LIBRARY_PATH
+  VNC_CENTOS_BIN="/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/bin"
+  VNC_CENTOS_LD="/cvmfs/slurm.ihep.ac.cn/centos7.9/anaconda3/envs/ink/lib"  
+  export PATH="${VNC_CENTOS_BIN}:${PATH}"
+  export LD_LIBRARY_PATH="${VNC_CENTOS_LD}:${LD_LIBRARY_PATH}"
 fi
 
 PYBIN="$(command -v python3 || command -v python || true)"
@@ -45,4 +49,7 @@ fi
 
 APP_PORT=$(get_free_port)
 LISTEN_PORT=$(get_free_port)
+export VNC_CMD="/opt/TurboVNC/bin/vncserver"
+export NOVNC_CMD="/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/novnc_proxy"
+
 ./run.sh ${APP_PORT} ${LISTEN_PORT}

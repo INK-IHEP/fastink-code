@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 APP_PATH=${1}
 APP_PORT=${2}
 APP_PASSWD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
@@ -19,4 +18,4 @@ EOL
 
 /bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${APP_PORT}\", \"PASSWD\": \"${APP_PASSWD}\"}" > ${APP_LOGIN_INFO}
 
-/usr/bin/code-server --config ${APP_PATH}/${APP_CONFIG_FILE} 2>&1
+${VSCODE_BIN} --config ${APP_PATH}/${APP_CONFIG_FILE} 2>&1
