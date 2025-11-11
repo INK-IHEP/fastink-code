@@ -14,7 +14,7 @@ mkdir -p "${SSH_CONFIG_DIR}"
   umask 077
   for t in rsa ecdsa ed25519; do
     key="${SSH_CONFIG_DIR}/ssh_host_${t}_key"
-    [ -s "$key" ] || ssh-keygen -q -t "$t" -f "$key" -N ""
+    [ -s "$key" ] || ssh-keygen -t "$t" -f "$key" -N ""
   done
 )
 
