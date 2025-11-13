@@ -508,9 +508,9 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
             raise FileNotFoundError(f"Xrdfs: Source {src_name} not found.")
         if path_type == PathType.UNKNOWN:
             raise TypeError(f"Xrdfs. Source {src_name} UNKNOWN.")
-        is_exist, path_type = await path_exist(src_name, username, mgm)
+        is_exist, path_type = await path_exist(dst_name, username, mgm)
         if is_exist:
-            raise FileNotFoundError(f"Xrdfs: Dest {src_name} exist.")
+            raise FileNotFoundError(f"Xrdfs: Dest {dst_name} exist.")
 
         cmd = ["xrdfs", mgm, "mv"]
         cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
