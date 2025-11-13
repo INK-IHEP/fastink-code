@@ -31,6 +31,7 @@ get_file_stream = fs_mod.get_file_stream
 delete_path = fs_mod.delete_path
 path_exist = fs_mod.path_exist
 chmod = fs_mod.chmod
+rename = fs_mod.rename
 init_ink_space = fs_mod.init_ink_space
 
 if __name__ == "__main__":

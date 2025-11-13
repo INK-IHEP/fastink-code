@@ -356,7 +356,7 @@ async def rename(req: Request, username:str = Depends(get_username)):
             return {"status": InkStatus.EMPTY_PATH, "msg": "Dst Path is EMPTY.", "data": None}
 
         logger.debug(f"Trying to rename {src_name} to {dst_name}.")
-        ret = await common.remove(src = src_name, dst = dst_name, username = username, mgm = xrd_host)
+        ret = await common.rename(src = src_name, dst = dst_name, username = username, mgm = xrd_host)
         if ret:
             return {"status": InkStatus.OK, "msg": f"Successfully rename {src_name} to {dst_name}", "data": None}
         else:
