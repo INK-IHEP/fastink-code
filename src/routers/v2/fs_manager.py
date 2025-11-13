@@ -341,15 +341,15 @@ async def chmod(req: Request, username:str = Depends(get_username)):
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.", "data": None}
 
 @router.post("/rename_path", response_class=UJSONResponse)
-async def chmod(req: Request, username:str = Depends(get_username)):
+async def rename(req: Request, username:str = Depends(get_username)):
     try:
         body = await req.json()
         SrcPath:str  = body['src']
         DstPath:str  = body['dst']
         isDir:bool   = bool(body['isDir'])
 
-        src_name = unquote_expand_user(dname = src, username = username, url = False)
-        dst_name = unquote_expand_user(dname = dst, username = username, url = False)
+        src_name = unquote_expand_user(dname = SrcPath, username = username, url = False)
+        dst_name = unquote_expand_user(dname = DstPath, username = username, url = False)
         if src_name is None or src_name == "":
             return {"status": InkStatus.EMPTY_PATH, "msg": "Src Path is EMPTY.", "data": None}
         if dst_name is None or dst_name == "":
