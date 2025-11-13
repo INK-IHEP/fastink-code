@@ -579,7 +579,7 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
             return False
     except Exception as e:
         logger.error(
-            f"Xrdfs. Failed to rename {src_name} to {dst_name}.\nErr:\n{sys.exc_info()[0]}\nMsg:\n{sys.exc_info()[1]}"
+            f"Xrdfs. Failed to perform rename operation.\nErr:\n{sys.exc_info()[0]}\nMsg:\n{sys.exc_info()[1]}"
         )
         raise e
 

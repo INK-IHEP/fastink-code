@@ -82,8 +82,8 @@ def get_krb5cc(uid: int = None, name: str = None, krb5: bool = True):
             krb5_data = get_krb5(name)
             with open(krb5ccname, "wb") as ofile:
                 ofile.write(base64.b64decode(krb5_data))
-        except:
-            logger.error(f"Failed to save token to file {krb5ccname}")
+        except Exception as e:
+            logger.error(f"Failed to save token to file {krb5ccname}. Err:{str(e)}")
             raise FileNotFoundError(f"Failed to save token to file {krb5ccname}")
 
     return uid, name, krb5ccname
