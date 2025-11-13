@@ -510,7 +510,7 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
             raise TypeError(f"Xrdfs. Source {src_name} UNKNOWN.")
         is_exist, path_type = await path_exist(dst_name, username, mgm)
         if is_exist:
-            raise FileNotFoundError(f"Xrdfs: Dest {dst_name} exist.")
+            raise FileExistsError(f"Xrdfs: Dest {dst_name} exist.")
 
         cmd = ["xrdfs", mgm, "mv"]
         cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
