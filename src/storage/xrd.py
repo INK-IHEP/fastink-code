@@ -87,9 +87,10 @@ async def chmod(fname:str, username:str, mode:str, mgm:str = mgm_url) -> bool:
         mode = mode_map(mode)
         fname = unquote_expand_user(dname = fname, username = username, url = False)
         cmd = f"xrdfs {mgm} chmod {fname} {mode}".split()
+        logger.debug(f"Xrdfs chmod: {cmd}")
     returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 5, decode = True)
     if returncode !=0 or err != "":
-        logger.error(f"Failed to change {fname}'s permission to {mode}.")
+        logger.error(f"Failed to change {fname}'s permission to {mode}. returncode: {returncode}. err: {err} env:{env}")
         raise PermissionError(f"Failed to change {fname}'s permission to {mode}.")
     else:
         return True
@@ -491,6 +492,40 @@ async def checksum(
     except Exception as e:
         logger.error(
             f"Error when get {fname}'s checksum .\nErr:\n{sys.exc_info()[0]}\nMsg:\n{sys.exc_info()[1]}"
+        )
+        raise e
+
+#### Rename file or directory
+async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
+    _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
+    env = xrd_env(krb5ccname)
+    try:
+        src_name = unquote_expand_user(dname = src, username = username, url = False)
+        dst_name = unquote_expand_user(dname = dst, username = username, url = False)
+        
+        is_exist, path_type = await path_exist(src_name, username, mgm)
+        if not is_exist:
+            raise FileNotFoundError(f"Xrdfs: Source {src_name} not found.")
+        if path_type == PathType.UNKNOWN:
+            raise TypeError(f"Xrdfs. Source {src_name} UNKNOWN.")
+        is_exist, path_type = await path_exist(src_name, username, mgm)
+        if is_exist:
+            raise FileNotFoundError(f"Xrdfs: Dest {src_name} exist.")
+
+        cmd = ["xrdfs", mgm, "mv"]
+        cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
+        cmd.append(f"""{dst_name}""") if "'" in dst_name else cmd.append(f'''{dst_name}''')
+        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
+        logger.debug(f"Xrdfs. Rename {src_name} to {dst_name}. \nret:{ret}\nret:{err}")
+
+        if returncode == 0 and err == "":
+            return True
+        else:
+            logger.error(f"Failed to rename {src_name} to {dst_name}. Err:{err}.")
+            return False
+    except Exception as e:
+        logger.error(
+            f"Xrdfs. Failed to rename {src_name} to {dst_name}.\nErr:\n{sys.exc_info()[0]}\nMsg:\n{sys.exc_info()[1]}"
         )
         raise e
 
