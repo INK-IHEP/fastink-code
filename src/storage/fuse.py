@@ -528,7 +528,6 @@ async def cat_file(
         )
         raise e
 
-#@async_timer
 async def checksum(
     fname: str, cksname: str = "adler32", mgm: str = mgm_url
 ) -> str:
@@ -549,6 +548,38 @@ async def checksum(
     except Exception as e:
         logger.error(
             f"Error when get {fname}'s checksum .\nErr:\n{sys.exc_info()[0]}\nMsg:\n{sys.exc_info()[1]}"
+        )
+        raise e
+
+#### Rename file or directory
+async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
+    try:
+        src_name = unquote_expand_user(dname = src, username = username, url = False)
+        dst_name = unquote_expand_user(dname = dst, username = username, url = False)
+        
+        is_exist, path_type = await path_exist(src_name, username, mgm)
+        if not is_exist:
+            raise FileNotFoundError(f"Xrdfs: Source {src_name} not found.")
+        if path_type == PathType.UNKNOWN:
+            raise TypeError(f"Xrdfs. Source {src_name} UNKNOWN.")
+        is_exist, path_type = await path_exist(src_name, username, mgm)
+        if is_exist:
+            raise FileNotFoundError(f"Xrdfs: Dest {src_name} exist.")
+
+        cmd = ["sudo", "-E", "-u", username, "xrdfs", mgm, "mv"]
+        cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
+        cmd.append(f"""{dst_name}""") if "'" in dst_name else cmd.append(f'''{dst_name}''')
+        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
+        logger.debug(f"Xrdfs. Rename {src_name} to {dst_name}. \nret:{ret}\nret:{err}")
+
+        if returncode == 0 and err == "":
+            return True
+        else:
+            logger.error(f"Failed to rename {src_name} to {dst_name}. Err:{err}.")
+            return False
+    except Exception as e:
+        logger.error(
+            f"Xrdfs. Failed to rename {src_name} to {dst_name}.\nErr:\n{sys.exc_info()[0]}\nMsg:\n{sys.exc_info()[1]}"
         )
         raise e
 

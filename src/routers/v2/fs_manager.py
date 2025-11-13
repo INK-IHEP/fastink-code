@@ -335,7 +335,32 @@ async def chmod(req: Request, username:str = Depends(get_username)):
         if ret:
             return {"status": InkStatus.OK, "msg": f"Successfully changed {fname}'s permission to {mode}", "data": None}
         else:
-            return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": "Failed to change {fname}'s permission.", "data": None}
+            return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to change {fname}'s permission.", "data": None}
+    except Exception as e:
+        logger.error(f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.", "data": None}
+
+@router.post("/rename_path", response_class=UJSONResponse)
+async def chmod(req: Request, username:str = Depends(get_username)):
+    try:
+        body = await req.json()
+        SrcPath:str  = body['src']
+        DstPath:str  = body['dst']
+        isDir:bool   = bool(body['isDir'])
+
+        src_name = unquote_expand_user(dname = src, username = username, url = False)
+        dst_name = unquote_expand_user(dname = dst, username = username, url = False)
+        if src_name is None or src_name == "":
+            return {"status": InkStatus.EMPTY_PATH, "msg": "Src Path is EMPTY.", "data": None}
+        if dst_name is None or dst_name == "":
+            return {"status": InkStatus.EMPTY_PATH, "msg": "Dst Path is EMPTY.", "data": None}
+
+        logger.debug(f"Trying to rename {src_name} to {dst_name}.")
+        ret = await common.remove(src = src_name, dst = dst_name, username = username, mgm = xrd_host)
+        if ret:
+            return {"status": InkStatus.OK, "msg": f"Successfully rename {src_name} to {dst_name}", "data": None}
+        else:
+            return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to rename {src_name} to {dst_name}.", "data": None}
     except Exception as e:
         logger.error(f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.", "data": None}
