@@ -362,8 +362,8 @@ async def chmod(req: Request, username:str = Depends(get_username)):
         else:
             return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to rename {src_name} to {dst_name}.", "data": None}
     except Exception as e:
-        logger.error(f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.")
-        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to change {fname}'s permission to {mode}. Err: {str(e)}.", "data": None}
+        logger.error(f"Failed to rename {src_name} to {dst_name}. Err: {str(e)}.")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to rename {src_name} to {dst_name}. Err: {str(e)}.", "data": None}
 
 if __name__ == "__main__":
 
