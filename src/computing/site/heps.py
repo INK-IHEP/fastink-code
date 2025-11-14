@@ -45,32 +45,32 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
         os.environ['KRB5CCNAME'] = token_filename
         _ = await sub_command(("aklog"), 5, "init aklog failed.", "init aklog timout.")
         
-        is_exist, _ = await common.path_exist(name=job_dir, krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=xrootd_path)
         if not is_exist:
-            await common.mkdir(dname=job_dir, krb5ccname=token_filename, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
+            await common.mkdir(dname=job_dir, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
         
         #await generate_home_link(user_home_dir, ink_dir, user_group, username, token_filename)
         #logger.info("Generate home link is done.")
         
         job_dir = f"{user_home_dir}/.ink/Jobs/{jobtype}-{time_stamp}"    
-        await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", username=username, mgm=xrootd_path)
         
         with open(rawjobPath, "rb") as file:
             jobfile_content = file.read()
-        await common.upload_file(src_data=jobfile_content, dst=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        await common.upload_file(src_data=jobfile_content, dst=f"{job_dir}/{jobfilename}", username=username, mgm=xrootd_path)
 
     else: 
-        is_exist, _ = await common.path_exist(name=job_dir, krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=xrootd_path)
         if not is_exist:
-            await common.mkdir(dname=job_dir, krb5ccname=token_filename, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
+            await common.mkdir(dname=job_dir, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
         
         job_content = ""
         with open(f"{rawjobPath}", 'rb') as file:
             job_content = file.read()
         
-        await common.upload_file(src_data=job_content, dst=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        await common.upload_file(src_data=job_content, dst=f"{job_dir}/{jobfilename}", username=username, mgm=xrootd_path)
         
-    await common.chmod(fname=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, mode="700", username=username, mgm=xrootd_path)
+    await common.chmod(fname=f"{job_dir}/{jobfilename}", mode="700", username=username, mgm=xrootd_path)
     
     return job_dir, token_filename
 
