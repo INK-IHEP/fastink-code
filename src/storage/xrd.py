@@ -27,7 +27,7 @@ async def path_exist(
         cmd.append(f'''{name}''') if '"' in name else cmd.append(f"""{name}""")
         logger.debug(f"Xrdfs. xrdfs {mgm} stat {name}. CMD: {cmd}")
 
-        returncode, stdout, stderr = await async_exec(cmd = cmd, env = env, timeout = 5, decode = True)
+        returncode, stdout, stderr = await async_exec(cmd = cmd, env = env, timeout = 20, decode = True)
         return path_stat(name, returncode, stdout, stderr)
     except PermissionError as e:
         logger.error(f"Permission denied when access {name}")
@@ -62,7 +62,7 @@ async def mkdir(
         cmd.append(f'''{dname}''') if '"' in dname else cmd.append(f"""{dname}""")
         logger.debug(f"CMD: {cmd}")
 
-        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 5, decode = True)
+        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 20, decode = True)
         logger.debug(f"Xrd mkdir. CMD: {cmd}.\nret:{ret}. err:{err}")
         if returncode == 0 and err == "":
             logger.info(f"Created {dname} successfully.")
@@ -88,7 +88,7 @@ async def chmod(fname:str, username:str, mode:str, mgm:str = mgm_url) -> bool:
         fname = unquote_expand_user(dname = fname, username = username, url = False)
         cmd = f"xrdfs {mgm} chmod {fname} {mode}".split()
         logger.debug(f"Xrdfs chmod: {cmd}")
-    returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 5, decode = True)
+    returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 20, decode = True)
     if returncode !=0 or err != "":
         logger.error(f"Failed to change {fname}'s permission to {mode}. returncode: {returncode}. err: {err} env:{env}")
         raise PermissionError(f"Failed to change {fname}'s permission to {mode}.")
@@ -123,7 +123,7 @@ async def list_dir(
         dname = unquote_expand_user(dname = dname, username = username, url = False)
         cmd.append(f'''{dname}''') if '"' in dname else cmd.append(f"""{dname}""")
         logger.debug(f"Executing ls {option} {dname}. CMD: {cmd}")
-        _, ret, err = await async_exec(cmd = cmd, env = env, timeout = 60, decode = True)
+        _, ret, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
 
         logger.debug(f"contents:\n{len(ret)}:\n{ret}")
         if len(ret) == 0:
@@ -223,7 +223,7 @@ async def xrd_delete_file0(name: str, str, mgm: str = mgm_url) -> bool:
     cmd = "rmdir" if path_type == PathType.DIR else "rm"
     try:
         cmd = f"xrdfs {mgm} {cmd} '''{name}'''" if '"' in name else f'xrdfs {mgm} {cmd} """{name}"""'
-        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 60, decode = True)
+        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
         if returncode == 0 and ret == 0:
             msg = f"{name} is deleted."
         else:
@@ -257,7 +257,7 @@ async def delete_path(
             f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2
         )
         logger.debug(f"Xrd DEL CMD: {cmd}")
-        returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 60, decode = True)
+        returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
         logger.debug(f"Xrd Del. err:{err}.")
         status = True
         if returncode != 0 or err != "":
@@ -286,7 +286,7 @@ async def delete_path(
             cmd.append(f'''{f}''') if '"' in f else cmd.append(f"""{f}""")
             logger.debug(f"Xrd DEL CMD: {cmd}")
 
-            returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 60, decode = True)
+            returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
             logger.debug(f"Xrd Del. {f} err:{err}.")
             if returncode == 0 and err == "":
                 msg = f"{f} is deleted."
@@ -298,7 +298,7 @@ async def delete_path(
         for f in dirs:
             cmd = ["xrdfs", mgm, "rmdir"]
             cmd.append(f'''{f}''') if '"' in f else cmd.append(f"""{f}""")
-            returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 60, decode = True)
+            returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
             logger.debug(f"Xrd Del. err:{err}")
             if returncode != 0 or err != "":
                 msg = f"Failed to delete {f}."
@@ -512,7 +512,7 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
         if is_exist:
             raise FileExistsError(f"Xrdfs: Dest {dst_name} exist.")
 
-        cmd = ["xrdfs", mgm, "mv"]
+        cmd = ["mv"]
         cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
         cmd.append(f"""{dst_name}""") if "'" in dst_name else cmd.append(f'''{dst_name}''')
         returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
