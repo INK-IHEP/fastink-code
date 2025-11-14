@@ -3,8 +3,9 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Fri Jun 13 14:41:19 2025 CST
-# Last modified : Thu Nov 13 17:47:39 2025 CST
-# Description   :
+# Last modified : Fri Nov 14 11:06:21 2025 CST
+# Description   : API to get monitor url for admin users,
+#                 and job monitor url for each job.
 
 from src.common.config import get_config
 from src.common.logger import logger
