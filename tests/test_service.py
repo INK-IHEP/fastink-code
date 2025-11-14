@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Tue Jun 17 14:31:38 2025 CST
-# Last modified : Fri Oct 31 00:08:45 2025 CST
+# Last modified : Fri Nov 14 10:17:21 2025 CST
 # Description   :
 
 from urllib.parse import urlparse
@@ -17,13 +17,22 @@ from src.main import app
 from src.routers.status import InkStatus
 from src.service.common import push_root_script, remote_is_exist, remote_ssh_connect
 
+# Initialize the test client
 client = TestClient(app)
 test_username = str(get_config("test", "username"))
 test_password = str(get_config("test", "password"))
-if get_config("common", "krb5_enabled") is True:
-    test_kerberos_tokens = str(get_krb5(test_username))
-else:
-    test_kerberos_tokens = str(query_token(test_username))
+try:
+    response = client.post(
+        "/api/v2/auth/create_token",
+        json={"username": test_username, "password": test_password},
+    )
+    if get_config("common", "krb5_enabled") is True:
+        test_kerberos_tokens = str(get_krb5(test_username))
+    else:
+        test_kerberos_tokens = str(query_token(test_username))
+except Exception as e:
+    print(f"An unexpected error occurred: {str(e)}")
+    raise
 
 client.headers.update(
     {
@@ -33,6 +42,7 @@ client.headers.update(
 )
 
 
+# Test the SSH connection and script push
 class TestSSHConnect:
     def test_ssh_connect(self):
         client = None
@@ -91,11 +101,8 @@ class TestSSHConnect:
                 client.close()
 
 
+# Test the service
 class TestServiceAPI:
-    def test_get_testuser(self):
-        test_username = str(get_config("test", "username"))
-        assert test_username
-
     def test_get_testuser_kerberos_tokens(self):
         test_username = str(get_config("test", "username"))
         try:
@@ -173,3 +180,24 @@ class TestServiceAPI:
         parsed = urlparse(url)
         assert parsed.scheme == "https", f"Invalid scheme: {url}"
         assert "win" in url
+
+
+# Test the monitor
+class TestMonitorAPI:
+    def test_get_monitor(self):
+        response = client.get("/api/v2/service/get_monitorurl")
+        assert response.status_code == 200
+        assert response.json()["status"] == InkStatus.SUCCESS
+        assert response.json()["msg"] == "Get monitor url successfully"
+        assert response.json()["data"]["url"]
+
+    def test_get_jobs_monitor(self):
+        url = "/api/v2/service/query_jobsmonitor"
+        json_data = {
+            "job_id": 10000,
+        }
+        response = client.post(url, json=json_data)
+        assert response.status_code == 200
+        assert response.json()["status"] == InkStatus.SUCCESS
+        assert response.json()["msg"] == "Get jobs monitor url successfully"
+        assert response.json()["data"]["url"]

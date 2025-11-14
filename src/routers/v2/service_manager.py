@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Fri Jun 27 10:06:54 2025 CST
-# Last modified : Fri Sep 19 23:27:44 2025 CST
+# Last modified : Fri Nov 14 09:37:01 2025 CST
 # Description   : version 2 of service manager
 
 import traceback
@@ -13,6 +13,7 @@ from fastapi import APIRouter, Body, Depends
 from src.common.logger import logger
 from src.routers.headers import get_username
 from src.routers.status import InkStatus
+from src.service.monitor import get_job_monitor_url, get_monitor_url
 from src.service.rootbrowse import access_rootfile
 
 router = APIRouter()
@@ -25,7 +26,7 @@ def service_check():
 
 async def _handle_access_rootfile(
     username: str, workdir: str, filename: str, is_private: bool
-):
+) -> dict:
     try:
         url = await access_rootfile(username, workdir, filename, is_private=is_private)
         msg_user = f"{username}" if is_private else f"Someone"
@@ -51,7 +52,7 @@ async def post_access_rootfile(
     username: str = Depends(get_username),
     workdir: str = Body(..., description="Work Directory"),
     filename: str = Body(..., description="Root File Name"),
-):
+) -> dict:
     return await _handle_access_rootfile(username, workdir, filename, is_private=True)
 
 
@@ -62,5 +63,23 @@ async def post_access_shared_rootfile(
     username: str = Body(..., description="File Owner Name"),
     workdir: str = Body(..., description="Work Directory"),
     filename: str = Body(..., description="Root File Name"),
-):
+) -> dict:
     return await _handle_access_rootfile(username, workdir, filename, is_private=False)
+
+
+@router.get("/service/get_monitorurl")
+async def get_monitorurl() -> dict:
+    return {
+        "status": InkStatus.SUCCESS,
+        "msg": "Get monitor url successfully",
+        "data": {"url": get_monitor_url()},
+    }
+
+
+@router.post("/service/query_jobsmonitor")
+async def query_jobsmonitor(job_id: int = Body(..., embed=True)) -> dict:
+    return {
+        "status": InkStatus.SUCCESS,
+        "msg": "Get jobs monitor url successfully",
+        "data": {"url": get_job_monitor_url(job_id)},
+    }
