@@ -512,7 +512,7 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
         if is_exist:
             raise FileExistsError(f"Xrdfs: Dest {dst_name} exist.")
 
-        cmd = ["mv"]
+        cmd = f"sudo -E -u {username} mv".split()
         cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
         cmd.append(f"""{dst_name}""") if "'" in dst_name else cmd.append(f'''{dst_name}''')
         returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
