@@ -13,6 +13,7 @@ def scheduler(clusterid: str):
 
 def _ensure_loaded():
     import src.computing.adapter.htcadapter
+    import src.computing.adapter.hpcadapter
 
 def get_scheduler(clusterid: str, username: str):
 

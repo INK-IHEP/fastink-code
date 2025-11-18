@@ -1,15 +1,10 @@
 from typing import Union
 from fastapi import APIRouter, Query, Request, Body, Depends
 from src.computing.hpc.v2 import hpc_create_jobs
-from src.computing.htc import htc_create_jobs
 from src.computing.hpc.v2 import hpc_check_job
 from src.computing.htc import htc_check_job
-from src.computing.hpc.v2 import hpc_delete_job
-from src.computing.htc import htc_delete_job
 from src.computing.hpc.v2 import hpc_job_details
 from src.computing.htc import htc_job_details
-from src.computing.hpc.v2 import hpc_query_jobs
-from src.computing.htc import htc_query_jobs
 from src.computing.hpc.v2 import hpc_get_user_assoc
 from src.computing.htc import htc_system_jobs
 from src.computing.tools.resources_utils import *
