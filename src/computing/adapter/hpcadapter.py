@@ -109,7 +109,7 @@ class HPC_Scheduler(SchedulerBase):
                                                            gpu_num=hpc_job_params.gpu_num,
                                                            gpu_name=hpc_job_params.gpu_name,
                                                            gpu_type=hpc_job_params.gpu_type)
-            logger.info(f"Generate User {self.USERNAME} the slurm submit command finished.")
+            logger.info(f"Generate User {self.USERNAME} the slurm submit command finished, cmd: {submit_cmd}")
 
             # Submit the slurm job.
             
