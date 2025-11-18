@@ -24,10 +24,6 @@ class SLURM_JOB(Base_JOB):
     gpu_type: Optional[str] = Field(None, description="GPU 类型")  # 可选
     output_file: str = Field(None, description="output_file name")  # 可选
     error_file: str = Field(None, description="error_file name")  # 可选
-    ntasks_per_node: int = Field(1, description="error_file")  # 可选
-    env: Optional[str] = Field(None, description="作业加载的具体环境")  # 可选
-    pre_script: Optional[str] = Field(None, description="作业运行前执行脚本")  # 可选
-    post_script: Optional[str] = Field(None, description="作业运行后执行脚本")  # 可选
     cluster_id: Literal["slurm"] = "slurm"
 
 

@@ -142,22 +142,6 @@ class HTC_Scheduler(SchedulerBase):
                 update_job_status(self.UID, key, 'COMPLETED', self.CLUSTER_TYPE)
                 logger.info(f"Update job {key} status to COMPLETED.")
 
-
-    def _generate_submit_command(self, job_dir, token_filename: str, submitfile: str):
-
-        submit_command = (
-
-            f"su - {quote(self.USERNAME)} -s /bin/bash -c "
-            f'"'
-            f"cd {quote(job_dir)} && "
-            f"export KRB5CCNAME={quote(token_filename)} && "
-            f"/usr/bin/aklog && "
-            f"condor_submit -name {quote(self.SCHEDD_HOST)} -pool {quote(self.CM_HOST)} {quote(submitfile)}"
-            f'"'
-        )
-
-        return submit_command
-    
     
     def _generate_submit_command(self, job_dir: str, job_type: str, token_filename: str, submitfile: str) -> str:
         
