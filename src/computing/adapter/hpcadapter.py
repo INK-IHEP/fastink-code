@@ -42,12 +42,12 @@ class HPC_Scheduler(SchedulerBase):
             raise ValueError("MEM must be >= 1 (MB).")
         
         
-        out_path = str(Path(jobdir) / f"{jobtype}-%j.out")
-        err_path = str(Path(jobdir) / f"{jobtype}-%j.err")
+        out_path = str(Path(jobdir) / f"%j.out")
+        err_path = str(Path(jobdir) / f"%j.err")
 
         args: List[str] = [
             "sbatch",
-            "--parsable",                        # 便于拿到 jobid
+            "--parsable",
             f"--output={out_path}",
             f"--error={err_path}",
             f"--nodes={nodes}",
@@ -115,12 +115,11 @@ class HPC_Scheduler(SchedulerBase):
             logger.info(f"Generate User {self.USERNAME} the slurm submit command finished, cmd: {submit_cmd}")
 
             # Submit the slurm job.
-            
             stdout = await sub_command(submit_cmd, 10, "submit job failed.", "submit job timeout.")
             logger.info(f"The slurm submit info: {stdout}")
-
+            
             job_id_line = stdout.decode().strip()
-            job_id = job_id_line.split()[-1].rstrip('.')
+            job_id = job_id_line.split(";", 1)[0]
             output = f"{job_dir}/{job_id}.out"
             errpath = f"{job_dir}/{job_id}.err"
 
