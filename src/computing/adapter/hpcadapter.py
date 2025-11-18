@@ -87,6 +87,9 @@ class HPC_Scheduler(SchedulerBase):
         args.append(f"{jobdir}/shell.sh")
         submit_command = shlex.join(args)
 
+        _inner = submit_command.replace("'", "'\"'\"'")
+        submit_command = f"sudo -iu {shlex.quote(self.USERNAME)} bash -lc '{_inner}'"
+
         return submit_command
 
     async def submit_job(self, hpc_job_params: SLURM_JOB) -> str:
