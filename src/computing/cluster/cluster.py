@@ -3,7 +3,7 @@ from typing import Optional, Literal
 
 
 class Base_JOB(BaseModel):
-    job_script: str = Field(..., description="Job Script Content")
+    job_script: Optional[str] = Field(..., description="Job Script Content")
     job_parameters: Optional[str] = Field(None, description="User job parameters")
     cpu: Optional[int] = Field(1, gt=0, description="CPU requirement")
     mem: Optional[int] = Field(..., gt=0, description="Memory requirement (MB)")
