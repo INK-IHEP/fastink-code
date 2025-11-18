@@ -96,10 +96,10 @@ class HPC_Scheduler(SchedulerBase):
             job_dir = await self._init_job_dir(hpc_job_params.job_type, time_stamp, krb5_decoded_bytes)
             logger.info(f"Init User {self.USERNAME} jobdir {job_dir} finished.")
 
-            submit_cmd = await self._generate_slurm_submit(self, 
-                                                           cpu=hpc_job_params.cpu, 
+            submit_cmd = await self._generate_slurm_submit(cpu=hpc_job_params.cpu, 
                                                            mem=hpc_job_params.mem, 
                                                            jobtype=hpc_job_params.job_type,
+                                                           jobdir=job_dir,
                                                            partition=hpc_job_params.partition,
                                                            account=hpc_job_params.account,
                                                            qos=hpc_job_params.qos,
