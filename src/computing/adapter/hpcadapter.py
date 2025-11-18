@@ -15,7 +15,7 @@ from src.computing.tools.common.utils import sub_command, get_job_output, create
 
 
 @scheduler("slurm")
-class HTC_Scheduler(SchedulerBase):
+class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
         super().__init__(uid)
         self.CLUSTER_TYPE = "slurm"
@@ -96,7 +96,8 @@ class HTC_Scheduler(SchedulerBase):
             job_dir = await self._init_job_dir(hpc_job_params.job_type, time_stamp, krb5_decoded_bytes)
             logger.info(f"Init User {self.USERNAME} jobdir {job_dir} finished.")
 
-            submit_cmd = await self._generate_slurm_submit(cpu=hpc_job_params.cpu, 
+            submit_cmd = await self._generate_slurm_submit(self, 
+                                                           cpu=hpc_job_params.cpu, 
                                                            mem=hpc_job_params.mem, 
                                                            jobtype=hpc_job_params.job_type,
                                                            partition=hpc_job_params.partition,
