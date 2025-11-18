@@ -1,5 +1,5 @@
 import os, re, shlex
-from shlex import quote
+from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from src.storage import common
@@ -41,8 +41,9 @@ class HPC_Scheduler(SchedulerBase):
         if mem < 1:
             raise ValueError("MEM must be >= 1 (MB).")
         
-        out_path = str(jobdir / f"{jobtype}-%j.out")
-        err_path = str(jobdir / f"{jobtype}-%j.err")
+        
+        out_path = str(Path(jobdir) / f"{jobtype}-%j.out")
+        err_path = str(Path(jobdir) / f"{jobtype}-%j.err")
 
         args: List[str] = [
             "sbatch",
