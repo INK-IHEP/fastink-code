@@ -35,6 +35,30 @@ def es_ping():
         print(f"[es_ping] Exception: {e}")
         return False
 
+def query_last_24h_srs_monitoring():
+    try:
+        es = get_es_client()
+        if not es:
+            return []
+        now = datetime.now()
+        last_24h = now - timedelta(hours=24)
+        query = {
+            "query": {
+                "range": {
+                    "@timestamp": {
+                        "gte": last_24h.isoformat(),
+                        "lte": now.isoformat(),
+                        "format": "strict_date_optional_time"
+                    }
+                }
+            }
+        }
+        resp = es.search(index="srs_monitoring", body=query, size=10000)  # size可根据需要调整
+        return resp['hits']['hits']
+    except Exception as e:
+        print(f"[query_last_24h_srs_monitoring] Exception: {e}")
+        return []
+
 # 查询mlc前24小时的数据
 def query_last_24h_mlc_monitoring():
     try:
@@ -133,6 +157,13 @@ def handle_compressor_data():
         print(f"[handle_compressor_data] Exception: {e}")
         return []
 
+def handle_srs_data():
+    try:
+        data = query_last_24h_srs_monitoring()
+        return data
+    except Exception as e:
+        print(f"[handle_srs_data] Exception: {e}")
+        return []
 def handle_mlc_data():
     try:
         data = query_last_24h_mlc_monitoring()
@@ -409,7 +440,7 @@ def handle_tilt_data():
 
 
 # if __name__ == "__main__":
-#     result = handle_mlc_data()
+#     result = handle_srs_data()
 #     print("[main] handle_mlc_data result:")
 #     print(result)
     

@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+from  src.alicpt.onlinemon.get_aligcs  import handle_srs_data
 from  src.alicpt.onlinemon.get_aligcs  import handle_mlc_data
 from  src.alicpt.onlinemon.get_aligcs  import handle_compressor_data
 from  src.alicpt.onlinemon.get_aligcs  import handle_ups_data
@@ -10,7 +11,21 @@ from  src.alicpt.onlinemon.get_aligcs  import handle_tilt_data
 
 router = APIRouter()
 
-
+#srs数据接口
+@router.get("/elk/get_srs")
+async def get_mlc_info():
+    try:
+        return {
+            "status": "200",
+            "msg": "success",
+            "data": handle_srs_data()
+        }
+    except Exception as e:
+        return {
+            "status": "500",
+            "msg": f"Exception: {e}",
+            "data": []
+        }
 #mlc数据接口
 @router.get("/elk/get_mlc")
 async def get_mlc_info():
