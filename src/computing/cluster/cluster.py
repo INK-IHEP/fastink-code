@@ -27,8 +27,6 @@ class SLURM_JOB(Base_JOB):
     cluster_id: Literal["slurm"] = "slurm"
 
 
-
-
 class HTC_JOB(Base_JOB):
     os: Optional[str] = Field(None, description="操作系统镜像") # 可选
     wn: str = Field(f"", description="woker node host")  # 可选
