@@ -3,7 +3,7 @@ from typing import Optional, Literal
 
 
 class Base_JOB(BaseModel):
-    job_script: Optional[str] = Field(..., description="Job Script Content")
+    job_script: Optional[str] = Field(None, description="Job Script Content")
     job_parameters: Optional[str] = Field(None, description="User job parameters")
     cpu: Optional[int] = Field(1, gt=0, description="CPU requirement")
     mem: Optional[int] = Field(..., gt=0, description="Memory requirement (MB)")
@@ -25,6 +25,7 @@ class SLURM_JOB(Base_JOB):
     output_file: str = Field(None, description="output_file name")  # 可选
     error_file: str = Field(None, description="error_file name")  # 可选
     cluster_id: Literal["slurm"] = "slurm"
+
 
 
 
