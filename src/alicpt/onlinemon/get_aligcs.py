@@ -40,7 +40,8 @@ def query_last_24h_srs_monitoring():
         es = get_es_client()
         if not es:
             return []
-        now = datetime.now()
+        # 使用UTC时间代替本地时间
+        now = datetime.now(timezone.utc)
         last_24h = now - timedelta(hours=24)
         query = {
             "query": {
@@ -65,7 +66,8 @@ def query_last_24h_mlc_monitoring():
         es = get_es_client()
         if not es:
             return []
-        now = datetime.now()
+        # 使用UTC时间代替本地时间
+        now = datetime.now(timezone.utc)
         last_24h = now - timedelta(hours=24)
         query = {
             "query": {
