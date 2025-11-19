@@ -55,7 +55,7 @@ class HPC_Scheduler(SchedulerBase):
             f"--cpus-per-task={cpu}",
             f"--mem={mem}M",
             f"--job-name={jobtype}",
-            f"--comment={jobtype}",
+            f"--wckey={jobtype}",
             f"--chdir={str(jobdir)}",
         ]
 
