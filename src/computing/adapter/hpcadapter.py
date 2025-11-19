@@ -144,7 +144,7 @@ class HPC_Scheduler(SchedulerBase):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         
-        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir -P -X")
+        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir -P -X -n")
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.info(f"Get user({self.USERNAME}) slurm cluster jobs: {stdout}")
         lines = stdout.decode().strip().split('\n')
