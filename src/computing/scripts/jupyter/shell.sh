@@ -23,7 +23,7 @@ if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; then
 fi
 
 # Configure Jupyter environment
-export JUPYTER_HOME="/cvmfs/slurm.ihep.ac.cn/alma9/anaconda3/envs/jupyter/bin/jupyter-lab"
+export JUPYTER_BIN="/cvmfs/slurm.ihep.ac.cn/alma9/anaconda3/envs/jupyter/bin"
 CVMFS_IPYK="/cvmfs/common.ihep.ac.cn/software/ipykernel"
 export JUPYTER_PATH=\
 "${CVMFS_IPYK}/fermiPy/fermiPy_1_4_0/share/jupyter/:"\

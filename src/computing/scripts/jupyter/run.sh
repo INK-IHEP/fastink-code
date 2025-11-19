@@ -23,4 +23,4 @@ EOL
 /bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${APP_PORT}\", \"TOKEN\": \"${APP_TOKEN}\"}" > ${APP_LOGIN_INFO}
 unset PYTHONPATH
 
-${JUPYTER_HOME}/bin/jupyter-lab --config=${APP_CONFIG_FILE} --notebook-dir=~ 2>&1
+${JUPYTER_BIN}/jupyter-lab --config=${APP_CONFIG_FILE} --notebook-dir=~ 2>&1
