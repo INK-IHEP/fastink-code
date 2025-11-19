@@ -55,6 +55,7 @@ class HPC_Scheduler(SchedulerBase):
             f"--cpus-per-task={cpu}",
             f"--mem={mem}M",
             f"--job-name={jobtype}",
+            f"--wckey={jobtype}",
             f"--chdir={str(jobdir)}",
         ]
 
@@ -117,7 +118,7 @@ class HPC_Scheduler(SchedulerBase):
             # Submit the slurm job.
             stdout = await sub_command(submit_cmd, 10, "submit job failed.", "submit job timeout.")
             logger.info(f"The slurm submit info: {stdout}")
-            
+
             job_id_line = stdout.decode().strip()
             job_id = job_id_line.split(";", 1)[0]
             output = f"{job_dir}/{job_id}.out"
@@ -143,14 +144,18 @@ class HPC_Scheduler(SchedulerBase):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         
-        command = self._generate_condor_query_command(job_type)
+        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir -P -X -n")
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
-        logger.info(f"Get user({self.USERNAME}) cluster jobs: {stdout}")
+        logger.info(f"Get user({self.USERNAME}) slurm cluster jobs: {stdout}")
         lines = stdout.decode().strip().split('\n')
+        logger.info(f"{self.USERNAME} slurm jobs return: {lines}")
 
         if lines != ['']:
             for line in lines:
-                job_param_list = line.split()
+                logger.info(f"Lines: {line}")
+                job_param_list = line.split("|")
+                logger.info(f"split: {job_param_list}")
+
                 job_clusterid = int(job_param_list[1])
                 job_procid = job_param_list[2]
                 job_id = str(job_clusterid) + '.' + str(job_procid)
