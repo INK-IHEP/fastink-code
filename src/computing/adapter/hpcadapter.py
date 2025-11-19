@@ -55,6 +55,7 @@ class HPC_Scheduler(SchedulerBase):
             f"--cpus-per-task={cpu}",
             f"--mem={mem}M",
             f"--job-name={jobtype}",
+            f"--comment={jobtype}",
             f"--chdir={str(jobdir)}",
         ]
 
@@ -117,7 +118,7 @@ class HPC_Scheduler(SchedulerBase):
             # Submit the slurm job.
             stdout = await sub_command(submit_cmd, 10, "submit job failed.", "submit job timeout.")
             logger.info(f"The slurm submit info: {stdout}")
-            
+
             job_id_line = stdout.decode().strip()
             job_id = job_id_line.split(";", 1)[0]
             output = f"{job_dir}/{job_id}.out"
