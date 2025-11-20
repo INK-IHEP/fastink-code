@@ -200,7 +200,7 @@ class HPC_Scheduler(SchedulerBase):
                             update_start_time(self.UID, job_clusterid, job_start_time, self.CLUSTER_TYPE)
                             
                 elif job_status == "COMPLETED" or job_status.startswith("CANCELLED"):
-                    db_end_time, _ = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
+                    db_end_time = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
                     if not db_end_time:
                         update_end_time(self.UID, job_clusterid, job_end_time, self.CLUSTER_TYPE)
 
