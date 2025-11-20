@@ -144,7 +144,7 @@ class HPC_Scheduler(SchedulerBase):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         
-        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir -P -X -n")
+        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir,Time -P -X -n")
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.info(f"Get user({self.USERNAME}) slurm cluster jobs: {stdout}")
         lines = stdout.decode().strip().split('\n')
@@ -161,9 +161,10 @@ class HPC_Scheduler(SchedulerBase):
                 job_status = job_param_list[2]
                 job_nodelist = job_param_list[5]
                 job_slurm_type = job_param_list[6]
-                job_submit_time = job_param_list[7][0].replace("T", " "),
-                job_start_time = job_param_list[8][0].replace("T", " "),
-                job_end_time = job_param_list[9][0].replace("T", " "),
+                job_submit_time = job_param_list[7].replace("T", " "),
+                job_start_time = job_param_list[8].replace("T", " "),
+                job_end_time = job_param_list[9].replace("T", " "),
+                job_time_limit = job_param_list[10]
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -204,6 +205,7 @@ class HPC_Scheduler(SchedulerBase):
                     db_end_time = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
                     if not db_end_time:
                         update_end_time(self.UID, job_clusterid, job_end_time, self.CLUSTER_TYPE)
+                    continue
 
                 else:
                     continue
@@ -220,7 +222,7 @@ class HPC_Scheduler(SchedulerBase):
                     "jobStatus": job_status,
                     "jobStartTime": job_start_time,
                     "JobNodeList": job_nodelist,
-                    "jobtimelimit": "24:00:00",
+                    "jobtimelimit": job_time_limit,
                     "connect_sign": connect_sign,
                 })
 
