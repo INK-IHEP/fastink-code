@@ -161,9 +161,9 @@ class HPC_Scheduler(SchedulerBase):
                 job_status = job_param_list[2]
                 job_nodelist = job_param_list[5]
                 job_slurm_type = job_param_list[6]
-                job_submit_time = job_param_list[7]
-                job_start_time = job_param_list[8]
-                job_end_time = job_param_list[9]
+                job_submit_time = job_param_list[7].replace("T", " "),
+                job_start_time = job_param_list[8].replace("T", " "),
+                job_end_time = job_param_list[9].replace("T", " "),
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -180,7 +180,6 @@ class HPC_Scheduler(SchedulerBase):
                     job_status = "QUEUEING"
 
                 elif job_status == "RUNNING":
-                    job_remote_host = job_nodelist
                     if connect_sign == "False":
                         output_content, _ = await get_job_output(uid=self.UID, job_id=job_clusterid, clusterid=self.CLUSTER_TYPE)
                         if (
@@ -201,11 +200,12 @@ class HPC_Scheduler(SchedulerBase):
                             update_start_time(self.UID, job_clusterid, job_start_time, self.CLUSTER_TYPE)
                             
                 elif job_status == "COMPLETED" or job_status.startswith("CANCELLED"):
-                    db_end_time = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
-                    logger.info(f"The job {job_clusterid} DB end time: {db_end_time}")
+                    db_end_time, _ = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
+                    if not db_end_time:
+                        update_end_time(self.UID, job_clusterid, job_end_time, self.CLUSTER_TYPE)
 
                 else:
-                    job_status = "OTHER" 
+                    continue
                 
                 if db_job_status != job_status: 
                     update_job_status(self.UID, job_clusterid, job_status, self.CLUSTER_TYPE)
@@ -218,7 +218,7 @@ class HPC_Scheduler(SchedulerBase):
                     "jobSubmitTime": job_submit_time,
                     "jobStatus": job_status,
                     "jobStartTime": job_start_time,
-                    "JobNodeList": job_remote_host,
+                    "JobNodeList": job_nodelist,
                     "jobtimelimit": "24:00:00",
                     "connect_sign": connect_sign,
                 })
