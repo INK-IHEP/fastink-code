@@ -107,6 +107,13 @@ def get_job_info(
 ):
     return get_job_info_field(uid, jobid, clusterid, 'job_type', 'job_status', 'iptable_status', 'iptable_clean')
 
+def get_endtime_info(
+    uid,
+    jobid,
+    clusterid,
+):
+    return get_job_info_field(uid, jobid, clusterid, 'job_end_time')
+
 def get_job_connect_info(
     uid, 
     jobid, 

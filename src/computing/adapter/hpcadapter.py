@@ -11,7 +11,7 @@ from src.computing.tools.db.db_tools import *
 from src.computing.cluster.cluster import SLURM_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
-from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables
+from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, get_endtime_info
 
 
 @scheduler("slurm")
@@ -156,38 +156,33 @@ class HPC_Scheduler(SchedulerBase):
                 job_param_list = line.split("|")
                 logger.info(f"split: {job_param_list}")
 
-                job_clusterid = int(job_param_list[1])
-                job_procid = job_param_list[2]
-                job_id = str(job_clusterid) + '.' + str(job_procid)
-                HepJob_JobType = job_param_list[8]
-                job_start_time = " "
-                job_remote_host = " "
-                hold_reason = ""
-                job_requestos = job_param_list[9]
+                job_clusterid = int(job_param_list[0])
+                job_partition = job_param_list[1]
+                job_status = job_param_list[2]
+                job_nodelist = job_param_list[5]
+                job_slurm_type = job_param_list[6]
+                job_submit_time = job_param_list[7]
+                job_start_time = job_param_list[8]
+                job_end_time = job_param_list[9]
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
-                    logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
+                    logger.info(f"Find the job {job_clusterid} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
                 except NoResultFound:
                     job_path = job_param_list[10]
-                    job_output_path = f"{job_param_list[11]}"
-                    job_errput_path = f"{job_param_list[12]}"
-                    insert_job_info(self.UID, job_id, job_output_path, job_errput_path, HepJob_JobType, job_path, self.CLUSTER_TYPE)
+                    job_output_path = f"{job_path}/{job_clusterid}.out"
+                    job_errput_path = f"{job_path}/{job_clusterid}.err"
+                    insert_job_info(self.UID, job_clusterid, job_output_path, job_errput_path, job_slurm_type, job_path, self.CLUSTER_TYPE)
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
-                connect_sign, = get_job_connect_info(self.UID, job_id, self.CLUSTER_TYPE)
+                connect_sign, = get_job_connect_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
 
-                date_time =  datetime.fromtimestamp(int(job_param_list[4]), ZoneInfo("Asia/Shanghai"))
-                job_queue_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                if job_param_list[5] == '1':    
+                if job_status == "PENDING":
                     job_status = "QUEUEING"
 
-                elif job_param_list[5] == '2':
-                    job_status = "RUNNING"
-                    date_time = datetime.fromtimestamp(int(job_param_list[6]), ZoneInfo("Asia/Shanghai"))
-                    job_start_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                    job_remote_host = job_param_list[7]
+                elif job_status == "RUNNING":
+                    job_remote_host = job_nodelist
                     if connect_sign == "False":
-                        output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
+                        output_content, _ = await get_job_output(uid=self.UID, job_id=job_clusterid, clusterid=self.CLUSTER_TYPE)
                         if (
                             re.search(r"Jupyter Server [\w.+-]+ is running at", output_content) or
                             "HTTP server listening on" in output_content or
@@ -196,26 +191,19 @@ class HPC_Scheduler(SchedulerBase):
                             "Elapsed time" in output_content
                         ):
                             connect_sign = "True"
-                            if HepJob_JobType in iptables_jobtype:
+                            if job_type in iptables_jobtype:
                                 try:
                                     await create_iptables(self.UID, job_clusterid, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
                                 except Exception as e:
                                     connect_sign = "False"
                                     logger.error(f"{job_clusterid} iptables set failed, the details: {e}")
-                            update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
-                            update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
+                            update_connect_status(self.UID, job_clusterid, connect_sign, self.CLUSTER_TYPE)
+                            update_start_time(self.UID, job_clusterid, job_start_time, self.CLUSTER_TYPE)
                             
-                elif job_param_list[5] == '4':
-                    job_status = "COMPLETED"
-                    date_time =  datetime.fromtimestamp(int(job_param_list[6]), ZoneInfo("Asia/Shanghai"))
-                    job_start_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                    job_remote_host = job_param_list[7]
+                elif job_status == "COMPLETED" or job_status.startswith("CANCELLED"):
+                    db_end_time = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
+                    logger.info(f"The job {job_clusterid} DB end time: {db_end_time}")
 
-                elif job_param_list[5] == '5':
-                    job_status = "HOLDING"
-                    date_time =  datetime.fromtimestamp(int(job_param_list[6]), ZoneInfo("Asia/Shanghai"))
-                    job_start_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                    hold_reason = ' '.join(map(str, job_param_list[13:]))
                 else:
                     job_status = "OTHER" 
                 
@@ -224,16 +212,15 @@ class HPC_Scheduler(SchedulerBase):
                 
                 job_list.append({
                     "clusterId": self.CLUSTER_TYPE,
-                    "jobId": job_id,
-                    "jobType": HepJob_JobType,
-                    "jobSubmitTime": job_queue_time,
+                    "jobId": job_clusterid,
+                    "jobPartition": job_partition,
+                    "jobType": job_type,
+                    "jobSubmitTime": job_submit_time,
                     "jobStatus": job_status,
                     "jobStartTime": job_start_time,
                     "JobNodeList": job_remote_host,
-                    "jobrunos": job_requestos,
                     "jobtimelimit": "24:00:00",
                     "connect_sign": connect_sign,
-                    "hold_reason": hold_reason
                 })
 
         return job_list
