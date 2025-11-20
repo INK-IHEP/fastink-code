@@ -152,10 +152,7 @@ class HPC_Scheduler(SchedulerBase):
 
         if lines != ['']:
             for line in lines:
-                logger.info(f"Lines: {line}")
                 job_param_list = line.split("|")
-                logger.info(f"split: {job_param_list}")
-
                 job_clusterid = int(job_param_list[0])
                 job_partition = job_param_list[1]
                 job_status = job_param_list[2]
