@@ -161,9 +161,9 @@ class HPC_Scheduler(SchedulerBase):
                 job_status = job_param_list[2]
                 job_nodelist = job_param_list[5]
                 job_slurm_type = job_param_list[6]
-                job_submit_time = job_param_list[7].replace("T", " "),
-                job_start_time = job_param_list[8].replace("T", " "),
-                job_end_time = job_param_list[9].replace("T", " "),
+                job_submit_time = job_param_list[7][0].replace("T", " "),
+                job_start_time = job_param_list[8][0].replace("T", " "),
+                job_end_time = job_param_list[9][0].replace("T", " "),
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -200,6 +200,7 @@ class HPC_Scheduler(SchedulerBase):
                             update_start_time(self.UID, job_clusterid, job_start_time, self.CLUSTER_TYPE)
                             
                 elif job_status == "COMPLETED" or job_status.startswith("CANCELLED"):
+                    job_status = "COMPLETED"
                     db_end_time = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
                     if not db_end_time:
                         update_end_time(self.UID, job_clusterid, job_end_time, self.CLUSTER_TYPE)
