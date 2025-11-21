@@ -3,7 +3,8 @@ import os
 import pexpect
 import subprocess
 import tempfile
-from datetime import datetime, timedelta
+import pymysql
+from datetime import datetime, timedelta, date
 from typing import Optional
 
 from src.common.logger import logger
@@ -117,7 +118,10 @@ def resolve_tgt(ccache_file: str):
     logger.debug(f"Resolving tgt")
     try:
         result = subprocess.run(
-            ["klist", "-c", f"{ccache_file}"], capture_output=True, text=True, env={"LC_TIME": "C"}
+            ["klist", "-c", f"{ccache_file}"],
+            capture_output=True,
+            text=True,
+            env={"LC_TIME": "C"},
         )
     except subprocess.CalledProcessError as error:
         raise ValueError(f"Failed to resolve tgt for {ccache_file}. {error}")
@@ -216,14 +220,24 @@ def get_krb5(
     Returns:
         Optional[str]: Token, None if not found.
     """
+    # Validating afs account.
+    validate_result = _validate_user(username=username)
+    if not validate_result["afsdate"]:
+        raise ValueError("Account is expired")
+    if not validate_result["passworddate"]:
+        raise ValueError("Account password is expired")
+
     # Getting Token from database.
     logger.debug(f"User {username} is trying to extend TGT.")
     user_id = get_user(username=username, email=email, uid=uid)["id"]
-    ticket = get_kerberos_token(user_id=user_id)
+    try:
+        ticket = get_kerberos_token(user_id=user_id)
+    except Exception as err:
+        raise ValueError(f"Token not exists in database: {err}")
 
     # Judging if it is expired.
     if ticket["expired_at"] < datetime.now():
-        raise ValueError("Token expired")
+        raise ValueError("Token is expired")
     elif ticket["expired_at"] - datetime.now() < timedelta(seconds=expire_in):
         logger.debug(f"Token for {username} is expiring soon.")
         fd, ccachefile = tempfile.mkstemp()
@@ -243,3 +257,92 @@ def get_krb5(
         return token
     else:
         return ticket["token"]
+
+
+def _create_connection() -> Optional[pymysql.connections.Connection]:
+    """
+    创建数据库连接
+    :return: 数据库连接对象，失败则返回 None
+    """
+    DB_CONFIG = {
+        "host": "ccs.ihep.ac.cn",
+        "database": "cluster",
+        "user": "read",
+        "password": "read;010",
+        "port": 3306,
+        "charset": "utf8",
+    }
+    connection = None
+    try:
+        connection = pymysql.connect(**DB_CONFIG)
+        if connection.open:
+            print(f"成功连接到 MySQL 服务器")
+    except pymysql.OperationalError as e:
+        print(f"连接数据库失败: {e}")
+    return connection
+
+
+def _execute_query(
+    connection: pymysql.connections.Connection,
+    query: str,
+    params: Optional[tuple] = None,
+) -> Optional[list[dict]]:
+    """
+    执行查询类 SQL（SELECT）
+    :param connection: 数据库连接对象
+    :param query: SQL 查询语句
+    :param params: SQL 参数（用于防止 SQL 注入）
+    :return: 查询结果列表（字典形式），失败返回 None
+    """
+    cursor = None
+    result = None
+    try:
+        with connection.cursor() as cursor:  # 自动关闭游标
+            cursor.execute(query, params or ())
+            result = cursor.fetchall()
+            print(f"查询成功，返回 {len(result)} 条记录")
+    except pymysql.ProgrammingError as e:
+        print(f"查询失败: {e}")
+        print(f"SQL: {query}")
+    return result
+
+
+def _close_connection(connection: pymysql.connections.Connection) -> None:
+    """
+    关闭数据库连接
+    :param connection: 数据库连接对象
+    """
+    if connection and connection.open:
+        connection.close()
+        print("数据库连接已关闭")
+
+
+def _validate_user(username: str) -> dict:
+    logger.debug(f"I got the username: {username}")
+    conn = _create_connection()
+    if not conn:
+        return None
+
+    today = date.today()
+    date_str_datetime = today.strftime("%Y-%m-%d")
+    # 用户在有效期，密码在有效期
+    afs_query = (
+        "SELECT afsaccount FROM afsuser WHERE afsaccount='"
+        + username
+        + "' AND islock='0' AND del_flag='0' AND afsdate>'"
+        + date_str_datetime
+        + "'"
+    )
+    afs_results = _execute_query(conn, afs_query, ())
+    password_query = (
+        "SELECT afsaccount FROM afsuser WHERE afsaccount='"
+        + username
+        + "' AND islock='0' AND del_flag='0' AND expiredate>'"
+        + date_str_datetime
+        + "'"
+    )
+    password_results = _execute_query(conn, password_query, ())
+    afsdate = True if afs_results else False
+    passworddate = True if password_results else False
+    _close_connection(conn)
+    return {"afsdate": afsdate, "passworddate": passworddate}

@@ -33,7 +33,7 @@ class UserValidationMiddleware(BaseHTTPMiddleware):
         if not username or not token:
             logger.warning("No username or token provided")
             return JSONResponse(
-                status_code=401,
+                status_code=200,
                 content={
                     "status": InkStatus.TOKEN_INVALID,
                     "msg": "Ink-Username or Ink-Token is missing in request headers",
@@ -48,7 +48,7 @@ class UserValidationMiddleware(BaseHTTPMiddleware):
         if not validate_token(username, token):
             logger.warning(f"Invalid user {username} with token {token}")
             return JSONResponse(
-                status_code=403,
+                status_code=200,
                 content={
                     "status": InkStatus.USER_INVALID,
                     "msg": "Invalid username or token",
@@ -101,7 +101,7 @@ class IPWhitelistMiddleware(BaseHTTPMiddleware):
 
         if not allowed:
             return JSONResponse(
-                status_code=403,
+                status_code=200,
                 content={
                     "status": InkStatus.IP_BANNED,
                     "msg": "IP address not allowed",
