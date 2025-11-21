@@ -227,20 +227,21 @@ class HPC_Scheduler(SchedulerBase):
 
     
     async def cancel_job(self, job_id):
-        
-        cancel_command = f"sudo -u {self.USERNAME} condor_rm -name {self.SCHEDD_HOST} -pool {self.CM_HOST} {job_id}"
 
-        _ = await sub_command(cancel_command, timeoutsec=10, errinfo="condor_rm job failed", tminfo="condor_rm job timeout")
-        
+        cancel_command = f"sudo -u {self.USERNAME} scancel {job_id}"
+        _ = await sub_command(cancel_command, timeoutsec=10, errinfo="scancel err",tminfo="scancel timeout")
         job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
 
         iptables_jobtype = get_config("computing", "iptables_jobtype")
-
         if job_type in iptables_jobtype:
             if job_iptables_status != 0 and job_iptables_clean == 0:
                 delete_iptables(self.UID, job_id, job_iptables_status, self.CLUSTER_TYPE)
         update_job_status(self.UID, job_id, 'COMPLETED', self.CLUSTER_TYPE)
 
         job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        update_end_time(self.UID, job_id, job_end_time, "htcondor")
+        update_end_time(self.UID, job_id, job_end_time, self.CLUSTER_TYPE)
+
+
+
+
 
