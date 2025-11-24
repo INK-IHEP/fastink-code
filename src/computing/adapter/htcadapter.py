@@ -232,6 +232,7 @@ class HTC_Scheduler(SchedulerBase):
     async def query_job(self, job_type):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
+        start_keywords = get_config("computing", "start_keywords")
         
         command = self._generate_condor_query_command(job_type)
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
@@ -273,13 +274,7 @@ class HTC_Scheduler(SchedulerBase):
                     job_remote_host = job_param_list[7]
                     if connect_sign == "False":
                         output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
-                        if (
-                            re.search(r"Jupyter Server [\w.+-]+ is running at", output_content) or
-                            "HTTP server listening on" in output_content or
-                            "SSH server starting" in output_content or
-                            "Navigate to this URL" in output_content or
-                            "Elapsed time" in output_content
-                        ):
+                        if any(kw in output_content for kw in start_keywords):
                             connect_sign = "True"
                             if HepJob_JobType in iptables_jobtype:
                                 try:
