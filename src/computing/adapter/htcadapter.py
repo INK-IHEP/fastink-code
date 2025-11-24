@@ -151,7 +151,8 @@ class HTC_Scheduler(SchedulerBase):
 
         user_shell = pwd.getpwuid(self.UID).pw_shell
         bash_like = user_shell in {"/bin/bash", "/bin/sh", "/bin/zsh"}
-        special_job = job_type in {"jupyter", "npu", "vnc"}
+        noenv_jobtype_list = get_config("computing", "noenv_jobtype")
+        special_job = job_type in noenv_jobtype_list
 
         if special_job:
             if bash_like:
