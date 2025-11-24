@@ -45,6 +45,7 @@ def get_extra_job_config(username: str, groupname: str, job_type: str, request_o
         # Site administrators can configure them according to their own site
         "+HepJob_Walltime" : f"\"default\"",
         "+IHEP_RealGroup" : f"\"{groupname}\"",
+        "concurrency_limits": f"inkjob_{username}_{job_type}"
     }
 
     if request_os:
