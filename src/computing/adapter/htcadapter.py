@@ -150,7 +150,7 @@ class HTC_Scheduler(SchedulerBase):
             krb5_enabled = krb5_enabled.strip().lower() in {"1", "true", "yes", "on"}
 
         user_shell = pwd.getpwuid(self.UID).pw_shell
-        bash_like = user_shell in {"/bin/bash", "/bin/sh"}
+        bash_like = user_shell in {"/bin/bash", "/bin/sh", "/bin/zsh"}
         noenv_jobtype_list = get_config("computing", "noenv_jobtype")
         special_job = job_type in noenv_jobtype_list
 
@@ -158,10 +158,7 @@ class HTC_Scheduler(SchedulerBase):
             if bash_like:
                 su_prefix = f"su -s /bin/bash {quote(self.USERNAME)} -c "
             else:
-                if user_shell == "/bin/zsh":
-                    su_prefix = f"su -s /bin/zsh {quote(self.USERNAME)} -c "
-                else:
-                    su_prefix = f"su -s /bin/tcsh {quote(self.USERNAME)} -c "
+                su_prefix = f"su -s /bin/tcsh {quote(self.USERNAME)} -c "
         else:
             su_prefix = f"su - {quote(self.USERNAME)} -c "
 
