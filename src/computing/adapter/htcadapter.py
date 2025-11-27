@@ -157,10 +157,11 @@ class HTC_Scheduler(SchedulerBase):
         if special_job:
             if bash_like:
                 su_prefix = f"su -s /bin/bash {quote(self.USERNAME)} -c "
-            elif user_shell == "/bin/zsh":
-                su_prefix = f"su -s /bin/zsh {quote(self.USERNAME)} -c "
             else:
-                su_prefix = f"su -s /bin/tcsh {quote(self.USERNAME)} -c "
+                if user_shell == "/bin/zsh":
+                    su_prefix = f"su -s /bin/zsh {quote(self.USERNAME)} -c "
+                else:
+                    su_prefix = f"su -s /bin/tcsh {quote(self.USERNAME)} -c "
         else:
             su_prefix = f"su - {quote(self.USERNAME)} -c "
 
