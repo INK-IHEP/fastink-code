@@ -138,7 +138,7 @@ async def create_job(
     if request.time:
         parameters += f"--time={request.time} "
     if request.partition:
-        parameters += f"--partition={request.partition} "
+        parameters += f"--partition={request.partition.strip()} "
     if request.nodes:
         parameters += f"--nodes={request.nodes} "
     if request.ntasks:
@@ -275,7 +275,7 @@ async def create_job_with_path(
     if request.time:
         parameters += f"--time={request.time} "
     if request.partition:
-        parameters += f"--partition={request.partition} "
+        parameters += f"--partition={request.partition.strip()} "
     if request.nodes:
         parameters += f"--nodes={request.nodes} "
     if request.ntasks:
