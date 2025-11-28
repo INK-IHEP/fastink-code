@@ -113,14 +113,6 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
             f'"'
         )
     
-    sinfo_cmd = "sinfo"
-    sinfo_stdout = await sub_command(sinfo_cmd, 30, "sinfo failed", "sinfo timeout")
-    logger.debug(f"show cluster sinfo : ({sinfo_stdout})")
-    
-    sacctmgr_cmd = "sacctmgr list assoc format=user,account,qos where user=duran"
-    sacctmgr_stdout = await sub_command(sacctmgr_cmd, 30, "sacctmgr failed", "sacctmgr timeout")
-    logger.debug(f"show assoc : ({sacctmgr_stdout})")
-    
     logger.info(f"Submit job command: {command}")
     stdout = await sub_command(command, 30, "submit job failed.", "submit job timeout.")
     
