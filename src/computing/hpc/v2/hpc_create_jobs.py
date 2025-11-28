@@ -111,7 +111,7 @@ async def create_job(
 
         with open(absolute_script_path, 'w') as f:
             f.write(request.job_script)
-        _ = await sub_command(f"chmod +x {absolute_script_path}", timeoutsec=5, errinfo="chmod err", tminfo="chmod timeout")
+        _ = await sub_command(f"chmod +x {absolute_script_path}", timeoutsec=30, errinfo="chmod err", tminfo="chmod timeout")
 
     #job_path, token_filename = await build_job_env(uid, job_type, absolute_script_path, script_file)
     site = get_config("computing", "site")
@@ -207,7 +207,7 @@ async def create_job(
             if job_id:
                 admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
                 try:
-                    asyncio.run(sub_command(admincomment_command, timeoutsec=5, errinfo="add admincomment err", tminfo="add admincomment timeout"))
+                    asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
                 except Exception as e:
                     tm.sleep(1)
                     add_admincomment()
@@ -316,7 +316,7 @@ async def create_job_with_path(
                 # add admincomment as root
                 admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
                 try:
-                    asyncio.run(sub_command(admincomment_command, timeoutsec=5, errinfo="add admincomment err", tminfo="add admincomment timeout"))
+                    asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
                 except Exception as e:
                     tm.sleep(1)
                     add_admincomment()

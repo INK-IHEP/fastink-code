@@ -42,8 +42,8 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
             with open(token_filename, 'wb') as file:
                 file.write(krb5_decoded_bytes)
 
-        os.environ['KRB5CCNAME'] = token_filename
-        _ = await sub_command(("aklog"), 5, "init aklog failed.", "init aklog timout.")
+        #os.environ['KRB5CCNAME'] = token_filename
+        #_ = await sub_command(("aklog"), 5, "init aklog failed.", "init aklog timout.")
         
         is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=xrootd_path)
         if not is_exist:
@@ -89,8 +89,8 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
                 f"su - {quote(user_name)} -c "
                 f'"'
                 f"cd {quote(job_path)} && "
-                f"export KRB5CCNAME={quote(f'{job_path}/krb5cc_{user_name}')} && "
-                f"/usr/bin/aklog && "
+                #f"export KRB5CCNAME={quote(f'{job_path}/krb5cc_{user_name}')} && "
+                #f"/usr/bin/aklog && "
                 f'sbatch {" ".join(sbatch_command)}'
                 f'"'
             ) 
@@ -99,8 +99,8 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
                 f"su - {quote(user_name)} -c "
                 f'"'
                 f"cd {quote(job_path)} && "
-                f"setenv KRB5CCNAME {quote(f'{job_path}/krb5cc_{user_name}')} && "
-                f"/usr/bin/aklog && "
+                #f"setenv KRB5CCNAME {quote(f'{job_path}/krb5cc_{user_name}')} && "
+                #f"/usr/bin/aklog && "
                 f'sbatch {" ".join(sbatch_command)}'
                 f'"'
             )
@@ -114,7 +114,7 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
         )
     
     logger.info(f"Submit job command: {command}")
-    stdout = await sub_command(command, 5, "submit job failed.", "submit job timeout.")
+    stdout = await sub_command(command, 30, "submit job failed.", "submit job timeout.")
     
     job_id_line = stdout.decode().strip()
     job_id = int(job_id_line.split()[-1]) 
