@@ -1,0 +1,57 @@
+common:
+  krb5_enabled: false
+  security_access: true
+  log_level: debug
+  log_path: /ink/v2/ink.log
+
+auth:
+  type: krb5
+  issuer: https://aiapi.ihep.ac.cn/apiv2
+  client_id: null
+  client_secret: sk-upyKzQkQYXxkOPfXSsczoBKzLykUYqYixsuRLoxpbEXZvRH
+
+database:
+  host: hepsink.heps.ihep.ac.cn
+  port: 3306
+  user: inkdbuser
+  password: ink;good!
+  dbname: inkdb
+
+storage:
+  xrd_host: root://hepsink.heps.ihep.ac.cn:1094
+  fs_backend: fuse
+  max_file_size: 5368709120
+
+omat:
+  addr: http://omat-escoord.ihep.ac.cn:80
+  user: omatonereader
+  passwd: omatonereaderpasswd
+
+graphite:
+  htc_job_addr: https://omat-graphite.ihep.ac.cn
+  htc_sched:
+    - schedd06_ihep_ac_cn
+    - schedd07_ihep_ac_cn
+    - schedd08_ihep_ac_cn
+    - schedd10_ihep_ac_cn
+  period: 24h
+  hpc_job_addr: https://omat-graphite.ihep.ac.cn
+  hpc_server:
+    - slurm10_ihep_ac_cn
+
+computing:
+  schedd_host: scheduler@pvm069.ihep.ac.cn
+  cm_host: pvm069.ihep.ac.cn
+  hepjob_path: /cvmfs/common.ihep.ac.cn/software/hepjob
+  xrootd_path: root://hepsink.heps.ihep.ac.cn:1094/
+  special_machine: jnws033.ihep.ac.cn
+  gateway_node: pvm065.ihep.ac.cn
+  cluster_scripts: /ink/v2/ink/src/computing/scripts
+  nginx_node: https://ink-dev.ihep.ac.cn
+  ink_dir: /heps/home/users
+
+app:
+  plugins: ihep
+
+service:
+  service_node: lhws312.ihep.ac.cn
