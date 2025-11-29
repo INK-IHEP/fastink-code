@@ -7,7 +7,7 @@ from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.computing.tools.db.db_tools import needto_change_status_jobs
 from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
-from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times
+from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobid
 
 
 router = APIRouter()
@@ -99,6 +99,9 @@ async def update_completed_jobs():
                         update_start_time(job_uid, key, job_start_time, "htcondor")
                         update_end_time(job_uid, key, job_end_time, "htcondor")
                         logger.info(f"Update job {key} status to COMPLETED.")
+                    
+                    else:
+                        delete_jobinfo_by_jobid(key)
 
     except Timeout:
         logger.info("update_completed_jobs: lock busy, skip this tick")
