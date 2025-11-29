@@ -106,10 +106,12 @@ async def update_completed_jobs():
 
 def gen_history_list_command() -> str:
     SCHEDD_HOST = get_config("computing", "schedd_host")
-    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 200"
+    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 500"
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
-        'formatTime(JobStartDate,"%Y-%m-%d %H:%M:%S")',
+        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))'
+        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%H:%M:%S"))'
+        'formatTime(QDate,"%Y-%m-%d %H:%M:%S")',
         "Owner",
         "ClusterId"
     ]
@@ -131,23 +133,25 @@ async def resert_start_end_time():
         with lock:
             time_null_jobs = get_jobs_with_null_times()
             query_command = gen_history_list_command()
-            stdout = await sub_command(query_command, 10, "Query history jobs failed.", "Query history jobs timeout.")
+            stdout = await sub_command(query_command, 20, "Query history jobs failed.", "Query history jobs timeout.")
             history_jobs_lines = stdout.decode().strip().split('\n')
 
             if history_jobs_lines != [""]:
                 for job_line in history_jobs_lines:
                     job_param_list = job_line.split()
-                    if len(job_param_list) == 6: 
-                        job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+                    job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+                    if job_param_list[2] != "NULL":
                         job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
-                        job_user = job_param_list[4]
-                        job_clusterid = job_param_list[5]
-                        job_uid = change_username_to_uid(job_user)
+                    else:
+                        job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
+                    job_user = job_param_list[6]
+                    job_clusterid = job_param_list[7]
+                    job_uid = change_username_to_uid(job_user)
 
-                        if job_clusterid in time_null_jobs:
-                            update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
-                            update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
-                            logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
+                    if job_clusterid in time_null_jobs:
+                        update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
+                        update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
+                        logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
 
     except Timeout:
             logger.info("update_completed_jobs: lock busy, skip this tick")
