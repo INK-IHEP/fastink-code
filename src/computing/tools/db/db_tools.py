@@ -248,7 +248,9 @@ def delete_jobinfo_by_jobids(jobids, *, session: Session):
     stmt = delete(models.JobInfo).where(models.JobInfo.jobid.in_(jobids))
     try:
         result = session.execute(stmt)
+        logger.info("delete before.")
         session.flush()
+        logger.info("delete after.")
         logger.info(f"delete_jobinfo_by_jobids: deleted {result.rowcount} rows, jobids_count={len(jobids)}")
     except Exception:
         logger.exception(f"delete_jobinfo_by_jobids: failed, jobids_count={len(jobids)}")
