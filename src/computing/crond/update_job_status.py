@@ -162,10 +162,10 @@ async def resert_start_end_time():
                         logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
 
     except Timeout:
-            logger.info("update_completed_jobs: lock busy, skip this tick")
+            logger.info("resert_start_end_time: lock busy, skip this tick")
     
     except Exception:
-        logger.exception("update_completed_jobs: failed")
+        logger.exception("resert_start_end_time: failed")
 
     
 
