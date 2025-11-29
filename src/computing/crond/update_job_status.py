@@ -122,7 +122,7 @@ async def update_completed_jobs():
 
 def gen_history_list_command() -> str:
     SCHEDD_HOST = get_config("computing", "schedd_host")
-    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 5000 "
+    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} "
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
         'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))',
@@ -219,9 +219,13 @@ async def resert_start_end_time():
 
                 history_ids.add(clusterid)
                 history_map[clusterid] = (uid, start_time, end_time, user)
+            
+            logger.info
 
             found = time_null_set & history_ids
             missing = time_null_set - history_ids
+            
+            logger.info(f"The history jobs: {history_ids}")
             
             logger.info(f"Found in history list: {found}")
             logger.info(f"Not found in history list: {missing}")
