@@ -58,6 +58,9 @@ async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     try:
         with lock:
+            
+            logger.info("Enter update_completed_jobs 1")
+            
             iptables_jobtype = get_config("computing", "iptables_jobtype")
             need_change_status_jobs = needto_change_status_jobs()
             query_command = query_cluster_jobs()
@@ -66,6 +69,8 @@ async def update_completed_jobs():
             to_delete = []
             
             
+            logger.info("Enter update_completed_jobs 2")
+            
             if lines != ['']:
                 for line in lines:
                     job_param_list = line.split()
@@ -73,8 +78,13 @@ async def update_completed_jobs():
                 
                     if job_clusterid in need_change_status_jobs.keys():
                         del need_change_status_jobs[job_clusterid]
+                        
+            logger.info("Enter update_completed_jobs 3")
 
             if need_change_status_jobs:
+                
+                logger.info("Enter update_completed_jobs 4")
+                
                 for key in need_change_status_jobs:
                     query_history_command = get_condor_history_command(key)
                     stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
