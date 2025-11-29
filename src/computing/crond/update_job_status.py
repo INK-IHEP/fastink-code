@@ -7,7 +7,7 @@ from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.computing.tools.db.db_tools import needto_change_status_jobs
 from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
-from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobid
+from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids
 
 
 router = APIRouter()
@@ -63,6 +63,8 @@ async def update_completed_jobs():
             query_command = query_cluster_jobs()
             stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
             lines = stdout.decode().strip().split('\n')
+            to_delete = []
+            
             
             if lines != ['']:
                 for line in lines:
@@ -101,8 +103,12 @@ async def update_completed_jobs():
                         logger.info(f"Update job {key} status to COMPLETED.")
                     
                     else:
-                        delete_jobinfo_by_jobid(key)
-
+                        to_delete.append(key)
+                
+                if to_delete:
+                    delete_jobinfo_by_jobids(to_delete)
+                        
+                    
     except Timeout:
         logger.info("update_completed_jobs: lock busy, skip this tick")
     

@@ -241,16 +241,15 @@ def get_jobs_with_null_times(
 
 
 @transactional_session
-def delete_jobinfo_by_jobid(jobid, *, session: Session):
-    if not jobid:
-        raise ValueError("jobid is required")
+def delete_jobinfo_by_jobids(jobids, *, session: Session):
+    if not jobids:
+        return
 
-    stmt = delete(models.JobInfo).where(models.JobInfo.jobid == jobid)
-
+    stmt = delete(models.JobInfo).where(models.JobInfo.jobid.in_(jobids))
     try:
         result = session.execute(stmt)
         session.flush()
-        logger.info(f"delete_jobinfo_by_jobid: deleted {result.rowcount} rows for jobid={jobid}")
-    except Exception as e:
-        logger.error(f"delete_jobinfo_by_jobid: failed for jobid={jobid}")
-        raise Exception(f"ERR : '{str(e)}' in delete for job({jobid}).")
+        logger.info(f"delete_jobinfo_by_jobids: deleted {result.rowcount} rows, jobids_count={len(jobids)}")
+    except Exception:
+        logger.exception(f"delete_jobinfo_by_jobids: failed, jobids_count={len(jobids)}")
+        raise
