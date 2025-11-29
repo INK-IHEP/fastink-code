@@ -109,8 +109,8 @@ def gen_history_list_command() -> str:
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} "
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
-        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))'
-        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%H:%M:%S"))'
+        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))',
+        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%H:%M:%S"))',
         'formatTime(QDate,"%Y-%m-%d %H:%M:%S")',
         "Owner",
         "ClusterId"
