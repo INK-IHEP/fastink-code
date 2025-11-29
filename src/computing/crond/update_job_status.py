@@ -37,9 +37,11 @@ def get_condor_history_command(job_id: str) -> str:
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 1"
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
+        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))',
+        'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%H:%M:%S"))',
+        'formatTime(QDate,"%Y-%m-%d %H:%M:%S")',
         "HepJob_JobType",
-        "Owner",
-        'formatTime(JobStartDate,"%Y-%m-%d %H:%M:%S")'
+        "Owner"
     ]
     attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
     command = f"{BASE_CMD} {quote(str(job_id))} -af {attrs_quoted}"
@@ -51,7 +53,7 @@ def get_condor_history_command(job_id: str) -> str:
 
 LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
 @router.on_event("startup")
-@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     try:
@@ -80,9 +82,12 @@ async def update_completed_jobs():
                     if history_job_lines != [""]:
                         job_param_list = history_job_lines[0].split()
                         job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
-                        job_type = job_param_list[2]
-                        job_user = job_param_list[3]
-                        job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
+                        if job_param_list[2] != "NULL":
+                            job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
+                        else:
+                            job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
+                        job_type = job_param_list[6]
+                        job_user = job_param_list[7]
                         job_uid = change_username_to_uid(job_user)
 
                         if job_type in iptables_jobtype:
@@ -126,7 +131,7 @@ def gen_history_list_command() -> str:
 
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
-@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
 async def resert_start_end_time():
     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
     try:
