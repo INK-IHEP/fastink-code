@@ -59,17 +59,12 @@ async def update_completed_jobs():
     try:
         with lock:
             
-            logger.info("Enter update_completed_jobs 1")
-            
             iptables_jobtype = get_config("computing", "iptables_jobtype")
             need_change_status_jobs = needto_change_status_jobs()
             query_command = query_cluster_jobs()
             stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
             lines = stdout.decode().strip().split('\n')
             to_delete = []
-            
-            
-            logger.info("Enter update_completed_jobs 2")
             
             if lines != ['']:
                 for line in lines:
@@ -79,11 +74,7 @@ async def update_completed_jobs():
                     if job_clusterid in need_change_status_jobs.keys():
                         del need_change_status_jobs[job_clusterid]
                         
-            logger.info("Enter update_completed_jobs 3")
-
             if need_change_status_jobs:
-                
-                logger.info("Enter update_completed_jobs 4")
                 
                 for key in need_change_status_jobs:
                     query_history_command = get_condor_history_command(key)
@@ -149,6 +140,46 @@ def gen_history_list_command() -> str:
 
 
 
+# LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
+# @router.on_event("startup")
+# @repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
+# async def resert_start_end_time():
+#     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
+#     try:
+#         with lock:
+#             time_null_jobs = get_jobs_with_null_times()
+#             logger.info(f"The DB time null jobs: {time_null_jobs}")
+            
+#             query_command = gen_history_list_command()
+#             stdout = await sub_command(query_command, 20, "Query history jobs failed.", "Query history jobs timeout.")
+#             history_jobs_lines = stdout.decode().strip().split('\n')
+#             logger.info(f"Get the all history jobs: {history_jobs_lines}")
+
+#             if history_jobs_lines != [""]:
+#                 for job_line in history_jobs_lines:
+#                     job_param_list = job_line.split()
+#                     job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+#                     if job_param_list[2] != "NULL":
+#                         job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
+#                     else:
+#                         job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
+#                     job_user = job_param_list[6]
+#                     job_clusterid = job_param_list[7]
+#                     job_uid = change_username_to_uid(job_user)
+
+#                     if job_clusterid in time_null_jobs:
+#                         update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
+#                         update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
+#                         logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
+
+#     except Timeout:
+#             logger.info("resert_start_end_time: lock busy, skip this tick")
+    
+#     except Exception:
+#         logger.exception("resert_start_end_time: failed")
+
+    
+
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
 @repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
@@ -159,33 +190,45 @@ async def resert_start_end_time():
             time_null_jobs = get_jobs_with_null_times()
             logger.info(f"The DB time null jobs: {time_null_jobs}")
             
+            if not time_null_jobs:
+                return
+
+            time_null_set = set(map(str, time_null_jobs))
+            
             query_command = gen_history_list_command()
             stdout = await sub_command(query_command, 20, "Query history jobs failed.", "Query history jobs timeout.")
-            history_jobs_lines = stdout.decode().strip().split('\n')
-            logger.info(f"Get the all history jobs: {history_jobs_lines}")
+            lines = stdout.decode(errors="ignore").splitlines()
+            lines = [ln for ln in lines if ln.strip()]
 
-            if history_jobs_lines != [""]:
-                for job_line in history_jobs_lines:
-                    job_param_list = job_line.split()
-                    job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
-                    if job_param_list[2] != "NULL":
-                        job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
-                    else:
-                        job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
-                    job_user = job_param_list[6]
-                    job_clusterid = job_param_list[7]
-                    job_uid = change_username_to_uid(job_user)
+            history_ids = set()
+            history_map = {}
 
-                    if job_clusterid in time_null_jobs:
-                        update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
-                        update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
-                        logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
+            for ln in lines:
+                parts = ln.split()
+                
+                end_time = f"{parts[0]} {parts[1]}"
+
+                if parts[2] != "NULL":
+                    start_time = f"{parts[2]} {parts[3]}"
+                else:
+                    start_time = f"{parts[4]} {parts[5]}"
+
+                user = parts[6]
+                clusterid = parts[7]
+                uid = change_username_to_uid(user)
+
+                history_ids.add(clusterid)
+                history_map[clusterid] = (uid, start_time, end_time, user)
+
+            found = time_null_set & history_ids
+            missing = time_null_set - history_ids
+            
+            logger.info(f"Found in history list: {found}")
+            logger.info(f"Not found in history list: {missing}")
+            
 
     except Timeout:
             logger.info("resert_start_end_time: lock busy, skip this tick")
     
     except Exception:
         logger.exception("resert_start_end_time: failed")
-
-    
-
