@@ -132,9 +132,12 @@ async def resert_start_end_time():
     try:
         with lock:
             time_null_jobs = get_jobs_with_null_times()
+            logger.info(f"The DB time null jobs: {time_null_jobs}")
+            
             query_command = gen_history_list_command()
             stdout = await sub_command(query_command, 20, "Query history jobs failed.", "Query history jobs timeout.")
             history_jobs_lines = stdout.decode().strip().split('\n')
+            logger.info(f"Get the all history jobs: {history_jobs_lines}")
 
             if history_jobs_lines != [""]:
                 for job_line in history_jobs_lines:
