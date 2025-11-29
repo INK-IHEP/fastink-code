@@ -53,7 +53,7 @@ def get_condor_history_command(job_id: str) -> str:
 
 LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
 @router.on_event("startup")
-@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=1800, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     try:
@@ -182,7 +182,7 @@ def gen_history_list_command() -> str:
 
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
-@repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
 async def resert_start_end_time():
     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
     try:
@@ -242,8 +242,7 @@ async def resert_start_end_time():
                 parts = ln.split()
                 if len(parts) >= 2:
                     active_jobs.add(parts[1])
-                    
-            logger.info(f"The active jobs: {active_jobs}")
+
             delete_jobs = missing - active_jobs
             
             if delete_jobs:
