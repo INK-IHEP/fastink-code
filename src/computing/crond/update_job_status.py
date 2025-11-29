@@ -225,12 +225,16 @@ async def resert_start_end_time():
             found = time_null_set & history_ids
             missing = time_null_set - history_ids
             
-            logger.info(f"The history jobs: {history_ids}")
-            
-            logger.info(f"Found in history list: {found}")
-            logger.info(f"Not found in history list: {missing}")
-            
+            for clusterid in found:
+                uid, start_time, end_time, user = history_map[clusterid]
+                update_start_time(uid, clusterid, start_time, "htcondor")
+                update_end_time(uid, clusterid, end_time, "htcondor")
+                logger.info(f"Update {user} job {clusterid} start and end time in DB.")
+                
 
+            if missing:
+                delete_jobinfo_by_jobids(list(missing))
+            
     except Timeout:
             logger.info("resert_start_end_time: lock busy, skip this tick")
     
