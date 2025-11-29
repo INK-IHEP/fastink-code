@@ -219,8 +219,6 @@ async def resert_start_end_time():
 
                 history_ids.add(clusterid)
                 history_map[clusterid] = (uid, start_time, end_time, user)
-            
-            logger.info
 
             found = time_null_set & history_ids
             missing = time_null_set - history_ids
@@ -231,9 +229,25 @@ async def resert_start_end_time():
                 update_end_time(uid, clusterid, end_time, "htcondor")
                 logger.info(f"Update {user} job {clusterid} start and end time in DB.")
                 
-
-            if missing:
-                delete_jobinfo_by_jobids(list(missing))
+            
+            stdout_q = await sub_command(
+                query_cluster_jobs(),
+                10,
+                "Query cluster jobs failed.",
+                "Query cluster jobs timeout."
+            )
+            q_lines = [ln for ln in stdout_q.decode(errors="ignore").splitlines() if ln.strip()]
+            active_jobs = set()
+            for ln in q_lines:
+                parts = ln.split()
+                if len(parts) >= 2:
+                    active_jobs.add(parts[1])
+                    
+            logger.info(f"The active jobs: {active_jobs}")
+            delete_jobs = missing - active_jobs
+            
+            if delete_jobs:
+                delete_jobinfo_by_jobids(list(delete_jobs))
             
     except Timeout:
             logger.info("resert_start_end_time: lock busy, skip this tick")
