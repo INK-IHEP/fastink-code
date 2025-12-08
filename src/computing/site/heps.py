@@ -88,7 +88,7 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
     )
     
     logger.info(f"Submit job command: {command}")
-    stdout = await sub_command(command, 5, "submit job failed.", "submit job timeout.")
+    stdout = await sub_command(command, 30, "submit job failed.", "submit job timeout.")
     
     job_id_line = stdout.decode().strip()
     job_id = int(job_id_line.split()[-1]) 

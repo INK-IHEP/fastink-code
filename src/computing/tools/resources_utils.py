@@ -696,7 +696,6 @@ async def connect_vnc_job(job_id, uid, clusterid):
 
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     try:
-        
         process = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
