@@ -41,36 +41,33 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
         if not os.path.exists(token_filename):
             with open(token_filename, 'wb') as file:
                 file.write(krb5_decoded_bytes)
-
-        os.environ['KRB5CCNAME'] = token_filename
-        _ = await sub_command(("aklog"), 5, "init aklog failed.", "init aklog timout.")
         
-        is_exist, _ = await common.path_exist(name=job_dir, krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=xrootd_path)
         if not is_exist:
-            await common.mkdir(dname=job_dir, krb5ccname=token_filename, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
+            await common.mkdir(dname=job_dir, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
         
         #await generate_home_link(user_home_dir, ink_dir, user_group, username, token_filename)
         #logger.info("Generate home link is done.")
         
         job_dir = f"{user_home_dir}/.ink/Jobs/{jobtype}-{time_stamp}"    
-        await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", username=username, mgm=xrootd_path)
         
         with open(rawjobPath, "rb") as file:
             jobfile_content = file.read()
-        await common.upload_file(src_data=jobfile_content, dst=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        await common.upload_file(src_data=jobfile_content, dst=f"{job_dir}/{jobfilename}", username=username, mgm=xrootd_path)
 
     else: 
-        is_exist, _ = await common.path_exist(name=job_dir, krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=xrootd_path)
         if not is_exist:
-            await common.mkdir(dname=job_dir, krb5ccname=token_filename, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
+            await common.mkdir(dname=job_dir, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
         
         job_content = ""
         with open(f"{rawjobPath}", 'rb') as file:
             job_content = file.read()
         
-        await common.upload_file(src_data=job_content, dst=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        await common.upload_file(src_data=job_content, dst=f"{job_dir}/{jobfilename}", username=username, mgm=xrootd_path)
         
-    await common.chmod(fname=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, mode="700", username=username, mgm=xrootd_path)
+    await common.chmod(fname=f"{job_dir}/{jobfilename}", mode="700", username=username, mgm=xrootd_path)
     
     return job_dir, token_filename
 
@@ -82,36 +79,13 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
     user_info = pwd.getpwuid(uid)
     user_shell = user_info.pw_shell
     
-    if krb5_enabled: 
-        
-        if user_shell in ["/bin/bash", "/bin/sh", "/bin/zsh"]:
-            command = (
-                f"su - {quote(user_name)} -c "
-                f'"'
-                f"cd {quote(job_path)} && "
-                f"export KRB5CCNAME={quote(f'{job_path}/krb5cc_{user_name}')} && "
-                f"/usr/bin/aklog && "
-                f'sbatch {" ".join(sbatch_command)}'
-                f'"'
-            ) 
-        else:
-            command = (
-                f"su - {quote(user_name)} -c "
-                f'"'
-                f"cd {quote(job_path)} && "
-                f"setenv KRB5CCNAME {quote(f'{job_path}/krb5cc_{user_name}')} && "
-                f"/usr/bin/aklog && "
-                f'sbatch {" ".join(sbatch_command)}'
-                f'"'
-            )
-    else:
-        command = (
-            f"su - {quote(user_name)} -c "
-            f'"'
-            f"cd {quote(job_path)} && "
-            f'sbatch {" ".join(sbatch_command)}'
-            f'"'
-        )
+    command = (
+        f"su - {quote(user_name)} -c "
+        f'"'
+        f"cd {quote(job_path)} && "
+        f'sbatch {" ".join(sbatch_command)}'
+        f'"'
+    )
     
     logger.info(f"Submit job command: {command}")
     stdout = await sub_command(command, 5, "submit job failed.", "submit job timeout.")
