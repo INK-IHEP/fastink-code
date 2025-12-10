@@ -90,7 +90,7 @@ def get_krb5cc(uid: int = None, name: str = None, krb5: bool = True):
             logger.error(f"Retrieved token for {name} is expired or invalid.")
             raise ValueError(f"Retrieved token for {name} is expired or invalid.")
     except Exception as e:
-        logger.error(f"Failed to fetch token for {user} and save to file {krb5ccname}. Err:{str(e)}")
+        logger.error(f"Failed to fetch token for {name} and save to file {krb5ccname}. Err:{str(e)}")
         raise e
 
     return uid, name, krb5ccname
