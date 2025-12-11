@@ -57,7 +57,7 @@ def unquote_expand_user(dname:str, username:str, url:bool = False):
         unquoted_dname = unquoted_dname[1:-1]
     if url:
         unquoted_dname = urllib.parse.unquote(dname, encoding="utf-8")
-    if unquoted_dname[0:2] == "~/" or unquote_dname == "~":
+    if unquoted_dname[0:2] == "~/" or unquoted_dname == "~":
         unquoted_dname = os.path.expanduser(f"~{username}{unquoted_dname[1:]}")
     return unquoted_dname
 
