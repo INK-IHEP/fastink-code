@@ -14,7 +14,7 @@ async def get_user_jobs(uid, jobId, cluster_id):
         
         # command = f"sacct -j {jobId} --format=JobID,Partition,JobName,User,State,Elapsed,NNodes,NodeList,AdminComment,Start,Submit -P"
         command = f"su {user_name} -c 'sacct -j {jobId} --format=JobID,Partition,JobName,User,State,Elapsed,NNodes,NodeList,AdminComment,Start,Submit -P'"
-        result = await sub_command(command, timeoutsec=5, errinfo="sacct err", tminfo="sacct timeout")
+        result = await sub_command(command, timeoutsec=30, errinfo="sacct err", tminfo="sacct timeout")
         lines = result.decode().strip().split('\n')
         headers = lines[0].split('|')
         
