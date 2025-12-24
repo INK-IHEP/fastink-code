@@ -127,7 +127,7 @@ def get_uid_krb5_by_email(email: str):
             #            if euid == 0:
             #               os.seteuid(0)
             if not check_krb5_validity(f"/tmp/krb5cc_{user_data['uid']}"):
-                print(f"The krb5 ticket for {user_data['uid']} is expired")
+                logger.error(f"The krb5 ticket for {user_data['uid']} is expired")
                 raise HTTPException(
                     status_code=504,
                     detail=response.json().get(
