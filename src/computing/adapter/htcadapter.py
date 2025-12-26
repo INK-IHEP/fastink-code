@@ -1,8 +1,7 @@
-import os, importlib, pwd
+import os, importlib, pwd, json
 from shlex import quote
 from typing import Optional
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from src.storage import common
 from src.common.logger import logger
 from src.common.config import get_config
@@ -237,7 +236,14 @@ class HTC_Scheduler(SchedulerBase):
     async def query_job(self):
         
         r = redis_connect()
-        cluster_jobs = await r.get("cluster_jobs")
+
+        raw_cluster_jobs = await r.get("cluster_jobs")
+        if not raw_cluster_jobs:
+            cluster_jobs = {}
+        else:
+            if isinstance(raw_cluster_jobs, (bytes, bytearray)):
+                raw_cluster_jobs = raw_cluster_jobs("utf-8")
+            cluster_jobs = json.loads(raw_cluster_jobs)
         job_list = cluster_jobs.get(self.USERNAME, [])
 
         iptables_jobtype = get_config("computing", "iptables_jobtype")
