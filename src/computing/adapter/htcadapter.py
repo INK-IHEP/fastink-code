@@ -307,7 +307,7 @@ class HTC_Scheduler(SchedulerBase):
             
             return_list.append({
                 "clusterId": self.CLUSTER_TYPE,
-                "jobId": job_id,
+                "jobId": str(job_id),
                 "jobType": job_type,
                 "jobSubmitTime": job_submit_time,
                 "jobStatus": job_status,
