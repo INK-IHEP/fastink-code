@@ -140,7 +140,7 @@ class HPC_Scheduler(SchedulerBase):
                 
 
         
-    async def query_job(self):
+    async def query_job(self, request_job_type: Optional[str] = None):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         
