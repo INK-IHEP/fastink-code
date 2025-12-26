@@ -114,6 +114,7 @@ async def update_completed_jobs():
 
             r = redis_connect()
             await r.set("cluster_jobs", json.dumps(cluster_jobs, ensure_ascii=False))
+            logger.debug(f"HTCondor joblist insert to redis, the list: {cluster_jobs}")
 
             if need_change_status_jobs:
                 
