@@ -348,14 +348,14 @@ async def query_common_job(
             for cid in cluster_ids:
                 try:
                     adapter = get_scheduler(cid, username)
-                    jobs = await adapter.query_job(job_type)
+                    jobs = await adapter.query_job()
                     if jobs:
                         joblist.extend(jobs)
                 except Exception as e:
                     logger.error(f"Get user jobs failed for cluster {cid}, username: {username}, details: {e}.")
         else:
             adapter = get_scheduler(cluster_id, username)
-            joblist = await adapter.query_job(job_type) or []
+            joblist = await adapter.query_job() or []
 
         start_idx = max(0, (page - 1) * limit)
         end_idx = start_idx + max(0, limit)
