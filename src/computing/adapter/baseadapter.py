@@ -24,7 +24,7 @@ class SchedulerBase(ABC):
     
 
     @abstractmethod
-    async def query_job(self, job_id: str) -> dict:
+    async def query_job(self) -> dict:
         """查询作业状态"""
     
 

@@ -1,4 +1,4 @@
-import os, re, importlib, pwd
+import os, importlib, pwd
 from shlex import quote
 from typing import Optional
 from datetime import datetime
@@ -11,6 +11,7 @@ from src.computing.tools.db.db_tools import *
 from src.computing.cluster.cluster import HTC_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
+from src.inkdb.inkredis import redis_connect
 from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, build_requirements
 
 @scheduler("htcondor")
@@ -233,92 +234,79 @@ class HTC_Scheduler(SchedulerBase):
                 
 
         
-    async def query_job(self, job_type):
-        job_list = []
+    async def query_job(self):
+        
+        r = redis_connect()
+        cluster_jobs = await r.get("cluster_jobs")
+        job_list = cluster_jobs.get(self.USERNAME, [])
+
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         start_keywords = get_config("computing", "start_keywords")
-        
-        command = self._generate_condor_query_command(job_type)
-        stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
-        logger.info(f"Get user({self.USERNAME}) cluster jobs: {stdout}")
-        lines = stdout.decode().strip().split('\n')
 
-        if lines != ['']:
-            for line in lines:
-                job_param_list = line.split()
-                job_clusterid = int(job_param_list[1])
-                job_procid = job_param_list[2]
-                job_id = str(job_clusterid) + '.' + str(job_procid)
-                HepJob_JobType = job_param_list[8]
-                job_start_time = " "
-                job_remote_host = " "
-                hold_reason = ""
-                job_requestos = job_param_list[9]
+        for job in job_list:
+            job_id = job.get("jobId")
+            job_type = job.get("jobType")
+            job_status = job.get("jobStatus")
+            job_output_path = job.get("joboutpath")
+            job_err_path = job.get("joberrpath")
+            job_iwd = job.get("jobiwd")
+            job_submit_time = job.get("jobSubmitTime")
+            job_start_time = job.get("jobStartTime")
+            job_node_list = job.get("jobNodeList")
+            job_runos = job.get("jobrunos")
+            job_hold_reason = job.get("hold_reason")
 
-                try:
-                    job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
-                    logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
-                except NoResultFound:
-                    job_path = job_param_list[10]
-                    job_output_path = f"{job_param_list[11]}"
-                    job_errput_path = f"{job_param_list[12]}"
-                    insert_job_info(self.UID, job_id, job_output_path, job_errput_path, HepJob_JobType, job_path, self.CLUSTER_TYPE)
-                    job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
-                connect_sign, = get_job_connect_info(self.UID, job_id, self.CLUSTER_TYPE)
+            try:
+                job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+                logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
+            except NoResultFound:
+                job_path = job_iwd
+                insert_job_info(self.UID, job_id, job_output_path, job_err_path, job_type, job_path, self.CLUSTER_TYPE)
+                job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+            connect_sign, = get_job_connect_info(self.UID, job_id, self.CLUSTER_TYPE)
 
-                date_time =  datetime.fromtimestamp(int(job_param_list[4]), ZoneInfo("Asia/Shanghai"))
-                job_queue_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                if job_param_list[5] == '1':    
-                    job_status = "QUEUEING"
+            if job_status == '1':    
+                job_status = "QUEUEING"
 
-                elif job_param_list[5] == '2':
-                    job_status = "RUNNING"
-                    date_time = datetime.fromtimestamp(int(job_param_list[6]), ZoneInfo("Asia/Shanghai"))
-                    job_start_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                    job_remote_host = job_param_list[7]
-                    if connect_sign == "False":
-                        output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
-                        if any(kw in output_content for kw in start_keywords):
-                            connect_sign = "True"
-                            if HepJob_JobType in iptables_jobtype:
-                                try:
-                                    await create_iptables(self.UID, job_clusterid, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
-                                except Exception as e:
-                                    connect_sign = "False"
-                                    logger.error(f"{job_clusterid} iptables set failed, the details: {e}")
-                            update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
-                            update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
-                            
-                elif job_param_list[5] == '4':
-                    job_status = "COMPLETED"
-                    date_time =  datetime.fromtimestamp(int(job_param_list[6]), ZoneInfo("Asia/Shanghai"))
-                    job_start_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                    job_remote_host = job_param_list[7]
+            elif job_status[5] == '2':
+                job_status = "RUNNING"
+                if connect_sign == "False":
+                    output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
+                    if any(kw in output_content for kw in start_keywords):
+                        connect_sign = "True"
+                        if job_type in iptables_jobtype:
+                            try:
+                                await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
+                            except Exception as e:
+                                connect_sign = "False"
+                                logger.error(f"{job_id} iptables set failed, the details: {e}")
+                        update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
+                        update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
+                        
+            elif job_status == '4':
+                job_status = "COMPLETED"
 
-                elif job_param_list[5] == '5':
-                    job_status = "HOLDING"
-                    date_time =  datetime.fromtimestamp(int(job_param_list[6]), ZoneInfo("Asia/Shanghai"))
-                    job_start_time = date_time.strftime('%Y-%m-%d %H:%M:%S')
-                    hold_reason = ' '.join(map(str, job_param_list[13:]))
-                else:
-                    job_status = "OTHER" 
-                
-                if db_job_status != job_status: 
-                    update_job_status(self.UID, job_clusterid, job_status, self.CLUSTER_TYPE)
-                
-                job_list.append({
-                    "clusterId": self.CLUSTER_TYPE,
-                    "jobId": job_id,
-                    "jobType": HepJob_JobType,
-                    "jobSubmitTime": job_queue_time,
-                    "jobStatus": job_status,
-                    "jobStartTime": job_start_time,
-                    "JobNodeList": job_remote_host,
-                    "jobrunos": job_requestos,
-                    "jobtimelimit": "24:00:00",
-                    "connect_sign": connect_sign,
-                    "hold_reason": hold_reason
-                })
+            elif job_status == '5':
+                job_status = "HOLDING"
+
+            else:
+                job_status = "OTHER" 
+            
+            if db_job_status != job_status: 
+                update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
+            
+            job_list.append({
+                "clusterId": self.CLUSTER_TYPE,
+                "jobId": job_id,
+                "jobType": job_type,
+                "jobSubmitTime": job_submit_time,
+                "jobStatus": job_status,
+                "jobStartTime": job_start_time,
+                "JobNodeList": job_node_list,
+                "jobrunos": job_runos,
+                "connect_sign": connect_sign,
+                "hold_reason": job_hold_reason
+            })
 
         return job_list
 

@@ -1,19 +1,15 @@
+import asyncio, json, pwd
+from typing import Optional
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from src.storage import common
 from fastapi import HTTPException
 from src.computing.common import *
-from src.computing.gateway_tools import *
-from src.auth.krb5 import get_krb5
-from src.computing.htc.htc_check_job import *
-from datetime import datetime
-from src.storage import common
-from src.common.config import get_config
 from src.common.logger import logger
-import base64, asyncio, os, json, pwd
+from src.common.config import get_config
+from src.computing.gateway_tools import *
+from src.computing.htc.htc_check_job import *
 
-'''
-Author:         guocq@ihep.ac.cn
-Created:        2024-12-18
-Last Modified:  2024-12-18
-'''
 
 def parse_info(info, key):
     try:
@@ -60,6 +56,26 @@ async def read_file(uid, file_path: str) -> str:
     file_content = await common.cat_file(fname=file_path, username=username, mgm=xrootd_path, krb5_enabled=krb5_enabled)
 
     return file_content
+
+
+def safe_get(arr, idx, default=""):
+    return arr[idx] if idx < len(arr) else default
+
+
+def safe_int(s: str, default: Optional[int] = None) -> Optional[int]:
+    try:
+        s = (s or "").strip()
+        if s == "" or s.lower() in {"undefined", "null", "none"}:
+            return default
+        return int(s)
+    except Exception:
+        return default
+    
+
+def ts_to_str(ts: Optional[int]) -> str:
+    if not ts or ts <= 0:
+        return ""
+    return datetime.fromtimestamp(ts, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def build_requirements(request_wn=None, request_arch=None) -> str:

@@ -1,11 +1,14 @@
+import json
 from shlex import quote
 from pathlib import Path
 from fastapi import APIRouter
+import redis.asyncio as redis
 from src.common.logger import logger
 from src.common.config import get_config
 from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.computing.tools.db.db_tools import needto_change_status_jobs
+from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str
 from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
 from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times
 
@@ -26,7 +29,7 @@ def query_cluster_jobs():
 
     command = (
         f"{BASE_CMD} "
-        f"-af {' '.join(attrs)}"
+        f"-af:V {' '.join(attrs)}"
     )
 
     return command
@@ -51,9 +54,10 @@ def get_condor_history_command(job_id: str) -> str:
 
 LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
 @router.on_event("startup")
-@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=10, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
+    cluster_jobs: dict[str, list[dict]] = {}
     try:
         with lock:
             iptables_jobtype = get_config("computing", "iptables_jobtype")
@@ -65,10 +69,45 @@ async def update_completed_jobs():
             if lines != ['']:
                 for line in lines:
                     job_param_list = line.split()
-                    job_clusterid = int(job_param_list[1])
+
+                    job_owner = safe_get(job_param_list, 0)
+                    job_clusterid = safe_int(safe_get(job_param_list, 1), default=None)
+                    qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
+                    start_ts = safe_int(safe_get(job_param_list, 6), default=None)
+
+                    job_submit_time = ts_to_str(qdate_ts)
+                    job_start_time  = ts_to_str(start_ts)
+
+                    job_status = safe_get(job_param_list, 5)
+                    job_remote_host = safe_get(job_param_list, 7)
+                    job_type = safe_get(job_param_list, 8)
+                    job_request_os = safe_get(job_param_list, 9)
+                    job_iwd = safe_get(job_param_list, 10)
+                    job_out_path = safe_get(job_param_list, 11)
+                    job_err_path = safe_get(job_param_list, 12)
+                    job_hold_reason = " ".join(job_param_list[13:]) if len(job_param_list) > 13 else ""
+
+                    cluster_jobs[job_owner].append(
+                        {
+                            "ClusterId": "HTCondor",
+                            "jobId": job_clusterid,
+                            "jobType": job_type,
+                            "jobStatus": job_status,
+                            "jobSubmitTime": job_submit_time,
+                            "jobStartTime": job_start_time,
+                            "jobNodeList": job_remote_host,
+                            "jobrunos": job_request_os,
+                            "jobiwd": job_iwd,
+                            "joboutpath": job_out_path,
+                            "joberrpath": job_err_path,
+                            "hold_reason": job_hold_reason
+                        }
+                    )
                 
                     if job_clusterid in need_change_status_jobs.keys():
                         del need_change_status_jobs[job_clusterid]
+            
+            await redis.set("cluster_jobs", json.dumps(cluster_jobs, ensure_ascii=False))
 
             if need_change_status_jobs:
                 for key in need_change_status_jobs:
