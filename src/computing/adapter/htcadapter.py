@@ -318,6 +318,8 @@ class HTC_Scheduler(SchedulerBase):
                 "hold_reason": job_hold_reason
             })
 
+        logger.info("1111111111111111111111111111111111111111111111111111")
+
         return return_list
 
     
