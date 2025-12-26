@@ -251,6 +251,8 @@ class HTC_Scheduler(SchedulerBase):
 
         logger.info(f"Get {self.USERNAME} jobs: {job_list}")
 
+        return_list = [] 
+
         for job in job_list:
             job_id = job.get("jobId")
             job_type = job.get("jobType")
@@ -303,7 +305,7 @@ class HTC_Scheduler(SchedulerBase):
             if db_job_status != job_status: 
                 update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
             
-            job_list.append({
+            return_list.append({
                 "clusterId": self.CLUSTER_TYPE,
                 "jobId": job_id,
                 "jobType": job_type,
@@ -316,7 +318,7 @@ class HTC_Scheduler(SchedulerBase):
                 "hold_reason": job_hold_reason
             })
 
-        return job_list
+        return return_list
 
     
     async def cancel_job(self, job_id):
