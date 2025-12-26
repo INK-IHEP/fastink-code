@@ -278,7 +278,7 @@ class HTC_Scheduler(SchedulerBase):
             if job_status == '1':    
                 job_status = "QUEUEING"
 
-            elif job_status[5] == '2':
+            elif job_status == '2':
                 job_status = "RUNNING"
                 if connect_sign == "False":
                     output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
@@ -317,8 +317,6 @@ class HTC_Scheduler(SchedulerBase):
                 "connect_sign": connect_sign,
                 "hold_reason": job_hold_reason
             })
-
-        logger.info("1111111111111111111111111111111111111111111111111111")
 
         return return_list
 
