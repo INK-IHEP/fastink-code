@@ -1,6 +1,8 @@
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.expression import update, select
+#from sqlalchemy.sql.expression import update, select, delete
+
+from sqlalchemy import select, update, delete
 from src.database.sqla import models
 from src.database.sqla.session import read_session, transactional_session
 from src.common.logger import logger
@@ -236,3 +238,18 @@ def get_jobs_with_null_times(
         
     except Exception as e:
         raise Exception(f"ERR : {e} in get job with null sql func.")
+
+
+@transactional_session
+def delete_jobinfo_by_jobids(jobids, *, session: Session):
+    if not jobids:
+        return
+
+    stmt = delete(models.JobInfo).where(models.JobInfo.jobid.in_(jobids))
+    try:
+        result = session.execute(stmt)
+        session.flush()
+        logger.info(f"delete_jobinfo_by_jobids: deleted {result.rowcount} rows, jobids_count={len(jobids)}")
+    except Exception:
+        logger.exception(f"delete_jobinfo_by_jobids: failed, jobids_count={len(jobids)}")
+        raise

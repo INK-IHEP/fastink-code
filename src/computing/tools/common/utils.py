@@ -261,29 +261,55 @@ def delete_iptables(uid, jobId, gateway_port, clusterid):
     update_iptable_clean(uid, jobId, 1, clusterid)
 
 
-async def sub_command(command, timeoutsec, errinfo, tminfo):
-    try:
+# async def sub_command(command, timeoutsec, errinfo, tminfo):
+#     try:
         
-        process = await asyncio.create_subprocess_shell(
-            command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            shell=True
-        )
+#         process = await asyncio.create_subprocess_shell(
+#             command,
+#             stdout=asyncio.subprocess.PIPE,
+#             stderr=asyncio.subprocess.PIPE,
+#             shell=True
+#         )
         
-        await asyncio.wait_for(process.wait(), timeout=timeoutsec)
-        stdout, stderr = await process.communicate()
+#         await asyncio.wait_for(process.wait(), timeout=timeoutsec)
+#         stdout, stderr = await process.communicate()
         
-        if process.returncode != 0:
-            error_msg = stderr.decode().strip()
-            raise Exception(f"{errinfo} {error_msg}")       
-    except asyncio.TimeoutError as e:
-        if process.returncode is None:
-            process.kill()
-            await process.wait()
-        raise Exception(f"{tminfo} {e}")
-    except Exception as e:
-        raise e
+#         if process.returncode != 0:
+#             error_msg = stderr.decode().strip()
+#             raise Exception(f"{errinfo} {error_msg}")       
+#     except asyncio.TimeoutError as e:
+#         if process.returncode is None:
+#             process.kill()
+#             await process.wait()
+#         raise Exception(f"{tminfo} {e}")
+#     except Exception as e:
+#         raise e
     
-    return stdout
+#     return stdout
 
+
+
+async def sub_command(command, timeoutsec, errinfo, tminfo):
+    process = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        # create_subprocess_shell 本身就用 shell 了，这里不要再传 shell=True
+    )
+
+    try:
+        # 关键：用 communicate()，它会一边读 stdout/stderr 一边等待进程结束，避免管道塞满死锁
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
+
+    except asyncio.TimeoutError as e:
+        # 超时：先 kill，再把管道读空，确保进程彻底回收
+        process.kill()
+        stdout, stderr = await process.communicate()
+        raise Exception(f"{tminfo} {e}. stderr={stderr.decode(errors='ignore')[:500]}")
+
+    # 正常结束后再检查 returncode
+    if process.returncode != 0:
+        error_msg = stderr.decode(errors="ignore").strip()
+        raise Exception(f"{errinfo} {error_msg}")
+
+    return stdout
