@@ -243,6 +243,8 @@ class HTC_Scheduler(SchedulerBase):
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         start_keywords = get_config("computing", "start_keywords")
 
+        logger.info(f"Get {self.USERNAME} jobs: {job_list}")
+
         for job in job_list:
             job_id = job.get("jobId")
             job_type = job.get("jobType")
