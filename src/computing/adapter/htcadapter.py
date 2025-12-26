@@ -266,7 +266,7 @@ class HTC_Scheduler(SchedulerBase):
             job_runos = job.get("jobrunos")
             job_hold_reason = job.get("hold_reason")
             
-            if job_condor_type == request_job_type:
+            if request_job_type == "all" or request_job_type == job_condor_type:
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
                     logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
