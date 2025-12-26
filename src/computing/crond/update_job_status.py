@@ -75,6 +75,7 @@ async def update_completed_jobs():
                     job_param_list = line.split()
 
                     job_owner = safe_get(job_param_list, 0)
+                    job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
                     job_clusterid = safe_int(safe_get(job_param_list, 1), default=None)
                     qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
                     start_ts = safe_int(safe_get(job_param_list, 6), default=None)
@@ -91,7 +92,7 @@ async def update_completed_jobs():
                     job_err_path = safe_get(job_param_list, 12)
                     job_hold_reason = " ".join(job_param_list[13:]) if len(job_param_list) > 13 else ""
 
-                    cluster_jobs[job_owner].append(
+                    cluster_jobs.setdefault(job_owner, []).append(
                         {
                             "ClusterId": "HTCondor",
                             "jobId": job_clusterid,
