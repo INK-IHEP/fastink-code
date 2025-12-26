@@ -1,4 +1,4 @@
-import json
+import json, shlex
 from shlex import quote
 from pathlib import Path
 from fastapi import APIRouter
@@ -72,7 +72,7 @@ async def update_completed_jobs():
             
             if lines != ['']:
                 for line in lines:
-                    job_param_list = line.split()
+                    job_param_list = shlex.split(line, posix=True)
 
                     job_owner = safe_get(job_param_list, 0)
                     job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
