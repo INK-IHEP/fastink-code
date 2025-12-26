@@ -1,4 +1,5 @@
 import os, base64, pwd, grp
+from typing import Optional
 from src.storage import common
 from src.auth.krb5 import get_krb5
 from abc import ABC, abstractmethod
@@ -24,7 +25,7 @@ class SchedulerBase(ABC):
     
 
     @abstractmethod
-    async def query_job(self) -> dict:
+    async def query_job(self, job_type: Optional[str] = None) -> dict:
         """查询作业状态"""
     
 

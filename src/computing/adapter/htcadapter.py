@@ -233,7 +233,7 @@ class HTC_Scheduler(SchedulerBase):
                 
 
         
-    async def query_job(self):
+    async def query_job(self, request_job_type: Optional[str] = None):
         
         r = redis_connect()
 
@@ -265,58 +265,61 @@ class HTC_Scheduler(SchedulerBase):
             job_node_list = job.get("jobNodeList")
             job_runos = job.get("jobrunos")
             job_hold_reason = job.get("hold_reason")
+            
+            if job_condor_type == request_job_type:
+                try:
+                    job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+                    logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
+                except NoResultFound:
+                    job_path = job_iwd
+                    insert_job_info(self.UID, job_id, job_output_path, job_err_path, job_condor_type, job_path, self.CLUSTER_TYPE)
+                    job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+                connect_sign, = get_job_connect_info(self.UID, job_id, self.CLUSTER_TYPE)
 
-            try:
-                job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-                logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
-            except NoResultFound:
-                job_path = job_iwd
-                insert_job_info(self.UID, job_id, job_output_path, job_err_path, job_condor_type, job_path, self.CLUSTER_TYPE)
-                job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-            connect_sign, = get_job_connect_info(self.UID, job_id, self.CLUSTER_TYPE)
+                if job_status == '1':    
+                    job_status = "QUEUEING"
 
-            if job_status == '1':    
-                job_status = "QUEUEING"
+                elif job_status == '2':
+                    job_status = "RUNNING"
+                    if connect_sign == "False":
+                        output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
+                        if any(kw in output_content for kw in start_keywords):
+                            connect_sign = "True"
+                            if job_type in iptables_jobtype:
+                                try:
+                                    await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
+                                except Exception as e:
+                                    connect_sign = "False"
+                                    logger.error(f"{job_id} iptables set failed, the details: {e}")
+                            update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
+                            update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
+                            
+                elif job_status == '4':
+                    job_status = "COMPLETED"
 
-            elif job_status == '2':
-                job_status = "RUNNING"
-                if connect_sign == "False":
-                    output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
-                    if any(kw in output_content for kw in start_keywords):
-                        connect_sign = "True"
-                        if job_type in iptables_jobtype:
-                            try:
-                                await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
-                            except Exception as e:
-                                connect_sign = "False"
-                                logger.error(f"{job_id} iptables set failed, the details: {e}")
-                        update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
-                        update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
-                        
-            elif job_status == '4':
-                job_status = "COMPLETED"
+                elif job_status == '5':
+                    job_status = "HOLDING"
 
-            elif job_status == '5':
-                job_status = "HOLDING"
-
+                else:
+                    job_status = "OTHER" 
+                
+                if db_job_status != job_status: 
+                    update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
+                
+                return_list.append({
+                    "clusterId": self.CLUSTER_TYPE,
+                    "jobId": str(job_id),
+                    "jobType": job_type,
+                    "jobSubmitTime": job_submit_time,
+                    "jobStatus": job_status,
+                    "jobStartTime": job_start_time,
+                    "JobNodeList": job_node_list,
+                    "jobrunos": job_runos,
+                    "connect_sign": connect_sign,
+                    "hold_reason": job_hold_reason
+                })
             else:
-                job_status = "OTHER" 
-            
-            if db_job_status != job_status: 
-                update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
-            
-            return_list.append({
-                "clusterId": self.CLUSTER_TYPE,
-                "jobId": str(job_id),
-                "jobType": job_type,
-                "jobSubmitTime": job_submit_time,
-                "jobStatus": job_status,
-                "jobStartTime": job_start_time,
-                "JobNodeList": job_node_list,
-                "jobrunos": job_runos,
-                "connect_sign": connect_sign,
-                "hold_reason": job_hold_reason
-            })
+                continue
 
         return return_list
 
