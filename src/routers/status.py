@@ -43,6 +43,7 @@ class InkStatus(str, Enum):
     FS_UNKNOWN_ERROR = "F08"
     NOT_OVERWRITE = "F10"
     PARAM_ERROR = "F09"
+    PATH_EXIST = "F11"
     # Resources
     RESOURCE_NOT_FOUND = "R01"
     SERVER_INTERNAL_ERROR = "R02"
