@@ -213,7 +213,7 @@ async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to upload file to {upload_dir}/{file.filename}. An unexpected error occurred:: {str(e)}", "data": None}
 
 @router.post("/create_file")
-async def create_file(TargetPath:str, username: str = Depends(get_username)):
+async def create_file(TargetPath:str, username: str = Depends(get_username), mode:str = '644'):
     TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
     logger.info("Creating file {TargetPath} .")
     try:
@@ -228,6 +228,9 @@ async def create_file(TargetPath:str, username: str = Depends(get_username)):
             return {"status": InkStatus.OK, "msg": f"TargetPath  {TargetPath} created successfully.", "data": None}
         else:
             return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}.", "data": None}
+        #### Change mode
+        await common.chmod(fname = TargetPath, username = username, mode = mode, mgm = xrd_host)
+
     except Exception as e:
         logger.error(f"Failed to create TargetPath {TargetPath}. Err:{str(e)}")
         return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}. err:{str(e)}", "data": None}
