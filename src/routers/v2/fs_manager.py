@@ -224,9 +224,13 @@ async def create_file(TargetPath:str, username: str = Depends(get_username)):
         await common.upload_file(src_data = '', dst = TargetPath, username = username, mgm = xrd_host)
         is_exist, path_type = await common.path_exist(TargetPath, username = username, mgm = xrd_host)
         if is_exist and path_type == PathType.FILE:
+            logger.debug(f"Created {TargetPath} successfully.")
             return {"status": InkStatus.OK, "msg": f"TargetPath  {TargetPath} created successfully.", "data": None}
         else:
             return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}.", "data": None}
+    except Exception as e:
+        logger.error(f"Failed to create TargetPath {TargetPath}. Err:{str(e)}")
+        return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}. err:{str(e)}", "data": None}
 
 @router.post("/upload_dir")
 async def dirUpload(upload_dir: str = Form(...), file: UploadFile = File(...)):
