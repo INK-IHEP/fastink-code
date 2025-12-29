@@ -230,7 +230,7 @@ async def create_file(TargetPath:str, username: str = Depends(get_username), mod
             return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}.", "data": None}
         #### Change mode
         await common.chmod(fname = TargetPath, username = username, mode = mode, mgm = xrd_host)
-
+        logger.debug(f"Changed {TargetPath}'s mode to {mode}.")
     except Exception as e:
         logger.error(f"Failed to create TargetPath {TargetPath}. Err:{str(e)}")
         return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}. err:{str(e)}", "data": None}
