@@ -72,14 +72,14 @@ def get_krb5cc(uid: int = None, name: str = None, krb5: bool = True):
                 logger.debug(f"Token file {krb5ccname} is valid. Just return. {uid} {name}")
                 return uid, name, krb5ccname
             else:
-                logger.info(f"Removing expired krb5 ticket {krb5ccname}.")
+                logger.info(f"Token ticket {krb5ccname} is expired. Remove it and Retrieve new token.")
                 os.remove(krb5ccname)
         except Exception as e:
             logger.error(f"Error when check {krb5ccname}'s validity. Err:{str(e)}.")
             raise e
     #### Fetch KRB5 token from DB
     try:
-        logger.debug(f"Trying to fetch recent krb5 token for {name} and save to {krb5ccname}.")
+        logger.debug(f"Trying to fetch latest krb5 token for {name} and save to {krb5ccname}.")
         krb5_data = get_krb5(name)
         with open(krb5ccname, "wb") as ofile:
             ofile.write(base64.b64decode(krb5_data))
@@ -87,7 +87,8 @@ def get_krb5cc(uid: int = None, name: str = None, krb5: bool = True):
         if check_krb5_validity(krb5ccname):
             logger.debug(f"Retrieved token {krb5ccname} is valid.")
         else:
-            logger.error(f"Retrieved token for {name} is expired or invalid.")
+            logger.error(f"Retrieved token for {name} is expired or invalid. Remove it.")
+            os.remove(krb5ccname)
             raise ValueError(f"Retrieved token for {name} is expired or invalid.")
     except Exception as e:
         logger.error(f"Failed to fetch token for {name} and save to file {krb5ccname}. Err:{str(e)}")
