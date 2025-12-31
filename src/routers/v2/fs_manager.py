@@ -140,9 +140,8 @@ async def fileDelete(req: Request,
 
 #### Upload a file
 @router.post("/upload_file")
-async def fileUpload(req: Request, upload_dir: str = Form(...), overWrite:bool = False, file: UploadFile = File(...),
+async def fileUpload(req: Request, upload_dir: str = Form(...), overWrite:bool = Form("False"), file: UploadFile = File(...),
                      username: str = Depends(get_username)):
-
     try:
         # _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         # Decode file path
