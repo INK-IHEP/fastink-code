@@ -257,53 +257,53 @@ async def resert_start_end_time():
         logger.exception("resert_start_end_time: failed")
 
 
-LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
-@router.on_event("startup")
-@repeat_every(seconds=10, wait_first=False, raise_exceptions=True, logger=logger)
-async def submit_job_from_redis():
-    lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
-    try:
-        with lock:
+# LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
+# @router.on_event("startup")
+# @repeat_every(seconds=10, wait_first=False, raise_exceptions=True, logger=logger)
+# async def submit_job_from_redis():
+#     lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
+#     try:
+#         with lock:
             
-            r = redis_connect()
+#             r = redis_connect()
 
-            while True:
-                raw_job = await r.rpop("submitting_jobs")
-                if not raw_job:
-                    break
-                job = json.loads(raw_job.decode("utf-8"))
+#             while True:
+#                 raw_job = await r.rpop("submitting_jobs")
+#                 if not raw_job:
+#                     break
+#                 job = json.loads(raw_job.decode("utf-8"))
 
-                job_owner = job.get("username")
-                job_type = job.get("jobType")
-                job_cpu = job.get("jobReqCPU")
-                job_mem = job.get("jobReqMEM")
-                job_os = job.get("jobReqOS")
-                job_wn = job.get("jobReqWN")
-                job_arch = job.get("jobReqARCH")
-                job_params = job.get("jobReqParam")
+#                 job_owner = job.get("username")
+#                 job_type = job.get("jobType")
+#                 job_cpu = job.get("jobReqCPU")
+#                 job_mem = job.get("jobReqMEM")
+#                 job_os = job.get("jobReqOS")
+#                 job_wn = job.get("jobReqWN")
+#                 job_arch = job.get("jobReqARCH")
+#                 job_params = job.get("jobReqParam")
 
-                job_dir = await init_job_dir(job_owner, job_type)
-                submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
+#                 job_dir = await init_job_dir(job_owner, job_type)
+#                 submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
 
-                # Submit the condor job.
-                submit_command = self._generate_submit_command(job_dir, htc_job_params.job_type, token_filename, submit_file)
+#                 # Submit the condor job.
+#                 submit_command = self._generate_submit_command(job_dir, htc_job_params.job_type, token_filename, submit_file)
 
-            logger.info(f"Generate User {self.USERNAME} submit command {submit_command} finished.")
-            stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
-            job_id_line = stdout.decode().strip()
-            job_id = job_id_line.split()[-1].rstrip('.')
-            output = f"{job_dir}/{job_id}.out"
-            errpath = f"{job_dir}/{job_id}.err"
+#             logger.info(f"Generate User {self.USERNAME} submit command {submit_command} finished.")
+#             stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
+#             job_id_line = stdout.decode().strip()
+#             job_id = job_id_line.split()[-1].rstrip('.')
+#             output = f"{job_dir}/{job_id}.out"
+#             errpath = f"{job_dir}/{job_id}.err"
 
-            logger.info(f"Submit User {self.USERNAME} job {job_id} to cluster.")
-            insert_job_info(self.UID, job_id, output, errpath, htc_job_params.job_type, job_dir, htc_job_params.cluster_id)
-            logger.info(f"Submit {self.USERNAME} job {job_id} to queue.")
+#             logger.info(f"Submit User {self.USERNAME} job {job_id} to cluster.")
+#             insert_job_info(self.UID, job_id, output, errpath, htc_job_params.job_type, job_dir, htc_job_params.cluster_id)
+#             logger.info(f"Submit {self.USERNAME} job {job_id} to queue.")
 
-            return int(job_id), job_dir
+#             return int(job_id), job_dir
         
-    except Exception as e:
-        logger.error(f"Some Wrong in Submit job, the details: {e}")
-        raise e
+#     except Exception as e:
+#         logger.error(f"Some Wrong in Submit job, the details: {e}")
+#         raise e
     
 
             
