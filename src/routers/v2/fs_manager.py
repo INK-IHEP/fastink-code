@@ -147,9 +147,11 @@ async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile
     try:
         body = await req.json()
         if 'overWrite' in body:
+            logger.debug(f"overWrite set: {body['overWrite']}")
             overWrite = bool(body['overWrite'])
     except Exception as e:
-        logger.error(f"Failed to get parameters when download. Err:{str(e)}")
+        logger.error(f"Failed to get parameters when upload file. Err:{str(e)}")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"{str(e)}", "data": None}
     try:
         # _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         # Decode file path
@@ -177,7 +179,7 @@ async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile
                 logger.error(f"{upload_dir} is not a directory.")
                 return {"status": InkStatus.TYPE_INVALID, "msg": f"Failed to upload file {filename}. {upload_dir} is not a directory.", "data": None}
         else:
-            logger.debug(f"{upload_dir} exists. We will upload {filename} into it.")
+            logger.debug(f"Dir {upload_dir} exists. We will upload {filename} into it.")
 
         # Construct full path to the file to be uploaded
         file_path = os.path.join(upload_dir, filename)
