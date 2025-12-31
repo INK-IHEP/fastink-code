@@ -1,15 +1,16 @@
-import json, shlex
+import json, shlex, base64
 from shlex import quote
 from pathlib import Path
 from fastapi import APIRouter
+from datetime import datetime
+from src.auth.krb5 import get_krb5
 from src.common.logger import logger
 from src.common.config import get_config
 from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.inkdb.inkredis import redis_connect
 from src.computing.tools.db.db_tools import needto_change_status_jobs
-from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str
-from src.computing.tools.common.utils import sub_command, delete_iptables, change_username_to_uid
+from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit
 from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids
 
 
@@ -181,47 +182,6 @@ def gen_history_list_command() -> str:
     return command
 
 
-
-# LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
-# @router.on_event("startup")
-# @repeat_every(seconds=60, wait_first=False, raise_exceptions=True, logger=logger)
-# async def resert_start_end_time():
-#     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
-#     try:
-#         with lock:
-#             time_null_jobs = get_jobs_with_null_times()
-#             logger.info(f"The DB time null jobs: {time_null_jobs}")
-            
-#             query_command = gen_history_list_command()
-#             stdout = await sub_command(query_command, 20, "Query history jobs failed.", "Query history jobs timeout.")
-#             history_jobs_lines = stdout.decode().strip().split('\n')
-#             logger.info(f"Get the all history jobs: {history_jobs_lines}")
-
-#             if history_jobs_lines != [""]:
-#                 for job_line in history_jobs_lines:
-#                     job_param_list = job_line.split()
-#                     job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
-#                     if job_param_list[2] != "NULL":
-#                         job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
-#                     else:
-#                         job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
-#                     job_user = job_param_list[6]
-#                     job_clusterid = job_param_list[7]
-#                     job_uid = change_username_to_uid(job_user)
-
-#                     if job_clusterid in time_null_jobs:
-#                         update_start_time(job_uid, job_clusterid, job_start_time, "htcondor")
-#                         update_end_time(job_uid, job_clusterid, job_end_time, "htcondor")
-#                         logger.info(f"Update {job_user} job {job_clusterid} start and end time in DB.")
-
-#     except Timeout:
-#             logger.info("resert_start_end_time: lock busy, skip this tick")
-    
-#     except Exception:
-#         logger.exception("resert_start_end_time: failed")
-
-    
-
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
 @repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
@@ -295,3 +255,55 @@ async def resert_start_end_time():
     
     except Exception:
         logger.exception("resert_start_end_time: failed")
+
+
+LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
+@router.on_event("startup")
+@repeat_every(seconds=10, wait_first=False, raise_exceptions=True, logger=logger)
+async def submit_job_from_redis():
+    lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
+    try:
+        with lock:
+            
+            r = redis_connect()
+
+            while True:
+                raw_job = await r.rpop("submitting_jobs")
+                if not raw_job:
+                    break
+                job = json.loads(raw_job.decode("utf-8"))
+
+                job_owner = job.get("username")
+                job_type = job.get("jobType")
+                job_cpu = job.get("jobReqCPU")
+                job_mem = job.get("jobReqMEM")
+                job_os = job.get("jobReqOS")
+                job_wn = job.get("jobReqWN")
+                job_arch = job.get("jobReqARCH")
+                job_params = job.get("jobReqParam")
+
+                job_dir = await init_job_dir(job_owner, job_type)
+                submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
+
+                # Submit the condor job.
+                submit_command = self._generate_submit_command(job_dir, htc_job_params.job_type, token_filename, submit_file)
+
+            logger.info(f"Generate User {self.USERNAME} submit command {submit_command} finished.")
+            stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
+            job_id_line = stdout.decode().strip()
+            job_id = job_id_line.split()[-1].rstrip('.')
+            output = f"{job_dir}/{job_id}.out"
+            errpath = f"{job_dir}/{job_id}.err"
+
+            logger.info(f"Submit User {self.USERNAME} job {job_id} to cluster.")
+            insert_job_info(self.UID, job_id, output, errpath, htc_job_params.job_type, job_dir, htc_job_params.cluster_id)
+            logger.info(f"Submit {self.USERNAME} job {job_id} to queue.")
+
+            return int(job_id), job_dir
+        
+    except Exception as e:
+        logger.error(f"Some Wrong in Submit job, the details: {e}")
+        raise e
+    
+
+            
