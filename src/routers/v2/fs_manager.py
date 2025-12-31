@@ -140,18 +140,9 @@ async def fileDelete(req: Request,
 
 #### Upload a file
 @router.post("/upload_file")
-async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile = File(...),
+async def fileUpload(req: Request, upload_dir: str = Form(...), overWrite:bool = False, file: UploadFile = File(...),
                      username: str = Depends(get_username)):
-    
-    overWrite: bool = False
-    try:
-        body = await req.json()
-        if 'overWrite' in body:
-            logger.debug(f"overWrite set: {body['overWrite']}")
-            overWrite = bool(body['overWrite'])
-    except Exception as e:
-        logger.error(f"Failed to get parameters when upload file. Err:{str(e)}")
-        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"{str(e)}", "data": None}
+
     try:
         # _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         # Decode file path
