@@ -294,6 +294,8 @@ async def submit_job_from_redis():
                     logger.debug(f"Submit User {job_owner} job {job_id} to cluster.")
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
                     logger.debug(f"Submit {job_owner} job {job_id} to queue.")
+                    await r.srem(f"{job_owner}_submit_types", job_type)
+
                 except Exception as e:
                     logger.error(f"Submit {job_owner} job failed, {e}")
                     failed_payload = json.dumps({
@@ -302,6 +304,7 @@ async def submit_job_from_redis():
                         "error": str(e)
                     })
                     await r.lpush("error_jobs", failed_payload)
+                    await r.srem(f"{job_owner}_submit_types", job_type)
                     continue
 
     except Timeout:
