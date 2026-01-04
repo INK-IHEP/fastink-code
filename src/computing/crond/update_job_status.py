@@ -120,7 +120,7 @@ async def update_completed_jobs():
                     query_history_command = get_condor_history_command(key)
                     stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
                     history_job_lines = stdout.decode().strip().split('\n')
-                    logger.info(f"The history result: {history_job_lines}")
+                    logger.debug(f"The history result: {history_job_lines}")
 
                     if history_job_lines != [""]:
                         job_param_list = history_job_lines[0].split()
@@ -141,18 +141,17 @@ async def update_completed_jobs():
                         update_job_status(job_uid, key, 'COMPLETED', "htcondor")
                         update_start_time(job_uid, key, job_start_time, "htcondor")
                         update_end_time(job_uid, key, job_end_time, "htcondor")
-                        logger.info(f"Update job {key} status to COMPLETED.")
+                        logger.debug(f"Update job {key} status to COMPLETED.")
                     
                     else:
                         to_delete.append(key)
                 
                 if to_delete:
-                    logger.info(f"Need to delete jobs: {to_delete}")
+                    logger.debug(f"Need to delete jobs: {to_delete}")
                     delete_jobinfo_by_jobids(to_delete)
                         
-                    
     except Timeout:
-        logger.info("update_completed_jobs: lock busy, skip this tick")
+        logger.debug("update_completed_jobs: lock busy, skip this tick")
     
     except Exception:
         logger.exception("update_completed_jobs: failed")
@@ -174,7 +173,7 @@ def gen_history_list_command() -> str:
     attrs_quoted = " ".join(quote(a) for a in ATTRS)
     command = f"{BASE_CMD} -af {attrs_quoted}"
 
-    logger.info(f"The reset DB history command: {command}")
+    logger.debug(f"The reset DB history command: {command}")
 
     return command
 
@@ -226,9 +225,8 @@ async def resert_start_end_time():
                 uid, start_time, end_time, user = history_map[clusterid]
                 update_start_time(uid, clusterid, start_time, "htcondor")
                 update_end_time(uid, clusterid, end_time, "htcondor")
-                logger.info(f"Update {user} job {clusterid} start and end time in DB.")
+                logger.debug(f"Update {user} job {clusterid} start and end time in DB.")
                 
-            
             stdout_q = await sub_command(
                 query_cluster_jobs(),
                 10,
@@ -248,7 +246,7 @@ async def resert_start_end_time():
                 delete_jobinfo_by_jobids(list(delete_jobs))
             
     except Timeout:
-        logger.info("resert_start_end_time: lock busy, skip this tick")
+        logger.debug("resert_start_end_time: lock busy, skip this tick")
     
     except Exception:
         logger.exception("resert_start_end_time: failed")
@@ -256,7 +254,7 @@ async def resert_start_end_time():
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
 @router.on_event("startup")
-@repeat_every(seconds=10, wait_first=False, raise_exceptions=False, logger=logger)
+@repeat_every(seconds=5, wait_first=False, raise_exceptions=False, logger=logger)
 async def submit_job_from_redis():
     lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
     try:
