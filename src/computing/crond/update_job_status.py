@@ -248,13 +248,14 @@ async def resert_start_end_time():
                 delete_jobinfo_by_jobids(list(delete_jobs))
             
     except Timeout:
-            logger.info("resert_start_end_time: lock busy, skip this tick")
+        logger.info("resert_start_end_time: lock busy, skip this tick")
     
     except Exception:
         logger.exception("resert_start_end_time: failed")
 
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
+LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
 @repeat_every(seconds=10, wait_first=False, raise_exceptions=False, logger=logger)
 async def submit_job_from_redis():
@@ -302,6 +303,9 @@ async def submit_job_from_redis():
                     })
                     await r.lpush("error_jobs", failed_payload)
                     continue
+
+    except Timeout:
+        logger.debug("submit_job_from_redis: lock busy, skip this tick")
         
     except Exception as e:
         logger.error(f"Some Wrong in Submit job, the details: {e}")
