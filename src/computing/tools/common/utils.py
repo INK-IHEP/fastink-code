@@ -408,7 +408,7 @@ async def generate_condor_submit(
 
     return submitfile_name
 
-def generate_submit_command(username: str, job_dir: str, job_type: str, token_filename: str, submitfile: str) -> str:
+def generate_submit_command(username: str, job_dir: str, job_type: str, submitfile: str) -> str:
         
     krb5_enabled = get_config("common", "krb5_enabled")
     if isinstance(krb5_enabled, str):
@@ -448,7 +448,7 @@ def generate_submit_command(username: str, job_dir: str, job_type: str, token_fi
         env_parts.append(env_kv("INKLDPATH", "$LD_LIBRARY_PATH"))
 
     if krb5_enabled:
-        env_parts.insert(1, env_kv("KRB5CCNAME", quote(token_filename)))
+        env_parts.insert(1, env_kv("KRB5CCNAME", quote(f"{job_dir}/krb5cc_{uid}")))
 
     SCHEDD_HOST = get_config("computing", "schedd_host")
     CM_HOST = get_config("computing", "cm_host")

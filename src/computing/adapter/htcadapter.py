@@ -92,7 +92,8 @@ class HTC_Scheduler(SchedulerBase):
                 "jobReqOS": htc_job_params.os,
                 "jobReqWN": htc_job_params.wn,
                 "jobReqARCH": htc_job_params.arch,
-                "jobReqParam": htc_job_params.job_parameters
+                "jobReqParam": htc_job_params.job_parameters,
+                "clusterId": htc_job_params.cluster_id
             }
             
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))

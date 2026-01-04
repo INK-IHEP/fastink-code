@@ -30,7 +30,7 @@ def insert_job_info(
             clusterid = clusterid
         )
         job_info.save(session=session, flush=True)
-        logger.info(f"Insert User {uid} job info to DB, jobid: {jobid}, output: {outpath}, errpath: {errpath}, jobtype: {job_type}, jobpath: {job_path}, cluster: {clusterid}")
+        logger.debug(f"Insert User {uid} job info to DB, jobid: {jobid}, output: {outpath}, errpath: {errpath}, jobtype: {job_type}, jobpath: {job_path}, cluster: {clusterid}")
         
     except Exception as e:
         raise Exception(f"Insert User({uid}) job info failed: {e}")
