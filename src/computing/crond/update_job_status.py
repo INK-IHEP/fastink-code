@@ -267,7 +267,6 @@ async def submit_job_from_redis():
                     raw_job = await r.rpop("submitting_jobs")
                     if not raw_job:
                         break
-                    #job = json.loads(raw_job.decode("utf-8"))
                     job = json.loads(raw_job)
 
                     job_owner = job.get("username")
