@@ -255,7 +255,6 @@ async def resert_start_end_time():
 
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
-LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
 @router.on_event("startup")
 @repeat_every(seconds=10, wait_first=False, raise_exceptions=False, logger=logger)
 async def submit_job_from_redis():
@@ -268,7 +267,8 @@ async def submit_job_from_redis():
                     raw_job = await r.rpop("submitting_jobs")
                     if not raw_job:
                         break
-                    job = json.loads(raw_job.decode("utf-8"))
+                    #job = json.loads(raw_job.decode("utf-8"))
+                    job = json.loads(raw_job)
 
                     job_owner = job.get("username")
                     job_type = job.get("jobType")
