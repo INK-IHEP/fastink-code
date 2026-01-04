@@ -283,7 +283,7 @@ async def submit_job_from_redis():
                     uid = change_username_to_uid(job_owner)
                     job_dir = await init_job_dir(job_owner, job_type)
                     submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
-                    submit_command = generate_submit_command(job_dir, job_type, submit_file)
+                    submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
                     logger.debug(f"Generate User {job_owner} submit command {submit_command} finished.")
                     stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
                     job_id_line = stdout.decode().strip()
