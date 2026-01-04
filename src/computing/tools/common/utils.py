@@ -305,10 +305,10 @@ async def init_job_dir(username: str, job_type: str):
     XROOTD_PATH = get_config("computing", "xrootd_path")
     time_stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     user_home_dir = os.path.expanduser(f'~{username}')
+    uid = change_username_to_uid(username)
 
     if user_home_dir.startswith("/afs/"):
-        UID = change_username_to_uid(username)
-        _, USERGROUP = get_user_exp_group(UID)
+        _, USERGROUP = get_user_exp_group(uid)
         ink_dir = get_config("computing", "ink_dir")
         ink_dir = ink_dir.format(user_group=USERGROUP, username=username)
         job_dir = f"{ink_dir}/.ink/Jobs/{job_type}-{time_stamp}"
@@ -326,7 +326,7 @@ async def init_job_dir(username: str, job_type: str):
         token = get_krb5(username)
         if token != "":  
             krb5_decoded_bytes = base64.b64decode(token)
-            await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{UID}", username=username, mgm=XROOTD_PATH, mode="600")
+            await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", username=username, mgm=XROOTD_PATH, mode="600")
             logger.debug(f"Generate user:{username} KRB5 token successfully.")
         else:
             raise Exception("Generate user KRB5 token failed.")
