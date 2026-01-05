@@ -202,7 +202,10 @@ class HTC_Scheduler(SchedulerBase):
         _ = await sub_command(cancel_command, timeoutsec=10, errinfo="condor_rm job failed", tminfo="condor_rm job timeout")
         
         job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-
+        
+        r = redis_connect()
+        await r.srem(f"{self.USERNAME}_submit_types", job_type)
+        
         iptables_jobtype = get_config("computing", "iptables_jobtype")
 
         if job_type in iptables_jobtype:
