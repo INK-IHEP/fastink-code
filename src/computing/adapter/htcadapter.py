@@ -65,11 +65,8 @@ class HTC_Scheduler(SchedulerBase):
 
     async def submit_job(self, htc_job_params: HTC_JOB):
         try:
-            logger.info("HTC-LOG: Enter submit func.")
             r = redis_connect()
-            logger.info(f"HTC-LOG: Get redis connect, {r}")
             cluster_jobs = await r.get("cluster_jobs")
-            logger.info("HTC-LOG: Get cluster_jobs.")
             
             if not cluster_jobs:
                 cluster_jobs = {}
@@ -78,7 +75,6 @@ class HTC_Scheduler(SchedulerBase):
                     cluster_jobs = cluster_jobs.decode("utf-8")
                 cluster_jobs = json.loads(cluster_jobs)
             user_job_list = cluster_jobs.get(self.USERNAME, [])
-            logger.info(f"HTC-LOG: Get user jobs: {user_job_list}")
 
             for job in user_job_list:
                 if job.get("jobType") == htc_job_params.job_type:
@@ -87,7 +83,6 @@ class HTC_Scheduler(SchedulerBase):
             added = await r.sadd(f"{self.USERNAME}_submit_types", htc_job_params.job_type)
             if added == 0:
                 return
-            logger.info("HTC-LOG: Add user submit command to redis set.")
             
             submit_param = {
                 "username": self.USERNAME,
@@ -102,7 +97,6 @@ class HTC_Scheduler(SchedulerBase):
             }
             
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            logger.info("HTC-LOG: Add user submit command to redis queue.")
 
         except Exception as e:
             logger.error(f"Some Wrong in Submit job, the details: {e}")

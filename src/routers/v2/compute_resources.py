@@ -292,14 +292,10 @@ async def query_system_jobs():
 @router.post("/create_job")
 async def create_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
     try:
-        logger.info("HTC-LOG: 11111111111111111")
         adapter = get_scheduler(jobclass.cluster_id, username)
-        logger.info(f"HTC-LOG: adapter: {adapter}")
-        
         await adapter.submit_job(jobclass)
         
         return {
@@ -309,20 +305,18 @@ async def create_common_job(
         }   
     
     except Exception as e:
-        raise e
-        # logger.exception(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
-        # return {
-        #     "status": InkStatus.SERVER_INTERNAL_ERROR,
-        #     "msg": f"Create job failed: {e}",
-        #     "data": {}
-        # }
+        logger.exception(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
+        return {
+            "status": InkStatus.SERVER_INTERNAL_ERROR,
+            "msg": f"Create job failed: {e}",
+            "data": {}
+        }
 
 
 
 @router.get("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
     cluster_id: str = Query(..., description="Cluster ID"),
     job_type: str = Query(None, description="Job type"),
     page: int = Query(1, description="Pangination page"),
@@ -382,7 +376,6 @@ async def query_common_job(
 @router.post("/delete_job")
 async def delete_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
     job_id: str = Body(..., description="Job ID",embed=True),
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
 ):
