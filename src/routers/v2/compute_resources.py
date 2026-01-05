@@ -292,7 +292,6 @@ async def query_system_jobs():
 @router.post("/create_job")
 async def create_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
     try:
@@ -302,20 +301,10 @@ async def create_common_job(
             "status": InkStatus.SUCCESS,
             "msg": f"Create job successfully.",
             "data": {}
-        }
-
-        # return {
-        #     "status": InkStatus.SUCCESS,
-        #     "msg": f"Create job successfully, jobid: {job_id}, cluster: {jobclass.cluster_id}.",
-        #     "data": {
-        #         "jobId": job_id,
-        #         "jobType": jobclass.job_type,
-        #         "jobPath": job_dir
-        #     }
-        # }        
+        }   
     
     except Exception as e:
-        logger.error(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
+        logger.exception(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
         return {
             "status": InkStatus.SERVER_INTERNAL_ERROR,
             "msg": f"Create job failed: {e}",
