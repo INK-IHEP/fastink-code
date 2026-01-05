@@ -310,12 +310,12 @@ async def create_common_job(
     
     except Exception as e:
         raise e
-        logger.exception(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
-        return {
-            "status": InkStatus.SERVER_INTERNAL_ERROR,
-            "msg": f"Create job failed: {e}",
-            "data": {}
-        }
+        # logger.exception(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
+        # return {
+        #     "status": InkStatus.SERVER_INTERNAL_ERROR,
+        #     "msg": f"Create job failed: {e}",
+        #     "data": {}
+        # }
 
 
 
