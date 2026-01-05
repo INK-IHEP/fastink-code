@@ -292,6 +292,7 @@ async def query_system_jobs():
 @router.post("/create_job")
 async def create_common_job(
     username: str = Depends(get_username),
+    token: str = Depends(get_token),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
     try:
