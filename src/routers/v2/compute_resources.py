@@ -295,8 +295,12 @@ async def create_common_job(
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
     try:
+        logger.info("HTC-LOG: 11111111111111111")
         adapter = get_scheduler(jobclass.cluster_id, username)
+        logger.info(f"HTC-LOG: adapter: {adapter}")
+        
         await adapter.submit_job(jobclass)
+        
         return {
             "status": InkStatus.SUCCESS,
             "msg": f"Create job successfully.",
