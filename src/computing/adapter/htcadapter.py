@@ -65,9 +65,9 @@ class HTC_Scheduler(SchedulerBase):
 
     async def submit_job(self, htc_job_params: HTC_JOB):
         try:
-
             r = redis_connect()
             cluster_jobs = await r.get("cluster_jobs")
+            
             if not cluster_jobs:
                 cluster_jobs = {}
             else:
@@ -101,7 +101,10 @@ class HTC_Scheduler(SchedulerBase):
             }
             
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+<<<<<<< HEAD
             await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+=======
+>>>>>>> 04921af3044ba2103262ec4270a2dacdda0c018a
 
         except Exception as e:
             logger.error(f"Some Wrong in Submit job, the details: {e}")
@@ -231,7 +234,10 @@ class HTC_Scheduler(SchedulerBase):
         _ = await sub_command(cancel_command, timeoutsec=10, errinfo="condor_rm job failed", tminfo="condor_rm job timeout")
         
         job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-
+        
+        r = redis_connect()
+        await r.srem(f"{self.USERNAME}_submit_types", job_type)
+        
         iptables_jobtype = get_config("computing", "iptables_jobtype")
 
         if job_type in iptables_jobtype:
