@@ -317,14 +317,14 @@ async def create_common_job(
 @router.get("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
-    cluster_id: str = Query(..., description="Cluster ID"),
+    cluster_id: str = Query(None, description="Cluster ID"),
     job_type: str = Query(None, description="Job type"),
     page: int = Query(1, description="Pangination page"),
     limit: int = Query(5000, description="lines of each page")
 ):
     try:
         joblist = []
-        if cluster_id == "all":
+        if not cluster_id:
             try:
                 cluster_list = get_config("computing", "cluster_list")
                 if not cluster_list:
