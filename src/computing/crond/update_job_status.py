@@ -267,7 +267,7 @@ async def submit_job_from_redis():
                     raw_job = await r.rpop("submitting_jobs")
                     if not raw_job:
                         break
-                    #job = json.loads(raw_job.decode("utf-8"))
+                    
                     job = json.loads(raw_job)
 
                     job_owner = job.get("username")
@@ -279,6 +279,8 @@ async def submit_job_from_redis():
                     job_arch = job.get("jobReqARCH")
                     job_params = job.get("jobReqParam")
                     cluster_id = job.get("clusterId")
+
+                    await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
 
                     uid = change_username_to_uid(job_owner)
                     job_dir = await init_job_dir(job_owner, job_type)
@@ -294,17 +296,16 @@ async def submit_job_from_redis():
                     logger.debug(f"Submit User {job_owner} job {job_id} to cluster.")
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
                     logger.debug(f"Submit {job_owner} job {job_id} to queue.")
-                    await r.srem(f"{job_owner}_submit_types", job_type)
 
                 except Exception as e:
                     logger.error(f"Submit {job_owner} job failed, {e}")
+                    await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                     failed_payload = json.dumps({
                         "raw_job": job,
                         "submit_command": sub_command,
                         "error": str(e)
                     })
                     await r.lpush("error_jobs", failed_payload)
-                    await r.srem(f"{job_owner}_submit_types", job_type)
                     continue
 
     except Timeout:

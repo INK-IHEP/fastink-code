@@ -80,9 +80,13 @@ class HTC_Scheduler(SchedulerBase):
                 if job.get("jobType") == htc_job_params.job_type:
                     return
             
-            added = await r.sadd(f"{self.USERNAME}_submit_types", htc_job_params.job_type)
-            if added == 0:
-                return
+            raw = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+            for job in raw:
+                if isinstance(job, (bytes, bytearray)):
+                    job = job.decode("utf-8")
+                    job_param = json.loads(job)
+                if job_param.get("jobType") == htc_job_params.job_type:
+                    return  
             
             submit_param = {
                 "username": self.USERNAME,
@@ -97,7 +101,7 @@ class HTC_Scheduler(SchedulerBase):
             }
             
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-
+            await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
 
         except Exception as e:
             logger.error(f"Some Wrong in Submit job, the details: {e}")
@@ -192,6 +196,30 @@ class HTC_Scheduler(SchedulerBase):
                 })
             else:
                 continue
+
+        while True:
+            raw_job = await r.rpop(f"{self.USERNAME}_submitting_jobs")
+            if not raw_job:
+                break
+            job = json.loads(raw_job)
+
+            job_type = job.get("jobType")
+            job_os = job.get("jobReqOS")
+            job_status = "Submitting"
+            connect_sign = "False"
+
+            return_list.append({
+                "clusterId": self.CLUSTER_TYPE,
+                "jobId": "",
+                "jobType": job_type,
+                "jobSubmitTime": "",
+                "jobStatus": job_status,
+                "jobStartTime": "",
+                "JobNodeList": "",
+                "jobrunos": job_os,
+                "connect_sign": connect_sign,
+                "hold_reason": ""
+            })
 
         return return_list
 
