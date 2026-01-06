@@ -101,10 +101,7 @@ class HTC_Scheduler(SchedulerBase):
             }
             
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-<<<<<<< HEAD
             await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-=======
->>>>>>> 04921af3044ba2103262ec4270a2dacdda0c018a
 
         except Exception as e:
             logger.error(f"Some Wrong in Submit job, the details: {e}")
