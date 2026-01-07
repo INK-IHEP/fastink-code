@@ -120,14 +120,14 @@ class TimerMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception as e:
             process_time = time.perf_counter() - start_time
-            url = mask_url_query(request.url, {"password"})
+            url = mask_url_query(str(request.url), {"password"})
             logger.error(
                 f"Exception {e} | {process_time:.4f}s | Request: {request.method} {url}"
             )
             raise
         process_time = time.perf_counter() - start_time
         # response.headers["X-Process-Time"] = f"{process_time:.4f}"
-        url = mask_url_query(request.url, {"password"})
+        url = mask_url_query(str(request.url), {"password"})
         logger.debug(
             f"{process_time:.4f}s | Request: {request.method} {response.status_code} {url}"
         )
