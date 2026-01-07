@@ -313,7 +313,6 @@ async def create_common_job(
         }
 
 
-
 @router.get("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
