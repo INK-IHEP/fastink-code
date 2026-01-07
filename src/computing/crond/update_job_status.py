@@ -112,7 +112,7 @@ async def update_completed_jobs():
 
             r = redis_connect()
             await r.set("cluster_jobs", json.dumps(cluster_jobs, ensure_ascii=False))
-            logger.debug(f"HTCondor joblist insert to redis, the list: {cluster_jobs}")
+            #logger.debug(f"HTCondor joblist insert to redis, the list: {cluster_jobs}")
 
             if need_change_status_jobs:
                 
@@ -120,7 +120,7 @@ async def update_completed_jobs():
                     query_history_command = get_condor_history_command(key)
                     stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
                     history_job_lines = stdout.decode().strip().split('\n')
-                    logger.debug(f"The history result: {history_job_lines}")
+                    #logger.debug(f"The history result: {history_job_lines}")
 
                     if history_job_lines != [""]:
                         job_param_list = history_job_lines[0].split()
