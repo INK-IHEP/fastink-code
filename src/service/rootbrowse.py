@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Fri Jun 13 14:41:19 2025 CST
-# Last modified : Thu Jan 08 15:41:25 2026 CST
+# Last modified : Thu Jan 08 15:45:52 2026 CST
 # Description   :
 
 from shlex import quote
@@ -49,7 +49,7 @@ async def access_rootfile(username: str, workdir: str, filename: str, is_private
             fallback="/dev/shm/check-rootbrowse.sh",
         )
         INKBROWSE_HOST = get_config(
-            "service", "service_host", fallback="inkbrowser.ihep.ac.cn"
+            "service", "service_node", fallback="inkbrowser.ihep.ac.cn"
         ).split(".")[0]
 
         ssh = remote_ssh_connect()
