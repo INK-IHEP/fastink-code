@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Wed Dec 25 18:23:29 2024 CST
-# Last modified : Mon Jan 05 17:32:08 2026 CST
+# Last modified : Thu Jan 08 15:35:41 2026 CST
 # Description   : This script automates the setup and management of a ROOT RBrowser
 #                 session using a dynamically assigned port, running in a detached
 #                 screen session, and making it accessible through an Nginx proxy.
@@ -30,6 +30,14 @@ function trans_url() {
         sed "s/^New web window: //" | sed "s/^(std::string) //" | sed "s/\"//g"
 }
 
+# Create a session name
+SESSION_NAME="rb-"$(date +%s)"-"$(uuidgen)
+
+# Set tmp dir path
+TMP="/tmp/rootbrowse-$USER/$(date +%Y-%m-%d)/"
+mkdir -p $TMP
+TMPFILE="${TMP}/${SESSION_NAME}"
+
 # Get short host name, if inside a bridge mode docker, use environment variable
 if [ -f "/.dockerenv" ]; then
     export APP_RUN_HOST="${INKBROWSE_HOST%%.*}"
@@ -38,12 +46,6 @@ else
 fi
 # Get a free port
 APP_PORT=$(get_free_port)
-# Create a session name
-SESSION_NAME="rb-"$(date +%s)"-"$(uuidgen)
-# Set tmp dir path
-TMP="/tmp/rootbrowse-$USER/$(date +%Y-%m-%d)/"
-mkdir -p $TMP
-TMPFILE="${TMP}/${SESSION_NAME}"
 # Set Nginx host. It will be replaced by fastink. No need to change
 NGINX="ink.ihep.ac.cn"
 
