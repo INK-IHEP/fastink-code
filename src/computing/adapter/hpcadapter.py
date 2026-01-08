@@ -11,9 +11,8 @@ from src.computing.tools.db.db_tools import *
 from src.computing.cluster.cluster import SLURM_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
-from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, get_endtime_info
-
-
+from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, get_endtime_info, PathChecker
+from time import time
 @scheduler("slurm")
 class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
@@ -40,7 +39,6 @@ class HPC_Scheduler(SchedulerBase):
         
         if mem < 1:
             raise ValueError("MEM must be >= 1 (MB).")
-        
         
         out_path = str(Path(jobdir) / f"%j.out")
         err_path = str(Path(jobdir) / f"%j.err")
@@ -137,8 +135,169 @@ class HPC_Scheduler(SchedulerBase):
         finally:
             if token_filename and os.path.exists(token_filename):
                 os.remove(token_filename)
-                
 
+    async def _gen_slurm_submit_common_cmd(
+        self, 
+        cpu: int, 
+        mem: int, 
+        jobtype: str, 
+        jobdir: str, 
+        partition: Optional[str],
+        account: Optional[str],
+        qos: Optional[str],
+        ntasks: int = 1,
+        nodes: int = 1,
+        gpu_num: int = 0,
+        gpu_name: Optional[str] = None,
+        gpu_type: Optional[str] = None,
+        job_script_abs_path: Optional[str] = None,
+        job_input_abs_path: Optional[str] = None,
+        output_file: Optional[str]= None,
+        error_file: Optional[str] = None,
+        job_content: Optional[str] = None
+    ):
+        if cpu < 1:
+            raise ValueError("CPU must be >=1 .")
+        
+        if mem < 1:
+            raise ValueError("MEM must be >= 1 (MB).")
+        
+        pathchk = PathChecker()
+        
+        out_path = str(Path(jobdir) / f"%j.out") 
+        if pathchk.is_dir(output_file):
+            raise ValueError(f"Output file cannot be a directory, current value is {output_file}.")
+        elif pathchk.is_abs(output_file):
+            out_path = output_file
+        elif pathchk.is_filename_only(output_file) :
+            out_path = str(Path(jobdir) / output_file)
+        
+        err_path = str(Path(jobdir) / f"%j.err") 
+        if pathchk.is_dir(error_file):
+            raise ValueError(f"Error file cannot be a directory, current value is {error_file}.")
+        elif pathchk.is_abs(error_file):
+            err_path = error_file
+        elif pathchk.is_filename_only(error_file) :
+            err_path = str(Path(jobdir) / error_file)
+        
+        if job_script_abs_path:
+            if not pathchk.is_existed(job_script_abs_path):
+                raise ValueError(f"Job script path not existed, current value is {job_input_abs_path}.")
+            if not pathchk.is_abs(job_script_abs_path):
+                raise ValueError(f"Job script must be an absolute path, current value is {job_script_abs_path}.")
+        
+        if job_input_abs_path:
+            if not pathchk.is_existed(job_input_abs_path):
+                raise ValueError(f"Job input file not existed, current value is {job_input_abs_path}.")
+            if not pathchk.is_abs(job_input_abs_path):
+                raise ValueError(f"Job input file must be an absolute path, current value is {job_input_abs_path}")
+            if not pathchk.is_file(job_input_abs_path):
+                raise ValueError(f"Job input must be a file, current value is {job_input_abs_path}")
+
+        args: List[str] = [
+            "sbatch",
+            "--parsable",
+            f"--output={out_path}",
+            f"--error={err_path}",
+            f"--nodes={nodes}",
+            f"--ntasks={ntasks}",
+            f"--cpus-per-task={cpu}",
+            f"--mem={mem}M",
+            f"--job-name={jobtype}",
+            f"--wckey={jobtype}",
+            f"--chdir={str(jobdir)}",
+        ]
+
+        if partition:
+            args.append(f"--partition={partition}")
+        if account:
+            args.append(f"--account={account}")
+        if qos:
+            args.append(f"--qos={qos}")
+
+        if gpu_num and gpu_num > 0 and gpu_name:
+            if gpu_type:
+                gres = f"{gpu_name}:{gpu_type}:{gpu_num}"
+            else:
+                gres = f"{gpu_name}:{gpu_num}"
+            args.append(f"--gres={gres}")
+
+        if job_input_abs_path:
+            args.append(f"--input={job_input_abs_path}")
+            
+        # sbatch job_content or job_script_abs_path
+        submit_abs_job_script = "" 
+        if job_content:
+            timestamp = int(time())
+            script_file_name = f'inkjob_{self.UID}_{timestamp}.sh'
+            submit_abs_job_script = f"{jobdir}/{script_file_name}"
+            await common.upload_file(src_data=job_content, dst=submit_abs_job_script, username=self.USERNAME, mgm=self.XROOTD_PATH, mode="700")
+            
+        elif job_script_abs_path:
+            script_file_name = Path(job_script_abs_path).name
+            with open(job_script_abs_path, "rb") as file:
+                script_content = file.read()
+            submit_abs_job_script = f"{jobdir}/{script_file_name}"
+            await common.upload_file(src_data=script_content, dst=submit_abs_job_script, username=self.USERNAME, mem=self.XROOTD_PATH, mode="700")
+        else:
+            raise ValueError("Job content or job script cannot both be empty.")
+        
+        args.append(f"{submit_abs_job_script}")
+        submit_command = shlex.join(args)
+
+        _inner = submit_command.replace("'", "'\"'\"'")
+        submit_command = f"sudo -iu {shlex.quote(self.USERNAME)} bash -lc '{_inner}'"
+
+        return submit_command, out_path, err_path
+                    
+    async def submit_common_job(self, hpc_job_params: SLURM_JOB):
+        try:
+            time_stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            token_filename, krb5_decoded_bytes = self._generate_token_file()
+            logger.info(f"Generate User {self.USERNAME} the token file finished.")
+            job_dir = await self._init_job_dir(hpc_job_params.job_type, time_stamp, krb5_decoded_bytes)
+            logger.info(f"Init User {self.USERNAME} jobdir {job_dir} finished.")
+
+            submit_cmd, out_path, err_path = await self._gen_slurm_submit_common_cmd(cpu=hpc_job_params.cpu, 
+                                                           mem=hpc_job_params.mem, 
+                                                           jobtype=hpc_job_params.job_type,
+                                                           jobdir=job_dir,
+                                                           partition=hpc_job_params.partition,
+                                                           account=hpc_job_params.account,
+                                                           qos=hpc_job_params.qos,
+                                                           ntasks=hpc_job_params.ntasks,
+                                                           nodes=hpc_job_params.nodes,
+                                                           gpu_num=hpc_job_params.gpu_num,
+                                                           gpu_name=hpc_job_params.gpu_name,
+                                                           gpu_type=hpc_job_params.gpu_type,
+                                                           job_script_abs_path=hpc_job_params.script_path,
+                                                           job_input_abs_path=hpc_job_params.input_path,
+                                                           output_file=hpc_job_params.output_file,
+                                                           error_file=hpc_job_params.error_file,
+                                                           job_content=hpc_job_params.job_script)
+            logger.info(f"Generate the slurm submit command for  User({self.USERNAME}) finished, cmd: {submit_cmd}")
+
+            # Submit the slurm job.
+            stdout = await sub_command(submit_cmd, 10, "submit job failed.", "submit job timeout.")
+            logger.info(f"The slurm submit info: {stdout}")
+
+            job_id_line = stdout.decode().strip()
+            job_id = job_id_line.split(";", 1)[0]
+
+            logger.info(f"Submit User {self.USERNAME} job {job_id} to cluster.")
+            insert_job_info(self.UID, job_id, out_path, err_path, hpc_job_params.job_type, job_dir, self.CLUSTER_TYPE)
+            logger.info(f"Submit job({job_id}) for user({self.USERNAME}) to queue.")
+
+            return int(job_id), job_dir
+        
+        except Exception as e:
+            logger.error(f"Some Wrong in Submit job, the details: {e}")
+            raise e
+        
+        finally:
+            if token_filename and os.path.exists(token_filename):
+                os.remove(token_filename)
+        
         
     async def query_job(self, job_type):
         job_list = []

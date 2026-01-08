@@ -6,6 +6,9 @@ from src.database.sqla import models
 from src.database.sqla.session import read_session, transactional_session
 from src.common.logger import logger
 
+from pathlib import Path, PurePath
+from typing import Optional, Tuple
+
 @transactional_session
 def insert_job_info(
     uid: int,
@@ -188,3 +191,56 @@ def find_completed_jobs(uid, jobtype, *, session:Session):
         job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]
         
     return job_list
+
+class PathChecker:
+    
+    @staticmethod
+    def is_absolute_path(path: str) -> bool:
+        """判断是否为绝对路径"""
+        return Path(path).is_absolute()
+    
+    @staticmethod
+    def is_relative_path(path: str) -> bool:
+        """判断是否为相对路径"""
+        return not Path(path).is_absolute()
+    
+    @staticmethod
+    def is_file(path: str) -> Optional[bool]:
+        """
+        判断是否为文件
+        返回: True=是文件, False=不是文件, None=路径不存在
+        """
+        p = Path(path)
+        return p.is_file() if p.exists() else None
+    
+    @staticmethod
+    def is_directory(path: str) -> Optional[bool]:
+        """
+        判断是否为目录
+        返回: True=是目录, False=不是目录, None=路径不存在
+        """
+        p = Path(path)
+        return p.is_dir() if p.exists() else None
+    
+    @staticmethod
+    def is_filename_only(path: str) -> Optional[bool]:
+        p = PurePath(path)
+    
+        if str(p.parent) != '.':
+            return False
+        
+        if any(sep in path for sep in ('/', '\\')):
+            return False
+        
+        if len(path.parts) > 1:
+            return False
+        
+        if path.anchor:
+            return False
+        
+        return True
+    
+    @staticmethod
+    def is_existed(path: str) -> Optional[bool]:
+        p = Path(path)
+        return p.exists()

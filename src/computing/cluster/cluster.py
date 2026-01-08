@@ -14,17 +14,20 @@ class Base_JOB(BaseModel):
 
 
 class SLURM_JOB(Base_JOB):
-    time: Optional[str] = Field(None, description="作业运行时间上限 (格式: HH:MM:SS)")  # 可选
-    partition: str = Field(..., description="作业分区")  # 必填
-    nodes: Optional[str] = Field(None, description="申请的节点数")  # 可选
-    ntasks: Optional[str] = Field(None, description="使用的CPU核数")  # 可选
-    account: str = Field(..., description="组名称")  # 必填
-    qos: str = Field(..., description="服务质量 (QoS)")  # 必填
-    gpu_name: Optional[str] = Field(None, description="GPU or DCU")  # 可选
-    gpu_type: Optional[str] = Field(None, description="GPU 类型")  # 可选
-    output_file: str = Field(None, description="output_file name")  # 可选
-    error_file: str = Field(None, description="error_file name")  # 可选
+    time: Optional[str] = Field(None, description="作业运行时间上限 (格式: HH:MM:SS)")  # Optional
+    partition: str = Field(..., description="作业分区")  # Mandatory
+    nodes: Optional[str] = Field(None, description="申请的节点数")  # Optional
+    ntasks: Optional[str] = Field(None, description="使用的CPU核数")  # Optional
+    account: str = Field(..., description="组名称")  # Mandatory
+    qos: str = Field(..., description="服务质量 (QoS)")  # Mandatory
+    gpu_name: Optional[str] = Field(None, description="GPU or DCU")  # Optional
+    gpu_type: Optional[str] = Field(None, description="GPU 类型")  # Optional
+    output_file: Optional[str] = Field(None, description="output_file name")  # Optional
+    error_file: Optional[str] = Field(None, description="error_file name")  # Optional
+    script_path: Optional[str] = Field(None, description="absolute path to the job script") # Optional
+    input_path: Optional[str] = Field(None, description="Absolute path to the input file") # Optional
     cluster_id: Literal["slurm"] = "slurm"
+
 
 
 class HTC_JOB(Base_JOB):

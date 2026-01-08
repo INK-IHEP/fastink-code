@@ -70,7 +70,7 @@ class JobCreateRequestWithPath(BaseModel):
     gpu_type: Optional[str] = Field(None, description="GPU/DCU/NPU type")  # optional
     output_file: Optional[str] = Field(None, description="output_file name")  # optional
     error_file: Optional[str] = Field(None, description="error_file name")  # optional
-    ntasks_per_node: int = Field(1, description="error_file")  # optional
+    ntasks_per_node: int = Field(1, description="number of cpu cores on each node")  # optional
     job_name: str = Field("", description="job name")  # optional
     env: Optional[str] = Field(None, description="Environment variables")  # optional
 

@@ -52,13 +52,8 @@ def get_condor_history_command(job_id: str) -> str:
 
 
 LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
-<<<<<<< HEAD
-@router.on_event("startup")
-@repeat_every(seconds=1800, wait_first=False, raise_exceptions=True, logger=logger)
-=======
 #@router.on_event("startup")
 #@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
->>>>>>> f266ae20ed4bf84bdbeea154ce10c684f2b421fe
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     try:
