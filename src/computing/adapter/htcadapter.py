@@ -78,6 +78,7 @@ class HTC_Scheduler(SchedulerBase):
 
             for job in user_job_list:
                 if job.get("jobType") == htc_job_params.job_type:
+                    logger.debug(f"Submit job exsit in cluster_jobs: {job}")
                     return
             
             raw = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
@@ -86,6 +87,7 @@ class HTC_Scheduler(SchedulerBase):
                     job = job.decode("utf-8")
                     job_param = json.loads(job)
                 if job_param.get("jobType") == htc_job_params.job_type:
+                    logger.debug(f"Submit job exsit in {self.USERNAME}_submitting_jobs: {job}")
                     return  
             
             submit_param = {
