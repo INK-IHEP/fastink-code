@@ -16,12 +16,12 @@ def get_config(
     option: Optional[str] = None,
     fallback: Any = None,
     config_file: Optional[str] = None,
-) -> Union[dict, Any]:
+) -> Any:
     configs = _load_config(config_file)
 
     # Validate section existence
     if section not in configs:
-        if fallback:
+        if fallback is not None:
             return fallback
         raise ValueError(
             f"Section '{section}' not found in config file. Available sections: {list(configs.keys())}"
