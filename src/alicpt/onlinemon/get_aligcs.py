@@ -1,6 +1,6 @@
 from elasticsearch import Elasticsearch
 from datetime import datetime, timedelta, timezone
-from src.common.config import get_config
+#from src.common.config import get_config
 
 _ES_CLIENT = None
 
@@ -9,79 +9,224 @@ _ES_CLIENT = None
 # ES_PORT = get_config('es', 'port', 9200)
 # ES_SCHEME = get_config('es', 'scheme', 'http')
 
-ES_HOST = "192.168.51.85"
-ES_PORT = 9200
-ES_SCHEME = "http"
+
 
 
 #获取es客户端
+#def create_es_client(host, port, username, password, use_ssl=False, verify_certs=False):
 def get_es_client():
+    """
+    Create Elasticsearch client connection
+    """
+    #host = "omattest-es.ihep.ac.cn"
+    #port = 443
+    #username = "omattest"
+    #password = "omattestpasswd"
+    #use_ssl = False
+    #verify_certs = False
+    host = "omat4alicpt-es.ihep.ac.cn"
+    port = 443
+    username = "omat4alicpt"
+    password = "omat4alicptpasswd"
+    index = "aligcs_monitor"
+    use_ssl = True
+    verify_certs = False
+    print("before create es client")
     try:
-        global _ES_CLIENT
-        if _ES_CLIENT is None:
-            es_url = f"{ES_SCHEME}://{ES_HOST}:{ES_PORT}"
-            _ES_CLIENT = Elasticsearch(hosts=[es_url])
-        return _ES_CLIENT
+        if use_ssl:
+            es_client = Elasticsearch(
+                [f'https://{host}:{port}'],
+                http_auth=(username, password),
+                verify_certs=verify_certs,
+                request_timeout=30,
+                max_retries=3,
+                retry_on_timeout=True
+            )
+        else:
+            es_client = Elasticsearch(
+                [f'https://{host}:{port}'],
+                http_auth=(username, password),
+                request_timeout=30,
+                max_retries=3,
+                retry_on_timeout=True
+            )
+        
+        # Test connection
+        if es_client.ping():
+            return es_client
+        else:
+            print(f"❌ Unable to connect to Elasticsearch: {host}:{port}")
+            return None
+            
     except Exception as e:
-        print(f"[get_es_client] Exception: {e}")
+        print(f"❌ Error creating ES client: {e}")
         return None
 
-# 测试es是否已经连接成功
-def es_ping():
-    try:
-        es = get_es_client()
-        return es.ping() if es else False
-    except Exception as e:
-        print(f"[es_ping] Exception: {e}")
-        return False
 
-def query_last_24h_srs_monitoring():
+def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scroll=False):
+    """
+    通用查询函数：查询指定data_type前24小时的数据
+
+    Args:
+        data_type: 数据类型标识 (如 "srs", "mlc", "compressor", "ups_1" 等)
+        index: ES索引名，默认为 "aligcs_monitor"
+        size: 返回结果数量，默认10000
+        use_scroll: 是否使用scroll查询，默认False
+
+    Returns:
+        查询结果列表
+    """
     try:
         es = get_es_client()
         if not es:
             return []
-        # 使用UTC时间代替本地时间
+
         now = datetime.now(timezone.utc)
         last_24h = now - timedelta(hours=24)
+
         query = {
             "query": {
-                "range": {
-                    "@timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
+                "bool": {
+                    "must": [
+                        {
+                            "term": {
+                                "data_type": data_type
+                            }
+                        },
+                        {
+                            "range": {
+                                "@timestamp": {
+                                    "gte": last_24h.isoformat(),
+                                    "lte": now.isoformat(),
+                                    "format": "strict_date_optional_time"
+                                }
+                            }
+                        }
+                    ]
                 }
-            }
+            },
+            "size": size
         }
-        resp = es.search(index="srs_monitoring", body=query, size=10000)  # size可根据需要调整
-        return resp['hits']['hits']
+
+        if use_scroll:
+            # 使用scroll查询获取大量数据
+            resp = es.search(
+                index=index,
+                body=query,
+                scroll='5m'
+            )
+            scroll_id = resp['_scroll_id']
+            all_data = resp['hits']['hits']
+
+            while len(resp['hits']['hits']) > 0:
+                resp = es.scroll(scroll_id=scroll_id, scroll='5m')
+                all_data.extend(resp['hits']['hits'])
+
+            es.clear_scroll(scroll_id=scroll_id)
+            return all_data
+        else:
+            resp = es.search(index=index, body=query)
+            return resp['hits']['hits']
+
+    except Exception as e:
+        print(f"[query_last_24h_data] Exception: {e}, data_type: {data_type}")
+        return []
+
+
+def handle_srs_data():
+    try:
+        data=query_last_24h_data('srs', index="aligcs_monitor", size=10000, use_scroll=False)
+        #data = query_last_24h_srs_monitoring()
+        return data
+    except Exception as e:
+        print(f"handle_srs_data Exception: {e}")
+        return []
+def handle_mlc_data():
+    try:
+        data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+        '''
+        query_last_24h_mlc_monitoring()
+        for item in data:
+            mlc_value = item['_source'].get('mlc')
+            if mlc_value is not None:
+                item['_source']['mlc_parsed'] = parse_mlc_bits(mlc_value)
+        '''
+        return data
+    except Exception as e:
+        print(f"[handle_mlc_data] Exception: {e}")
+        return []
+def handle_weather_data():
+    try:
+        data = query_last_24h_data('weather', index="aligcs_monitor", size=10000, use_scroll=False)
+        return data
+    except Exception as e:
+        print(f"[handle_weather_data] Exception: {e}")
+        return []
+def handle_airheater_data():
+    try:
+        data = query_last_24h_data('airheater', index="aligcs_monitor", size=10000, use_scroll=False)
+        return data
+    except Exception as e:
+        print(f"[handle_airheater_data] Exception: {e}")
+        return []
+def handle_ats_data():
+    try:
+        data = query_last_24h_data('ats', index="aligcs_monitor", size=10000, use_scroll=False)
+        return data
+    except Exception as e:
+        print(f"[handle_ats_data] Exception: {e}")
+        return []
+def handle_imu_data():
+    try:
+        data = query_last_24h_data('imu', index="aligcs_monitor", size=10000, use_scroll=False)     
+        return data
+    except Exception as e:
+        print(f"[handle_imu_data] Exception: {e}")
+        return []
+def handle_tilt_data():
+    try:
+        data = query_last_24h_data('tilt', index="aligcs_monitor", size=10000, use_scroll=False)
+        print(data)
+        return data
+    except Exception as e:
+        print(f"[handle_tilt_data] Exception: {e}")
+        return []
+
+def handle_compressor_data():
+    try:
+        data = query_last_24h_data('compressor', index="aligcs_monitor", size=10000, use_scroll=False)
+        print(data)
+        return data
+    except Exception as e:
+        print(f"[handle_compressor_data] Exception: {e}")
+        return []
+
+def handle_ups_data():
+    try:
+        data = query_last_24h_data('ups', index="aligcs_monitor", size=10000, use_scroll=False)
+        print(data)
+        return data
+    except Exception as e:
+        print(f"[handle_compressor_data] Exception: {e}")
+        return []
+'''
+def query_last_24h_srs_monitoring():
+    """查询SRS前24小时的数据"""
+    try:
+        es = get_es_client()
+        print("es:", es)
+        if not es:
+            return []
+        return query_last_24h_data("srs")
     except Exception as e:
         print(f"[query_last_24h_srs_monitoring] Exception: {e}")
         return []
 
 # 查询mlc前24小时的数据
 def query_last_24h_mlc_monitoring():
+    """查询MLC前24小时的数据"""
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        # 使用UTC时间代替本地时间
-        now = datetime.now(timezone.utc)
-        last_24h = now - timedelta(hours=24)
-        query = {
-            "query": {
-                "range": {
-                    "@timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
-                }
-            }
-        }
-        resp = es.search(index="mlc_monitoring", body=query, size=10000)  # size可根据需要调整
-        return resp['hits']['hits']
+        return query_last_24h_data("mlc")
     except Exception as e:
         print(f"[query_last_24h_mlc_monitoring] Exception: {e}")
         return []
@@ -128,25 +273,9 @@ def parse_mlc_bits(mlc_value):
 
 #查询compressor前24小时的数据
 def query_last_24h_compressor_data():
+    """查询Compressor前24小时的数据"""
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        now = datetime.now()
-        last_24h = now - timedelta(hours=24)
-        query = {
-            "query": {
-                "range": {
-                    "timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
-                }
-            }
-        }
-        resp = es.search(index="compressor_data", body=query, size=10000)  # size可根据需要调整
-        return resp['hits']['hits']
+        return query_last_24h_data("compressor")
     except Exception as e:
         print(f"[query_last_24h_compressor_data] Exception: {e}")
         return []
@@ -158,55 +287,58 @@ def handle_compressor_data():
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
         return []
+'''
 
-def handle_srs_data():
-    try:
-        data = query_last_24h_srs_monitoring()
-        return data
-    except Exception as e:
-        print(f"[handle_srs_data] Exception: {e}")
-        return []
-def handle_mlc_data():
-    try:
-        data = query_last_24h_mlc_monitoring()
-        for item in data:
-            mlc_value = item['_source'].get('mlc')
-            if mlc_value is not None:
-                item['_source']['mlc_parsed'] = parse_mlc_bits(mlc_value)
-        return data
-    except Exception as e:
-        print(f"[handle_mlc_data] Exception: {e}")
-        return []
-
+'''
 #查询UPS最新数据
 def query_latest_ups_data():
+    """查询UPS最新数据（获取每个UPS设备的最新一条记录）"""
     try:
         es = get_es_client()
         if not es:
             return []
-        
+
         ups_data = []
         for i in range(1, 6):  # ups_1 到 ups_5
             ups_id = f"ups_{i}"
+            now = datetime.now(timezone.utc)
+            last_24h = now - timedelta(hours=24)
+
             query = {
                 "query": {
-                    "term": {
-                        "id": ups_id
+                    "bool": {
+                        "must": [
+                            {
+                                "term": {
+                                    "data_type": ups_id
+                                }
+                            },
+                            {
+                                "range": {
+                                    "@timestamp": {
+                                        "gte": last_24h.isoformat(),
+                                        "lte": now.isoformat(),
+                                        "format": "strict_date_optional_time"
+                                    }
+                                }
+                            }
+                        ]
                     }
                 },
                 "size": 1,
                 "sort": [
                     {
-                        "timestamp": {
+                        "@timestamp": {
                             "order": "desc"
                         }
                     }
                 ]
             }
-            resp = es.search(index="ups_data", body=query)
+            resp = es.search(index="aligcs_monitor", body=query)
+            print(f"Query response for {ups_id}: {resp}")
             if resp['hits']['hits']:
                 ups_data.append(resp['hits']['hits'][0])
-        
+
         return ups_data
     except Exception as e:
         print(f"[query_latest_ups_data] Exception: {e}")
@@ -214,7 +346,7 @@ def query_latest_ups_data():
 
 def handle_ups_data():
     try:
-        data = query_latest_ups_data()
+        data = query_last_24h_data('ups', index="aligcs_monitor", size=10000, use_scroll=False)
         return data
     except Exception as e:
         print(f"[handle_ups_data] Exception: {e}")
@@ -222,33 +354,52 @@ def handle_ups_data():
 
 #查询weather最新数据
 def query_latest_weather_data():
+    """查询Weather最新数据（获取每个气象站的最新一条记录）"""
     try:
         es = get_es_client()
         if not es:
             return []
-        
+
         weather_data = []
         for i in [3, 4]:  # weather_3 和 weather_4
             weather_id = f"weather_{i}"
+            now = datetime.now(timezone.utc)
+            last_24h = now - timedelta(hours=24)
+
             query = {
                 "query": {
-                    "term": {
-                        "weather_id": weather_id
+                    "bool": {
+                        "must": [
+                            {
+                                "term": {
+                                    "data_type": weather_id
+                                }
+                            },
+                            {
+                                "range": {
+                                    "@timestamp": {
+                                        "gte": last_24h.isoformat(),
+                                        "lte": now.isoformat(),
+                                        "format": "strict_date_optional_time"
+                                    }
+                                }
+                            }
+                        ]
                     }
                 },
                 "size": 1,
                 "sort": [
                     {
-                        "timestamp": {
+                        "@timestamp": {
                             "order": "desc"
                         }
                     }
                 ]
             }
-            resp = es.search(index="weather_data", body=query)
+            resp = es.search(index="aligcs_monitor", body=query)
             if resp['hits']['hits']:
                 weather_data.append(resp['hits']['hits'][0])
-        
+
         return weather_data
     except Exception as e:
         print(f"[query_latest_weather_data] Exception: {e}")
@@ -264,46 +415,9 @@ def handle_weather_data():
 
 #查询airheater前24小时的数据
 def query_last_24h_airheater_data():
+    """查询Airheater前24小时的数据"""
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        
-        now = datetime.now()
-        last_24h = now - timedelta(hours=24)
-        
-        query = {
-            "query": {
-                "range": {
-                    "timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
-                }
-            },
-            "size": 1000
-        }
-        
-        # 初始化scroll查询
-        resp = es.search(
-            index="airheater_data", 
-            body=query, 
-            scroll='5m'  # 5分钟超时
-        )
-        
-        scroll_id = resp['_scroll_id']
-        all_data = resp['hits']['hits']
-        
-        # 继续scroll直到获取所有数据
-        while len(resp['hits']['hits']) > 0:
-            resp = es.scroll(scroll_id=scroll_id, scroll='5m')
-            all_data.extend(resp['hits']['hits'])
-        
-        # 清理scroll
-        es.clear_scroll(scroll_id=scroll_id)
-        
-        return all_data
+        return query_last_24h_data("airheater", use_scroll=True, size=1000)
     except Exception as e:
         print(f"[query_last_24h_airheater_data] Exception: {e}")
         return []
@@ -318,25 +432,9 @@ def handle_airheater_data():
 
 #查询ats前24小时的数据
 def query_last_24h_ats_data():
+    """查询ATS前24小时的数据"""
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        now = datetime.now()
-        last_24h = now - timedelta(hours=24)
-        query = {
-            "query": {
-                "range": {
-                    "timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
-                }
-            }
-        }
-        resp = es.search(index="ats_data", body=query, size=10000)  # size可根据需要调整
-        return resp['hits']['hits']
+        return query_last_24h_data("airheater_ats")
     except Exception as e:
         print(f"[query_last_24h_ats_data] Exception: {e}")
         return []
@@ -352,33 +450,16 @@ def handle_ats_data():
 
 #查询imu前24小时的数据
 def query_last_24h_imu_data():
+    """查询IMU前24小时的数据"""
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        now = datetime.now()
-        last_24h = now - timedelta(hours=24)
-        query = {
-            "query": {
-                "range": {
-                    "timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
-                }
-            }
-        }
-        resp = es.search(index="imu_data", body=query, size=10000)  # size可根据需要调整
-        return resp['hits']['hits']
+        return query_last_24h_data("imu")
     except Exception as e:
         print(f"[query_last_24h_imu_data] Exception: {e}")
         return []
-
 def handle_imu_data():
     try:
         data = query_last_24h_imu_data()
-        print(data)
+        
         return data
     except Exception as e:
         print(f"[handle_imu_data] Exception: {e}")
@@ -390,46 +471,17 @@ def handle_imu_data():
 
 #查询tilt前24小时的数据
 def query_last_24h_tilt_data():
+    """查询Tilt前24小时的数据"""
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        
         tilt_data = []
-        for tilt_id in [0, 1, 2]:  # 分别获取 tilt_id 0, 1, 2 的前24小时数据
-            now = datetime.now()
-            last_24h = now - timedelta(hours=24)
-            query = {
-                "query": {
-                    "bool": {
-                        "must": [
-                            {
-                                "term": {
-                                    "tilt_id": tilt_id
-                                }
-                            },
-                            {
-                                "range": {
-                                    "timestamp": {
-                                        "gte": last_24h.isoformat(),
-                                        "lte": now.isoformat(),
-                                        "format": "strict_date_optional_time"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                },
-                "size": 10000  # size可根据需要调整
-            }
-            resp = es.search(index="tilt_data", body=query)
-            if resp['hits']['hits']:
-                tilt_data.extend(resp['hits']['hits'])
-        
+        for i in [0, 1, 2]:  # 分别获取 tilt_0, tilt_1, tilt_2 的前24小时数据
+            data = query_last_24h_data(f"tilt_{i}")
+            tilt_data.extend(data)
         return tilt_data
     except Exception as e:
         print(f"[query_last_24h_tilt_data] Exception: {e}")
         return []
+
 
 def handle_tilt_data():
     try:
@@ -439,42 +491,48 @@ def handle_tilt_data():
     except Exception as e:
         print(f"[handle_tilt_data] Exception: {e}")
         return []
+'''
 
+def main():
+    """Main function to test all data query functions."""
+    
+    result = handle_srs_data()
+    print("[main] handle_srs_data result:")
+    print(result)
 
-# if __name__ == "__main__":
-#     result = handle_srs_data()
-#     print("[main] handle_mlc_data result:")
-#     print(result)
+    '''
+    compressor_result = handle_compressor_data()
+    print("[main] handle_compressor_data result:")
+    print(compressor_result)
     
-#     compressor_result = handle_compressor_data()
-#     print("[main] handle_compressor_data result:")
-#     print(compressor_result)
+    ups_result = handle_ups_data()
+    print("[main] handle_ups_data result:")
+    print(ups_result)
     
-#     ups_result = handle_ups_data()
-#     print("[main] handle_ups_data result:")
-#     print(ups_result)
+    weather_result = handle_weather_data()
+    print("[main] handle_weather_data result:")
+    print(weather_result)
     
-#     weather_result = handle_weather_data()
-#     print("[main] handle_weather_data result:")
-#     print(weather_result)
+    airheater_result = handle_airheater_data()
+    print("[main] handle_airheater_data result:")
+    #print(airheater_result)
     
-#     airheater_result = handle_airheater_data()
-#     print("[main] handle_airheater_data result:")
-#     print(airheater_result)
-    
-#     ats_result = handle_ats_data()
-#     print("[main] handle_ats_data result:")
-#     print(ats_result)
-    
-    
-    
-#     imu_result = handle_imu_data()
-#     print("[main] handle_imu_data result:")
-#     print(imu_result)
-    
-#     tilt_result = handle_tilt_data()
-#     print("[main] handle_tilt_data result:")
-#     print(tilt_result)
+    ats_result = handle_ats_data()
+    print("[main] handle_ats_data result:")
+    #print(ats_result)
+
+    imu_result = handle_imu_data()
+    print("[main] handle_imu_data result:")
+    #print(imu_result)
+
+    tilt_result = handle_tilt_data()
+    print("[main] handle_tilt_data result:")
+    print(tilt_result)
+    '''
+
+if __name__ == "__main__":
+    main()
+
     
 
 
