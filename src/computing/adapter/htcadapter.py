@@ -103,6 +103,8 @@ class HTC_Scheduler(SchedulerBase):
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
             await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
 
+            logger.debug(f"{self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
+
         except Exception as e:
             logger.error(f"Some Wrong in Submit job, the details: {e}")
             raise e
