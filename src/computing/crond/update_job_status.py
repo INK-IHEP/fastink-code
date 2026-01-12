@@ -291,7 +291,7 @@ async def submit_job_from_redis():
                     output = f"{job_dir}/{job_id}.out"
                     errpath = f"{job_dir}/{job_id}.err"
 
-                    logger.debug(f"Submit User {job_owner} job {job_id} to cluster.")
+                    logger.debug(f"Submit User {job_owner} job {job_type} {job_id} to cluster.")
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
                     logger.debug(f"Submit {job_owner} job {job_id} to queue.")
 
