@@ -203,10 +203,8 @@ class HTC_Scheduler(SchedulerBase):
                 "hold_reason": job_hold_reason
             })
 
-        while True:
-            raw_job = await r.rpop(f"{self.USERNAME}_submitting_jobs")
-            if not raw_job:
-                break
+        raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+        for raw_job in raw_jobs:
             job = json.loads(raw_job)
 
             job_redis_type = job.get("jobType")
