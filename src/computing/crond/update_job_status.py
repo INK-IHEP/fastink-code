@@ -254,7 +254,7 @@ async def resert_start_end_time():
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
 @router.on_event("startup")
-@repeat_every(seconds=5, wait_first=False, raise_exceptions=True, logger=logger)
+@repeat_every(seconds=5, wait_first=False, raise_exceptions=False, logger=logger)
 async def submit_job_from_redis():
     lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
     try:
@@ -300,17 +300,7 @@ async def submit_job_from_redis():
                 except Exception as e:
                     if job_owner:
                         await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
-
-                    failed_payload = json.dumps({
-                        "raw_job": job,
-                        "error_type": type(e).__name__,
-                        "error_repr": repr(e),
-                        "error_args": getattr(e, "args", None),
-                        "traceback": traceback.format_exc(),
-                    })
-
-                    await r.lpush("error_jobs", failed_payload)
-                    logger.error(f"HTC-LOG: Submit {raw_job} job failed, {e}")
+                    logger.exception(f"HTC-LOG: Submit {raw_job} job failed, {e}")
                     continue
 
     except Timeout:
