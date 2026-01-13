@@ -14,11 +14,12 @@ class InkStatus(str, Enum):
     S is for Service status codes
 
     """
-
     # Common
     SUCCESS = "200"
     OK = "200"
     INTERNAL_ERROR = "500"
+    # Apps
+    APP_UNKNOWN = "P00"
     # Authentication
     TOKEN_EXPIRED = "A01"
     TOKEN_INVALID = "A02"
