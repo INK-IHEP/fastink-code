@@ -277,8 +277,6 @@ async def submit_job_from_redis():
                     job_params = job.get("jobReqParam")
                     cluster_id = job.get("clusterId")
 
-                    await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
-
                     uid = change_username_to_uid(job_owner)
                     job_dir = await init_job_dir(job_owner, job_type)
                     logger.debug(f"HTC-LOG: Init user dir {job_dir} successfully.")
@@ -296,13 +294,14 @@ async def submit_job_from_redis():
 
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
                     logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
+                    await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
 
                 except Exception as e:
-                    logger.exception(f"HTC-LOG: Submit {job_owner} job failed, {e}")
-                    await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
+                    logger.exception(f"HTC-LOG: Submit {raw_job} job failed, {e}")
+                    if job_owner:
+                        await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                     failed_payload = json.dumps({
-                        "raw_job": job,
-                        "submit_command": submit_command,
+                        "raw_job": raw_job,
                         "error": str(e)
                     })
                     await r.lpush("error_jobs", failed_payload)
