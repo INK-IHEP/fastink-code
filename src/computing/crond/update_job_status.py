@@ -281,21 +281,24 @@ async def submit_job_from_redis():
 
                     uid = change_username_to_uid(job_owner)
                     job_dir = await init_job_dir(job_owner, job_type)
+                    logger.debug(f"HTC-LOG: Init user dir {job_dir} successfully.")
+
                     submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
                     submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
-                    logger.debug(f"Generate User {job_owner} submit command {submit_command} finished.")
+                    logger.debug(f"HTC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
+
                     stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
                     job_id_line = stdout.decode().strip()
                     job_id = job_id_line.split()[-1].rstrip('.')
                     output = f"{job_dir}/{job_id}.out"
                     errpath = f"{job_dir}/{job_id}.err"
+                    logger.debug(f"HTC-LOG: Submit User {job_owner} job {job_type} {job_id} to cluster.")
 
-                    logger.debug(f"Submit User {job_owner} job {job_type} {job_id} to cluster.")
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
-                    logger.debug(f"Submit {job_owner} job {job_id} to queue.")
+                    logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
 
                 except Exception as e:
-                    logger.exception(f"Submit {job_owner} job failed, {e}")
+                    logger.exception(f"HTC-LOG: Submit {job_owner} job failed, {e}")
                     await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                     failed_payload = json.dumps({
                         "raw_job": job,
@@ -309,7 +312,7 @@ async def submit_job_from_redis():
         logger.debug("submit_job_from_redis: lock busy, skip this tick")
         
     except Exception as e:
-        logger.error(f"Some Wrong in Submit job, the details: {e}")
+        logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
         raise e
     
 

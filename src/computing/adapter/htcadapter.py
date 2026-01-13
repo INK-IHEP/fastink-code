@@ -10,7 +10,7 @@ from src.computing.cluster.cluster import HTC_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
 from src.inkdb.inkredis import redis_connect
-from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, build_requirements
+from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables
 
 @scheduler("htcondor")
 class HTC_Scheduler(SchedulerBase):
@@ -75,19 +75,22 @@ class HTC_Scheduler(SchedulerBase):
                     cluster_jobs = cluster_jobs.decode("utf-8")
                 cluster_jobs = json.loads(cluster_jobs)
             user_job_list = cluster_jobs.get(self.USERNAME, [])
+            logger.debug(f"HTC-LOG: Get {self.USERNAME} cluster_jobs: {user_job_list}")
 
             for job in user_job_list:
                 if job.get("jobType") == htc_job_params.job_type:
-                    logger.debug(f"Submit job {htc_job_params.job_type} exsit in cluster_jobs: {job}")
+                    logger.debug(f"HTC-LOG: Submit job {htc_job_params.job_type} exsit in cluster_jobs: {job}")
                     return
             
             raw = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+            logger.debug(f"HTC-LOG: Get {self.USERNAME}_submitting_jobs keys value: {raw}")
+
             for job in raw:
                 if isinstance(job, (bytes, bytearray)):
                     job = job.decode("utf-8")
                     job_param = json.loads(job)
                 if job_param.get("jobType") == htc_job_params.job_type:
-                    logger.debug(f"Submit job {htc_job_params.job_type} exsit in {self.USERNAME}_submitting_jobs: {job}")
+                    logger.debug(f"HTC-LOG: Submit job {htc_job_params.job_type} exsit in {self.USERNAME}_submitting_jobs: {job}")
                     return  
             
             submit_param = {
@@ -105,10 +108,10 @@ class HTC_Scheduler(SchedulerBase):
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
             await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
 
-            logger.debug(f"{self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
+            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
 
         except Exception as e:
-            logger.error(f"Some Wrong in Submit job, the details: {e}")
+            logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
             raise e
     
 

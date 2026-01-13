@@ -161,7 +161,7 @@ class HPC_Scheduler(SchedulerBase):
                 job_submit_time = job_param_list[7].replace("T", " "),
                 job_start_time = job_param_list[8].replace("T", " "),
                 job_end_time = job_param_list[9].replace("T", " "),
-                job_time_limit = job_param_list[10]
+                job_time_limit = job_param_list[11]
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)

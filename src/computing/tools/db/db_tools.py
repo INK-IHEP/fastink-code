@@ -199,7 +199,6 @@ def needto_change_status_jobs(*, session:Session):
     job_list = {}
     stmt = select(models.JobInfo)
     stmt = stmt.where(models.JobInfo.clusterid == 'htcondor')
-
     stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "CANCELED"]))
     
     try:
