@@ -203,7 +203,6 @@ async def resert_start_end_time():
 
             for ln in lines:
                 parts = ln.split()
-                
                 end_time = f"{parts[0]} {parts[1]}"
 
                 if parts[2] != "NULL":
@@ -254,7 +253,7 @@ async def resert_start_end_time():
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
 @router.on_event("startup")
-@repeat_every(seconds=5, wait_first=False, raise_exceptions=False, logger=logger)
+@repeat_every(seconds=5, wait_first=False, raise_exceptions=True, logger=logger)
 async def submit_job_from_redis():
     lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
     try:
@@ -296,11 +295,11 @@ async def submit_job_from_redis():
                     logger.debug(f"Submit {job_owner} job {job_id} to queue.")
 
                 except Exception as e:
-                    logger.error(f"Submit {job_owner} job failed, {e}")
+                    logger.exception(f"Submit {job_owner} job failed, {e}")
                     await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                     failed_payload = json.dumps({
                         "raw_job": job,
-                        "submit_command": sub_command,
+                        "submit_command": submit_command,
                         "error": str(e)
                     })
                     await r.lpush("error_jobs", failed_payload)
