@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Fri Jun 13 14:41:19 2025 CST
-# Last modified : Thu Oct 16 18:54:49 2025 CST
+# Last modified : Thu Jan 08 15:45:52 2026 CST
 # Description   :
 
 from shlex import quote
@@ -48,6 +48,9 @@ async def access_rootfile(username: str, workdir: str, filename: str, is_private
             "rootbrowse_check_script",
             fallback="/dev/shm/check-rootbrowse.sh",
         )
+        INKBROWSE_HOST = get_config(
+            "service", "service_node", fallback="inkbrowser.ihep.ac.cn"
+        ).split(".")[0]
 
         ssh = remote_ssh_connect()
 
@@ -56,9 +59,9 @@ async def access_rootfile(username: str, workdir: str, filename: str, is_private
             logger.info(f"Shell script {RBSCRIPT}, {RBCSCRIPT} uploaded successfully.")
 
         if krb5_enabled and is_private:
-            command = f'sudo -u {quote(username)} sh -c "export KRB5CCNAME={krb5_path} && /dev/shm/start-rootbrowse.sh {workdir}/{filename}"'
+            command = f'sudo -u {quote(username)} sh -c "export KRB5CCNAME={krb5_path} && export INKBROWSE_HOST={INKBROWSE_HOST} && /dev/shm/start-rootbrowse.sh {workdir}/{filename}"'
         else:
-            command = f'sudo -u {quote(username)} sh -c "/dev/shm/start-rootbrowse.sh {workdir}/{filename}"'
+            command = f'sudo -u {quote(username)} sh -c "export INKBROWSE_HOST={INKBROWSE_HOST} && /dev/shm/start-rootbrowse.sh {workdir}/{filename}"'
 
         _, stdout, stderr = ssh.exec_command(command)
 

@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Wed Dec 25 18:23:29 2024 CST
-# Last modified : Thu Oct 16 18:56:07 2025 CST
+# Last modified : Thu Jan 08 15:35:41 2026 CST
 # Description   : This script automates the setup and management of a ROOT RBrowser
 #                 session using a dynamically assigned port, running in a detached
 #                 screen session, and making it accessible through an Nginx proxy.
@@ -30,26 +30,43 @@ function trans_url() {
         sed "s/^New web window: //" | sed "s/^(std::string) //" | sed "s/\"//g"
 }
 
-# Get short host name
-export APP_RUN_HOST="$(/bin/hostname -s)"
-# Get a free port
-APP_PORT=$(get_free_port)
 # Create a session name
 SESSION_NAME="rb-"$(date +%s)"-"$(uuidgen)
+
 # Set tmp dir path
 TMP="/tmp/rootbrowse-$USER/$(date +%Y-%m-%d)/"
 mkdir -p $TMP
 TMPFILE="${TMP}/${SESSION_NAME}"
+
+# Get short host name, if inside a bridge mode docker, use environment variable
+if [ -f "/.dockerenv" ]; then
+    export APP_RUN_HOST="${INKBROWSE_HOST%%.*}"
+else
+    export APP_RUN_HOST="$(/bin/hostname -s)"
+fi
+# Get a free port
+APP_PORT=$(get_free_port)
 # Set Nginx host. It will be replaced by fastink. No need to change
 NGINX="ink.ihep.ac.cn"
 
 echo "$(date +'[%Y-%d-%m %H:%M:%S]') $0 $@" >>"$TMPFILE"
 
+echo "APP_RUN_HOST: $APP_RUN_HOST" >>$TMPFILE
+echo "APP_PORT    : $APP_PORT" >>$TMPFILE
+echo "SESSION_NAME: $SESSION_NAME" >>$TMPFILE
+echo "TMPFILE     : $TMPFILE" >>$TMPFILE
+
+# Check every second whether the connection is established;
+# if it is established and then disconnected, refresh the URL.
+# Disconnected in 3600 second.
+nohup /dev/shm/check-rootbrowse.sh $SESSION_NAME $APP_PORT $TMPFILE >>$TMPFILE 2>&1 &
+echo "$(date +'[%Y-%d-%m %H:%M:%S]') Start check-rootbrowse.sh in background" >>$TMPFILE
+
 if [ -f "$1" ] && [[ "$1" =~ \.root$ ]]; then
     # Set root file path
     ROOT_PATH="$(dirname "$1")"
     ROOT_FILE="$(basename "$1")"
-    echo "File $ROOT_FILE (path: $ROOT_PATH) exists and ends with .root" >$TMPFILE
+    echo "$(date +'[%Y-%d-%m %H:%M:%S]') File $ROOT_FILE (path: $ROOT_PATH) exists and ends with .root" >>$TMPFILE
 else
     echo "File '$1' does not exist or cannot be accessed due to permission issues." >&2
     exit
@@ -66,19 +83,20 @@ CMD_ROOT="'ROOT::RWebWindowsManager::SetLoopbackMode(false);gROOT->SetWebDisplay
 # Remove zombie screen sessions
 screen -wipe >/dev/null 2>&1 || true
 # Start the ROOT command and redirect the output to a file
-echo "Start rootbrowse in screen session ${SESSION_NAME} in ${APP_RUN_HOST}" >>$TMPFILE
-screen -dmS "$SESSION_NAME" bash -c "$CMD_SOURCE; date; cd \"$ROOT_PATH\"; root -l -b \"$ROOT_FILE\" -e $CMD_ROOT >> $TMPFILE 2>&1"
+echo "$(date +'[%Y-%d-%m %H:%M:%S]') Starting rootbrowse in screen session ${SESSION_NAME} in ${APP_RUN_HOST}" >>$TMPFILE
+screen -dmS "$SESSION_NAME" bash -c "$CMD_SOURCE; date>>$TMPFILE; cd \"$ROOT_PATH\"; root -l -b \"$ROOT_FILE\" -e $CMD_ROOT >> $TMPFILE 2>&1"
+echo "$(date +'[%Y-%d-%m %H:%M:%S]') screen command executed" >>$TMPFILE
 
 # Check SESSION
 while ! screen -list | grep -q "$SESSION_NAME"; do
     sleep 0.1
     screen_retries=$((screen_retries + 1))
     if [ $screen_retries -eq 300 ]; then
-        echo "Failed to create Session $SESSION_NAME." >&2
+        echo "$(date +'[%Y-%d-%m %H:%M:%S]') Failed to create Session $SESSION_NAME." >&2
         exit
     fi
 done
-echo "Screen session ${SESSION_NAME} started." >>$TMPFILE
+echo "$(date +'[%Y-%d-%m %H:%M:%S]') Screen session ${SESSION_NAME} started." >>$TMPFILE
 
 max_retries=1200
 retries=0
@@ -92,7 +110,7 @@ while [ $retries -lt $max_retries ]; do
             echo -e "$URL\c"
             echo $URL >>$TMPFILE
             END_TIME=$(date +%s%3N) >>$TMPFILE
-            echo "Elapsed time: $((END_TIME - START_TIME)) ms." >>$TMPFILE
+            echo "$(date +'[%Y-%d-%m %H:%M:%S]') Elapsed time: $((END_TIME - START_TIME)) ms." >>$TMPFILE
             FLAG_CONNECT=0
             break
         fi
@@ -108,10 +126,5 @@ if [ $retries -eq $max_retries ]; then
     cat "$TMPFILE" >&2
     exit
 fi
-
-# Check every second whether the connection is established;
-# if it is established and then disconnected, refresh the URL.
-# Disconnected in 3600 second.
-nohup /dev/shm/check-rootbrowse.sh $SESSION_NAME $APP_PORT $TMPFILE >>$TMPFILE 2>&1 &
 
 exit 0

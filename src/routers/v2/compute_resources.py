@@ -292,24 +292,20 @@ async def query_system_jobs():
 @router.post("/create_job")
 async def create_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
-        job_id, job_dir = await adapter.submit_job(jobclass)
+        await adapter.submit_job(jobclass)
+        
         return {
             "status": InkStatus.SUCCESS,
-            "msg": f"Create job successfully, jobid: {job_id}, cluster: {jobclass.cluster_id}.",
-            "data": {
-                "jobId": job_id,
-                "jobType": jobclass.job_type,
-                "jobPath": job_dir
-            }
-        }        
+            "msg": f"Create job successfully.",
+            "data": {}
+        }   
     
     except Exception as e:
-        logger.error(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
+        logger.exception(f"Create job failed, username: {username}, cluster_id: {jobclass.cluster_id}, details: {e}.")
         return {
             "status": InkStatus.SERVER_INTERNAL_ERROR,
             "msg": f"Create job failed: {e}",
@@ -320,15 +316,14 @@ async def create_common_job(
 @router.get("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
-    cluster_id: str = Query(..., description="Cluster ID"),
+    cluster_id: str = Query(None, description="Cluster ID"),
     job_type: str = Query(None, description="Job type"),
     page: int = Query(1, description="Pangination page"),
     limit: int = Query(5000, description="lines of each page")
 ):
     try:
         joblist = []
-        if cluster_id == "all":
+        if not cluster_id:
             try:
                 cluster_list = get_config("computing", "cluster_list")
                 if not cluster_list:
@@ -380,7 +375,6 @@ async def query_common_job(
 @router.post("/delete_job")
 async def delete_common_job(
     username: str = Depends(get_username),
-    token: str = Depends(get_token),
     job_id: str = Body(..., description="Job ID",embed=True),
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
 ):

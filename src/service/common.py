@@ -3,7 +3,7 @@
 # Author        : HAN Xiao
 # Email         : hanx@ihep.ac.cn
 # Date          : Mon Jun 16 10:44:24 2025 CST
-# Last modified : Thu Oct 30 23:59:14 2025 CST
+# Last modified : Mon Jan 05 17:26:54 2026 CST
 # Description   :
 
 import base64
@@ -29,12 +29,15 @@ def remote_ssh_connect():
     SERVICE_NODE = get_config(
         "service", "service_node", fallback="inkbrowser.ihep.ac.cn"
     )
+    SERVICE_PORT = get_config("service", "service_port", fallback=2000)
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     private_key = paramiko.RSAKey.from_private_key_file("/root/.ssh/id_rsa")
     try:
-        client.connect(f"{SERVICE_NODE}", port=22, username="root", pkey=private_key)
+        client.connect(
+            f"{SERVICE_NODE}", port=int(SERVICE_PORT), username="root", pkey=private_key
+        )
     except Exception as e:
         raise Exception(f"SSH connect failed: {e}")
 

@@ -1,19 +1,19 @@
+import asyncio, json
+import importlib, grp
+import pwd, os, base64
+from shlex import quote
+from typing import Optional
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from src.storage import common
+from src.auth.krb5 import get_krb5
 from fastapi import HTTPException
 from src.computing.common import *
-from src.computing.gateway_tools import *
-from src.auth.krb5 import get_krb5
-from src.computing.htc.htc_check_job import *
-from datetime import datetime
-from src.storage import common
-from src.common.config import get_config
 from src.common.logger import logger
-import base64, asyncio, os, json, pwd
+from src.common.config import get_config
+from src.computing.gateway_tools import *
+from src.computing.htc.htc_check_job import *
 
-'''
-Author:         guocq@ihep.ac.cn
-Created:        2024-12-18
-Last Modified:  2024-12-18
-'''
 
 def parse_info(info, key):
     try:
@@ -60,6 +60,26 @@ async def read_file(uid, file_path: str) -> str:
     file_content = await common.cat_file(fname=file_path, username=username, mgm=xrootd_path, krb5_enabled=krb5_enabled)
 
     return file_content
+
+
+def safe_get(arr, idx, default=""):
+    return arr[idx] if idx < len(arr) else default
+
+
+def safe_int(s: str, default: Optional[int] = None) -> Optional[int]:
+    try:
+        s = (s or "").strip()
+        if s == "" or s.lower() in {"undefined", "null", "none"}:
+            return default
+        return int(s)
+    except Exception:
+        return default
+    
+
+def ts_to_str(ts: Optional[int]) -> str:
+    if not ts or ts <= 0:
+        return ""
+    return datetime.fromtimestamp(ts, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def build_requirements(request_wn=None, request_arch=None) -> str:
@@ -245,31 +265,206 @@ def delete_iptables(uid, jobId, gateway_port, clusterid):
     update_iptable_clean(uid, jobId, 1, clusterid)
 
 
-# async def sub_command(command, timeoutsec, errinfo, tminfo):
-#     try:
-        
-#         process = await asyncio.create_subprocess_shell(
-#             command,
-#             stdout=asyncio.subprocess.PIPE,
-#             stderr=asyncio.subprocess.PIPE,
-#             shell=True
-#         )
-        
-#         await asyncio.wait_for(process.wait(), timeout=timeoutsec)
-#         stdout, stderr = await process.communicate()
-        
-#         if process.returncode != 0:
-#             error_msg = stderr.decode().strip()
-#             raise Exception(f"{errinfo} {error_msg}")       
-#     except asyncio.TimeoutError as e:
-#         if process.returncode is None:
-#             process.kill()
-#             await process.wait()
-#         raise Exception(f"{tminfo} {e}")
-#     except Exception as e:
-#         raise e
+
+def get_user_exp_group(uid):
+
+    # 查询用户信息 → 主组 GID
+    gid = pwd.getpwuid(uid).pw_gid
+
+    # 查询组信息 → 组名
+    group_name = grp.getgrgid(gid).gr_name
+
+    mapping = {
+        # 单键直接映射
+        'alicpt': 'AliCPT',
+        'cms': 'CMS',
+        'dyw': 'DYW',
+        'gecam': 'GECAM',
+        'hxmt': 'HXMT',
+        'lhcb': 'LHCB',
+        'panda': 'Panda',
+        'higgs': 'CEPC',
+        'u07': 'CC',
+        'comet': 'COMET',
+        'csns': 'CSNS',
+        'ucas': 'OTHERS',
+        'heps': 'HEPS',
+        # 多键映射同一值
+        **{g: 'ATLAS' for g in ('atlas', 'combination')},
+        **{g: 'BES' for g in ('dqarun', 'offlinerun', 'physics')},
+        **{g: 'JUNO' for g in ('juno', 'dqmtest', 'dqmjuno', 'junospecial', 'junodc', 'junogns')},
+        **{g: 'LHAASO' for g in ('lhaaso', 'lhaasorun')},
+        **{g: 'HERD' for g in ('herd', 'herdrun')},
+    }
+
+    return mapping.get(group_name), group_name
+
+
+async def init_job_dir(username: str, job_type: str):
     
-#     return stdout
+    XROOTD_PATH = get_config("computing", "xrootd_path")
+    time_stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    user_home_dir = os.path.expanduser(f'~{username}')
+    uid = change_username_to_uid(username)
+
+    if user_home_dir.startswith("/afs/"):
+        _, USERGROUP = get_user_exp_group(uid)
+        ink_dir = get_config("computing", "ink_dir")
+        ink_dir = ink_dir.format(user_group=USERGROUP, username=username)
+        job_dir = f"{ink_dir}/.ink/Jobs/{job_type}-{time_stamp}"
+    else:
+        job_dir = f"{user_home_dir}/.ink/Jobs/{job_type}-{time_stamp}"
+    
+    logger.debug(f"User job_dir: {job_dir}")
+    is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=XROOTD_PATH)
+    if not is_exist:
+        await common.mkdir(dname=job_dir, username=username, mode="700", exist_ok=False, mgm=XROOTD_PATH)
+    logger.debug(f"Completed the jobdir({job_dir}) init for User({username})")
+
+    KRB5_ENABLED = get_config("common", "krb5_enabled")
+    if KRB5_ENABLED:
+        token = get_krb5(username)
+        if token != "":  
+            krb5_decoded_bytes = base64.b64decode(token)
+            await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", username=username, mgm=XROOTD_PATH, mode="600")
+            logger.debug(f"Generate user:{username} KRB5 token successfully.")
+        else:
+            raise Exception("Generate user KRB5 token failed.")
+
+    return job_dir
+
+
+async def generate_condor_submit(
+    username: str,
+    cpu: int, 
+    mem: int, 
+    jobtype: str, 
+    jobdir: str, 
+    request_os: Optional[str] = None, 
+    request_wn: Optional[str] = None, 
+    request_arch: Optional[str] = None, 
+    arguments: Optional[str] = None
+):
+
+    default_job_config = get_config("jobtype", jobtype).get("htc")
+    extra_param = default_job_config.get("extra_param")
+    job_cpus = default_job_config.get("RequestCpus", cpu)
+    job_mem = default_job_config.get("RequestMemory", mem)
+    XROOTD_PATH = get_config("computing", "xrootd_path")
+    
+    workernode = default_job_config.get("workernode", request_wn)
+    arch = default_job_config.get("arch", request_arch)
+
+    executable_dir = get_config("computing", "cluster_scripts")
+    executable = f"{executable_dir}/{jobtype}/shell.sh"
+
+    with open(executable, "rb") as file:
+        submitfile_content = file.read()
+    await common.upload_file(src_data=submitfile_content, dst=f"{jobdir}/shell.sh", username=username, mgm=XROOTD_PATH, mode="700")
+
+    job_script = f"{executable_dir}/{jobtype}/run.sh"
+    with open(job_script, "rb") as file:
+        job_script_content = file.read()
+    await common.upload_file(src_data=job_script_content, dst=f"{jobdir}/run.sh", username=username, mgm=XROOTD_PATH, mode="700")
+
+    if jobtype == "npu":
+        arguments += jobdir
+    
+    config = {
+        "universe": "vanilla",
+        "executable": "shell.sh",
+        "arguments": arguments,
+        "output": f"{jobdir}/$(ClusterId).out",
+        "error": f"{jobdir}/$(ClusterId).err",
+        "request_cpus": job_cpus,
+        "request_memory": job_mem,
+        "getenv": "True",
+    }    
+
+    for key, value in default_job_config.items():
+        if key in {"schedd_host", "cm_host", "RequestCpus", "RequestMemory", "walltime", "workernode", "extra_param"}:
+            continue
+        config[f"{key}"] = value
+
+    if extra_param:
+        job_plugin = importlib.import_module(f"src.computing.scripts.plugins.set_extra_config")
+        uid = change_username_to_uid(username)
+        groupname = grp.getgrgid(pwd.getpwuid(uid).pw_gid).gr_name
+        extra_job_config = job_plugin.get_extra_job_config(username, groupname, jobtype, request_os)
+        for key, value in extra_job_config.items():
+            logger.info(f"key: {key}, value: {value}")
+            config[f"{key}"] = value
+
+    requirement_expr = build_requirements(workernode, arch)
+    config[f"requirements"] = requirement_expr
+
+    lines = [f"{k} = {v}" for k, v in config.items()]
+    lines.append("queue")
+    submitfile_bytes = ("\n".join(lines) + "\n").encode("utf-8")
+    submitfile_name = f"{username}_{jobtype}.sub"
+
+    await common.upload_file(src_data=submitfile_bytes, dst=f"{jobdir}/{submitfile_name}", username=username, mgm=XROOTD_PATH, mode="600")
+    logger.debug(f"Completed the submit file initial and upload.")
+
+    return submitfile_name
+
+def generate_submit_command(username: str, job_dir: str, job_type: str, submitfile: str) -> str:
+        
+    krb5_enabled = get_config("common", "krb5_enabled")
+    if isinstance(krb5_enabled, str):
+        krb5_enabled = krb5_enabled.strip().lower() in {"1", "true", "yes", "on"}
+
+    uid = change_username_to_uid(username)
+    user_shell = pwd.getpwuid(uid).pw_shell
+    bash_like = user_shell in {"/bin/bash", "/bin/sh", "/bin/zsh"}
+    noenv_jobtype_list = get_config("computing", "noenv_jobtype")
+    special_job = job_type in noenv_jobtype_list
+
+    if special_job:
+        if bash_like:
+            if user_shell == "/bin/zsh":
+                su_prefix = f"su -s /bin/zsh {quote(username)} -c "
+            else:
+                su_prefix = f"su -s /bin/bash {quote(username)} -c "
+        else:
+            su_prefix = f"su -s /bin/tcsh {quote(username)} -c "
+    else:
+        su_prefix = f"su - {quote(username)} -c "
+
+    def env_kv(k: str, v: str) -> str:
+        if bash_like:
+            return f"export {k}={v}"
+        else:
+            return f"setenv {k} {v}"
+
+    env_parts = [
+        f"cd {quote(job_dir)}",
+        env_kv("PATH", "/usr/bin:$PATH"),
+        env_kv("LD_LIBRARY_PATH", "/lib64:$LD_LIBRARY_PATH"),
+    ]
+
+    if not special_job:
+        env_parts.append(env_kv("INKPATH", "$PATH"))
+        env_parts.append(env_kv("INKLDPATH", "$LD_LIBRARY_PATH"))
+
+    if krb5_enabled:
+        env_parts.insert(1, env_kv("KRB5CCNAME", quote(f"{job_dir}/krb5cc_{uid}")))
+
+    SCHEDD_HOST = get_config("computing", "schedd_host")
+    CM_HOST = get_config("computing", "cm_host")
+
+    submit_part = (
+        "condor_submit "
+        f"-name {quote(SCHEDD_HOST)} "
+        f"-pool {quote(CM_HOST)} "
+        f"{quote(submitfile)}"
+    )
+
+    command = su_prefix + '"' + " && ".join(env_parts + [submit_part]) + '"'
+    logger.debug(f"User {username} submit command: {command}")
+
+    return command
+
 
 
 

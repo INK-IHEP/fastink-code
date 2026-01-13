@@ -301,7 +301,7 @@ class HPC_Scheduler(SchedulerBase):
     async def _get_job_out_err():
         pass
         
-    async def query_job(self, job_type):
+    async def query_job(self, request_job_type: Optional[str] = None):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         

@@ -70,7 +70,7 @@ async def fileList(workdir:str = Query(default=None, description = "Directory to
     logger.info(f"List {workdir}")
     try:
         # _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
-        logger.debug(f"Processing list request. workdir={workdir}. {type(workdir)}. {len(workdir)}")
+        logger.debug(f"Processing list request. workdir={workdir}.")
         if not workdir or workdir == "''" or workdir == '""':
             logger.debug(f"Work dir is empty. setting to ~{username}")
             workdir = os.path.expanduser(urllib.parse.unquote(f"~{username}", encoding='utf-8'))
@@ -81,6 +81,7 @@ async def fileList(workdir:str = Query(default=None, description = "Directory to
             work_directory = os.path.normpath(work_directory)
 
         # _, is_dir = await common.path_exist(name = work_directory, krb5ccname = krb5ccname, username = username, mgm = xrd_host)
+        logger.debug(f"Checking if {work_directory} exists.....")
         _, is_dir = await common.path_exist(name = work_directory, username = username, mgm = xrd_host)
         if is_dir != PathType.DIR:
             return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to list {work_directory}. Err: Path {work_directory} does not exist.", "data": None}
@@ -139,16 +140,8 @@ async def fileDelete(req: Request,
 
 #### Upload a file
 @router.post("/upload_file")
-async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile = File(...),
+async def fileUpload(req: Request, upload_dir: str = Form(...), overWrite:bool = Form("False"), file: UploadFile = File(...),
                      username: str = Depends(get_username)):
-    
-    overWrite: bool = False
-    try:
-        body = await req.json()
-        if 'overWrite' in body:
-            overWrite = bool(body['overWrite'])
-    except Exception as e:
-        logger.error(f"Failed to get parameters when download. Err:{str(e)}")
     try:
         # _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         # Decode file path
@@ -176,7 +169,7 @@ async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile
                 logger.error(f"{upload_dir} is not a directory.")
                 return {"status": InkStatus.TYPE_INVALID, "msg": f"Failed to upload file {filename}. {upload_dir} is not a directory.", "data": None}
         else:
-            logger.debug(f"{upload_dir} exists. We will upload {filename} into it.")
+            logger.debug(f"Dir {upload_dir} exists. We will upload {filename} into it.")
 
         # Construct full path to the file to be uploaded
         file_path = os.path.join(upload_dir, filename)
@@ -210,6 +203,30 @@ async def fileUpload(req: Request, upload_dir: str = Form(...), file: UploadFile
     except Exception as e:
         logger.error(f"An unexpected error occurred: {str(e)}\n{traceback.format_exc()}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to upload file to {upload_dir}/{file.filename}. An unexpected error occurred:: {str(e)}", "data": None}
+
+@router.post("/create_file")
+async def create_file(TargetPath:str, username: str = Depends(get_username), mode:str = '644'):
+    TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    logger.info("Creating file {TargetPath} .")
+    try:
+        is_exist, path_type = await common.path_exist(name = TargetPath, username = username, mgm = xrd_host)
+        if is_exist:
+            logger.error("TargetPath {TargetPath} exists... Failed to created it...")
+            return {"status": InkStatus.PATH_EXIST, "msg": {f"Failed to create {TaragetPath}. Path exists..."}, "data": None}
+        await common.upload_file(src_data = '', dst = TargetPath, username = username, mgm = xrd_host)
+        is_exist, path_type = await common.path_exist(TargetPath, username = username, mgm = xrd_host)
+        if is_exist and path_type == PathType.FILE:
+            logger.debug(f"Created {TargetPath} successfully.")
+        else:
+            return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}.", "data": None}
+        #### Change mode
+        await common.chmod(fname = TargetPath, username = username, mode = mode, mgm = xrd_host)
+        logger.debug(f"Changed {TargetPath}'s mode to {mode}.")
+        return {"status": InkStatus.OK, "msg": f"TargetPath  {TargetPath} created successfully.", "data": None}
+
+    except Exception as e:
+        logger.error(f"Failed to create TargetPath {TargetPath}. Err:{str(e)}")
+        return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to create TaretPath {TargetPath}. err:{str(e)}", "data": None}
 
 @router.post("/upload_dir")
 async def dirUpload(upload_dir: str = Form(...), file: UploadFile = File(...)):

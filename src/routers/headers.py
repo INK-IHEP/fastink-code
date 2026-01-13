@@ -4,6 +4,7 @@ import time
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 from src.common.config import get_config
 from src.common.logger import logger
@@ -119,14 +120,16 @@ class TimerMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception as e:
             process_time = time.perf_counter() - start_time
+            url = mask_url_query(str(request.url), {"password"})
             logger.error(
-                f"Exception {e} | {process_time:.4f}s | Request: {request.method} {request.url.path}"
+                f"Exception {e} | {process_time:.4f}s | Request: {request.method} {url}"
             )
             raise
         process_time = time.perf_counter() - start_time
         # response.headers["X-Process-Time"] = f"{process_time:.4f}"
+        url = mask_url_query(str(request.url), {"password"})
         logger.debug(
-            f"{process_time:.4f}s | Request: {request.method} {response.status_code} {request.url}"
+            f"{process_time:.4f}s | Request: {request.method} {response.status_code} {url}"
         )
         return response
 
@@ -152,6 +155,21 @@ def validate_token(username: str, token: str) -> bool:
     except Exception as e:
         logger.error(f"User validation failed: {e}")
         return False
+
+
+def mask_url_query(url: str, sensitive_keys: set[str]) -> str:
+    parsed = urlparse(url)
+    query_pairs = parse_qsl(parsed.query, keep_blank_values=True)
+
+    masked_pairs = list()
+    for k, v in query_pairs:
+        if k in sensitive_keys and v:
+            masked_pairs.append((k, "*" * len(v)))
+        else:
+            masked_pairs.append((k, v))
+    new_query = urlencode(masked_pairs)
+
+    return urlunparse(parsed._replace(query=new_query))
 
 
 def get_username(request: Request) -> str:
