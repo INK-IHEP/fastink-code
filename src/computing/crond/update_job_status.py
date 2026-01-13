@@ -302,7 +302,7 @@ async def submit_job_from_redis():
                         await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
 
                     failed_payload = json.dumps({
-                        "raw_job": raw_job,
+                        "raw_job": job,
                         "error_type": type(e).__name__,
                         "error_repr": repr(e),
                         "error_args": getattr(e, "args", None),
