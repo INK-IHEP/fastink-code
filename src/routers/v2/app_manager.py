@@ -9,7 +9,7 @@ import asyncio
 from src.common.config import get_config
 from src.common.logger import logger
 from src.routers.status import *
-
+from src.apps.drawio import drawio
 
 router = APIRouter()
 @router.get("/get_job_statistics")
@@ -65,8 +65,17 @@ async def get_omat_stack_jobs_info():
             "msg": f"Failed to get omat stack jobs, and the err details: {err}",
             "data": ""
         }
-        
 
-    
-    
-    
+@router.get("/drawio")
+async def app_drawio(
+    username: str = Depends(get_username),
+    TargetPath: str = Query(..., description="File Path"),
+    Type:str = Query("svg", description="File Type"),
+    create:bool = Query(False, description="Create new file")):
+
+    try:
+        response = await drawio.draw(username = username, TaragetPath = TaragetPath, create = create)
+    except Exception as e:
+        logger.error(f"Failed to load drawio app. Err:{str(e)}")
+        return {"status": InkStatus.APP_UNKNOWN, "msg": f"Failed to load drawio app. Err:{str(e)}", "data": None}
+    return response
