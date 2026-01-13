@@ -196,29 +196,19 @@ class PathChecker:
     
     @staticmethod
     def is_absolute_path(path: str) -> bool:
-        """判断是否为绝对路径"""
         return Path(path).is_absolute()
     
     @staticmethod
     def is_relative_path(path: str) -> bool:
-        """判断是否为相对路径"""
         return not Path(path).is_absolute()
     
     @staticmethod
     def is_file(path: str) -> Optional[bool]:
-        """
-        判断是否为文件
-        返回: True=是文件, False=不是文件, None=路径不存在
-        """
         p = Path(path)
         return p.is_file() if p.exists() else None
     
     @staticmethod
     def is_directory(path: str) -> Optional[bool]:
-        """
-        判断是否为目录
-        返回: True=是目录, False=不是目录, None=路径不存在
-        """
         p = Path(path)
         return p.is_dir() if p.exists() else None
     
