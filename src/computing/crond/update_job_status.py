@@ -1,4 +1,5 @@
 import json, shlex
+import traceback
 from shlex import quote
 from pathlib import Path
 from fastapi import APIRouter
@@ -297,14 +298,19 @@ async def submit_job_from_redis():
                     await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
 
                 except Exception as e:
-                    logger.exception(f"HTC-LOG: Submit {raw_job} job failed, {e}")
                     if job_owner:
                         await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
+
                     failed_payload = json.dumps({
                         "raw_job": raw_job,
-                        "error": str(e)
+                        "error_type": type(e).__name__,
+                        "error_repr": repr(e),
+                        "error_args": getattr(e, "args", None),
+                        "traceback": traceback.format_exc(),
                     })
+
                     await r.lpush("error_jobs", failed_payload)
+                    logger.error(f"HTC-LOG: Submit {raw_job} job failed, {e}")
                     continue
 
     except Timeout:
