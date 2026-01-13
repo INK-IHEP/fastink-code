@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 
 from src.storage import common
 from src.storage.utils import PathType, extract_param, unquote_expand_user
-from src.common.utils import get_token
+from src.common.utils import get_krb5cc
 from src.common.config import get_config
 from src.common.logger import logger
 from src.routers.status import *
