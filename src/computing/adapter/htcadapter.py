@@ -105,10 +105,10 @@ class HTC_Scheduler(SchedulerBase):
                 "clusterId": htc_job_params.cluster_id
             }
             
-            await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            n1 = await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            n2 = await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
 
-            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
+            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue, the submitting_jobs_len: {n1}, the user_submitting_jobs_len: {n2}.")
 
         except Exception as e:
             logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
