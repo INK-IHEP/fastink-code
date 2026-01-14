@@ -261,6 +261,8 @@ async def submit_job_from_redis():
         with lock:   
             r = redis_connect()
             while True:
+                job_owner = None
+                raw_job = None
                 try:
                     raw_job = await r.rpop("submitting_jobs")
                     if not raw_job:
