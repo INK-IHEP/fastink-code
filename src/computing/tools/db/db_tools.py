@@ -1,7 +1,5 @@
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
-#from sqlalchemy.sql.expression import update, select, delete
-
 from sqlalchemy import select, update, delete
 from src.database.sqla import models
 from src.database.sqla.session import read_session, transactional_session
