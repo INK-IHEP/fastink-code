@@ -379,6 +379,13 @@ async def delete_common_job(
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
 ):
     try:
+        if not job_id:
+            return {
+                "status": InkStatus.PARAM_ERROR,
+                "msg": f"",
+                "data": {}
+            }
+
         adapter = get_scheduler(cluster_id, username)
         await adapter.cancel_job(job_id)
         return {
