@@ -88,7 +88,7 @@ class HTC_Scheduler(SchedulerBase):
             for job in raw:
                 if isinstance(job, (bytes, bytearray)):
                     job = job.decode("utf-8")
-                    job_param = json.loads(job)
+                job_param = json.loads(job)
                 if job_param.get("jobType") == htc_job_params.job_type:
                     logger.debug(f"HTC-LOG: Submit job {htc_job_params.job_type} exsit in {self.USERNAME}_submitting_jobs: {job}")
                     return  
