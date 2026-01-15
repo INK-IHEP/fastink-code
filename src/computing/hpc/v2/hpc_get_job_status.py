@@ -1,10 +1,7 @@
-import subprocess
 from fastapi import HTTPException
-from src.computing.tools.resources_utils import change_uid_to_username
-from src.computing.common import *
-from src.computing.gateway_tools import *
-import json
-from src.computing.tools.resources_utils import *
+from src.computing.tools.common.utils import change_uid_to_username, create_iptables, delete_iptables, sub_command
+from src.computing.tools.db.db_tools import update_job_status, get_job_info, get_job_iptables_status
+
 
 async def get_job_status(jobId, uid, cluster_id):
 

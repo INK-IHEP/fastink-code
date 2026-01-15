@@ -114,7 +114,6 @@ class HTC_Scheduler(SchedulerBase):
             items = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
             items = [x.decode("utf-8") if isinstance(x, (bytes, bytearray)) else x for x in items]
             logger.debug(f"HTC-LOG: PUSH successfully, and the {self.USERNAME}_submitting_jobs: {items}")
-
             logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
 
         except Exception as e:

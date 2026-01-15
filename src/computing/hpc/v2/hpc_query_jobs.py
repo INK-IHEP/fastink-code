@@ -4,9 +4,11 @@ from fastapi import HTTPException
 from src.computing.gateway_tools import *
 from datetime import datetime, timedelta
 from sqlalchemy.exc import NoResultFound
-from src.computing.tools.resources_utils import *
-from src.computing.hpc.hpc_check_job import get_job_output
-from src.computing.common import get_job_info, insert_job_info
+from src.common.logger import logger
+from src.computing.hpc.v2.hpc_check_job import get_job_output
+from src.computing.tools.common.utils import change_uid_to_username, create_iptables, delete_iptables, sub_command
+from src.computing.tools.db.db_tools import get_job_info, insert_job_info, update_job_status, update_connect_status, get_job_connect_info, get_job_iptables_status
+
 
 async def get_user_jobs(uid, job_type, cluster_id):
     try:

@@ -1,18 +1,16 @@
 # routers/jobs.py
 from fastapi import HTTPException
-import subprocess
+from sqlalchemy.exc import NoResultFound
 import re
-from src.computing.tools.resources_utils import change_uid_to_username, sub_command
-from src.computing.common import get_job_info, insert_job_info
-from src.computing.gateway_tools import *
-from src.computing.tools.resources_utils import *
-from src.computing.hpc.hpc_check_job import get_job_output
+from src.common.logger import logger
+from src.computing.tools.common.utils import change_uid_to_username, create_iptables, delete_iptables, sub_command
+from src.computing.tools.db.db_tools import get_job_info, insert_job_info, update_job_status, get_job_connect_info, update_connect_status, get_job_iptables_status
+from src.computing.hpc.v2.hpc_check_job import get_job_output
 
 async def get_user_jobs(uid, jobId, cluster_id):
     try:
         user_name = change_uid_to_username(uid)
-        
-        # command = f"sacct -j {jobId} --format=JobID,Partition,JobName,User,State,Elapsed,NNodes,NodeList,AdminComment,Start,Submit -P"
+    
         command = f"su {user_name} -c 'sacct -j {jobId} --format=JobID,Partition,JobName,User,State,Elapsed,NNodes,NodeList,AdminComment,Start,Submit -P'"
         result = await sub_command(command, timeoutsec=5, errinfo="sacct err", tminfo="sacct timeout")
         lines = result.decode().strip().split('\n')

@@ -1,6 +1,6 @@
 from fastapi import HTTPException
-from src.computing.tools.resources_utils import change_uid_to_username, sub_command
-from src.computing.hpc.hpc_job_details import *
+from src.computing.tools.common.utils import change_uid_to_username, delete_iptables, sub_command
+from src.computing.tools.db.db_tools import get_job_info, update_job_status
 
 # delete job
 async def delete_job(jobid, uid):

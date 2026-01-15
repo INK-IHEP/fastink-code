@@ -304,7 +304,7 @@ async def submit_job_from_redis():
                 except Exception as e:
                     if job_owner:
                         await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
-                    logger.exception(f"HTC-LOG: Submit job failed, {e}")
+                    logger.error(f"HTC-LOG: Submit job failed, {e}")
                     continue
 
     except Timeout:

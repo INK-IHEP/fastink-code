@@ -11,7 +11,8 @@ from fastapi import HTTPException
 from src.computing.common import *
 from src.common.logger import logger
 from src.common.config import get_config
-from src.computing.gateway_tools import *
+from src.computing.tools.db.db_tools import *
+from src.computing.tools.gateway.gateway_utils import *
 from src.computing.htc.htc_check_job import *
 
 
@@ -464,8 +465,6 @@ def generate_submit_command(username: str, job_dir: str, job_type: str, submitfi
     logger.debug(f"User {username} submit command: {command}")
 
     return command
-
-
 
 
 async def sub_command(command, timeoutsec, errinfo, tminfo):

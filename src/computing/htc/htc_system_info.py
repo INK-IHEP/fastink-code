@@ -1,5 +1,4 @@
-import subprocess
-from src.computing.tools.resources_utils import sub_command
+from src.computing.tools.common.utils import sub_command
 from src.inkdb.inkredis import *
 from fastapi import HTTPException
 from src.common.config import get_config

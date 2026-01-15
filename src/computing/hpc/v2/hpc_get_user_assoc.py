@@ -1,7 +1,5 @@
 from fastapi import Header, HTTPException
-import subprocess
-
-from src.computing.tools.resources_utils import sub_command, change_uid_to_username
+from src.computing.tools.common.utils import sub_command, change_uid_to_username
 
 
 async def get_user_assoc(uid):

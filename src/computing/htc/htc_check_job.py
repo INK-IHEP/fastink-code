@@ -1,6 +1,6 @@
 from fastapi import HTTPException
-from src.computing.common import get_out_err_path
-import src.computing.tools.resources_utils as utils
+from src.computing.tools.db.db_tools import get_out_err_path
+import src.computing.tools.common.utils as utils
 from src.common.logger import logger
 '''
 Author:         guocq@ihep.ac.cn
