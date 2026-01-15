@@ -3,11 +3,8 @@ from fastapi import APIRouter, Query, Request, Body, Depends
 from src.computing.hpc.v2 import hpc_create_jobs
 from src.computing.hpc.v2 import hpc_check_job
 from src.computing.htc import htc_check_job
-from src.computing.hpc.v2 import hpc_job_details
-from src.computing.htc import htc_job_details
 from src.computing.hpc.v2 import hpc_get_user_assoc
 from src.computing.htc import htc_system_jobs
-from src.computing.tools.resources_utils import *
 from src.apps.statistic.job_statistic import *
 from src.routers.headers import get_username, get_token
 from src.inkdb.inkredis import *
@@ -15,6 +12,7 @@ from src.routers.status import InkStatus
 from src.common.logger import logger
 from src.computing.adapter.strategy import get_scheduler
 from src.computing.cluster.cluster import HTC_JOB, SLURM_JOB
+from src.computing.tools.common.utils import change_username_to_uid, connect_jupyter_job, connect_rootbrowse_job, connect_sshd, connect_vnc_job, connect_vscode_job
 
 router = APIRouter()
 
@@ -184,52 +182,6 @@ async def create_job_with_path(
             "data": {}
         }
 
-
-@router.get("/get_jobdetails")
-async def get_common_job_details(
-    username: str = Depends(get_username),
-    token: str = Depends(get_token),
-    job_id: str = Query(..., description="Job ID"),
-    cluster_id: str = Query(..., description="Cluster ID")
-):
-    try:
-        uid = change_username_to_uid(username)
-        if cluster_id == "slurm":
-            jobStartTime, jobStatus, jobNodeList, jobSubmitTime, jobType, connect_sign = await hpc_job_details.get_user_jobs(uid, job_id, cluster_id)
-            response_data = {
-                "status": InkStatus.SUCCESS,
-                "msg": "Request Success",
-                "data": {
-                    "clusterId": "slurm",
-                    "jobId": int(job_id),
-                    "jobStartTime": jobStartTime,
-                    "jobStatus": jobStatus,
-                    "jobNodeList": jobNodeList,
-                    "jobSubmitTime":jobSubmitTime,
-                    "jobType": jobType,
-                    "connect_sign": connect_sign
-                }
-            }
-            
-        elif cluster_id == "htcondor":
-            response_data = await htc_job_details.get_user_job_details(uid, job_id, cluster_id)
-        else:
-            return {
-                "status": InkStatus.RESOURCE_NOT_SUPPORT,
-                "msg": "Get job details failed with wrong cluster_id.",
-                "data": {}
-            }
-            
-        return response_data
-        
-    except Exception as e:
-        logger.error(f"Get job details failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
-        return {
-            "status": InkStatus.SERVER_INTERNAL_ERROR,
-            "msg": f"Get job details failed: {e}",
-            "data": {}
-        }
-    
 
 @router.get("/get_userassoc")
 async def get_common_user_assoc(
