@@ -105,15 +105,17 @@ class HTC_Scheduler(SchedulerBase):
                 "clusterId": htc_job_params.cluster_id
             }
             
-            len1 = await r.llen("submitting_jobs")
             await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            len2 = await r.llen("submitting_jobs")
+            items = await r.lrange("submitting_jobs", 0, -1)
+            items = [x.decode("utf-8") if isinstance(x, (bytes, bytearray)) else x for x in items]
+            logger.debug(f"HTC-LOG: PUSH successfully, and the submitting_jobs: {items}")
 
-            len3 = await r.llen(f"{self.USERNAME}_submitting_jobs")
             await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            len4 = await r.llen(f"{self.USERNAME}_submitting_jobs")
+            items = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+            items = [x.decode("utf-8") if isinstance(x, (bytes, bytearray)) else x for x in items]
+            logger.debug(f"HTC-LOG: PUSH successfully, and the {self.USERNAME}_submitting_jobs: {items}")
 
-            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue, the submitting_jobs lens: {len1} --> {len2}, the {self.USERNAME}_submitting_jobs lens: {len3} --> {len4}.")
+            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
 
         except Exception as e:
             logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
