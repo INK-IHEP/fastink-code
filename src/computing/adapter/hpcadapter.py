@@ -1,7 +1,6 @@
 import os, re, shlex
 from pathlib import Path
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from src.storage import common
 from typing import List, Optional
 from src.common.logger import logger
@@ -11,7 +10,7 @@ from src.computing.tools.db.db_tools import *
 from src.computing.cluster.cluster import SLURM_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
-from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, get_endtime_info
+from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables
 
 
 @scheduler("slurm")

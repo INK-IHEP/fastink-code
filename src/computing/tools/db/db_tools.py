@@ -114,6 +114,14 @@ def get_job_connect_info(
 ):
     return get_job_info_field(uid, jobid, clusterid, 'connect_sign')
 
+def get_endtime_info(
+    uid,
+    jobid,
+    clusterid,
+):
+    return get_job_info_field(uid, jobid, clusterid, 'job_end_time')
+
+
 def get_job_iptables_status(uid, jobid, clusterid):
     return get_job_info_field(uid, jobid, clusterid, 'iptable_status')
 

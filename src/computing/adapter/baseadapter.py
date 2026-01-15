@@ -3,7 +3,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 from src.common.config import get_config
 from src.computing.cluster.cluster import Base_JOB
-from src.computing.tools.resources_utils import change_uid_to_username
+from src.computing.tools.common.utils import change_uid_to_username
 
 class SchedulerBase(ABC):
     def __init__(self, uid: int):
