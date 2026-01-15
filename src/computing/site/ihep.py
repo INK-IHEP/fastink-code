@@ -7,7 +7,7 @@ from src.common.logger import logger
 from src.common.config import get_config
 from src.auth.krb5 import get_krb5
 from src.computing.site.strategy import register_site, register_submitter
-from src.computing.tools.resources_utils import change_uid_to_username, sub_command
+from src.computing.tools.common.utils import change_uid_to_username, sub_command
 
 def _get_user_exp_group(uid):
 

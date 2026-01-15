@@ -5,7 +5,7 @@ from src.storage import common
 from src.common.logger import logger
 from src.common.config import get_config
 from src.computing.site.strategy import register_site, register_submitter
-from src.computing.tools.resources_utils import change_uid_to_username, sub_command
+from src.computing.tools.common.utils import change_uid_to_username, sub_command
 
 @register_site("hai")
 async def build_job_env(uid, jobtype, rawjobPath, jobfilename):

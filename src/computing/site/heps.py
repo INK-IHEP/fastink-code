@@ -1,5 +1,4 @@
 import os
-import time
 import base64
 import pwd
 from shlex import quote
@@ -9,7 +8,7 @@ from src.storage import common
 from src.common.logger import logger
 from src.common.config import get_config
 from src.computing.site.strategy import register_site, register_submitter
-from src.computing.tools.resources_utils import change_uid_to_username, sub_command, get_user_exp_group, generate_home_link 
+from src.computing.tools.common.utils import change_uid_to_username, sub_command, get_user_exp_group 
 
 @register_site("heps")
 async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
