@@ -105,10 +105,15 @@ class HTC_Scheduler(SchedulerBase):
                 "clusterId": htc_job_params.cluster_id
             }
             
-            n1 = await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            n2 = await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            len1 = await r.llen("submitting_jobs")
+            await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            len2 = await r.llen("submitting_jobs")
 
-            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue, the submitting_jobs_len: {n1}, the user_submitting_jobs_len: {n2}.")
+            len3 = await r.llen(f"{self.USERNAME}_submitting_jobs")
+            await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            len4 = await r.llen(f"{self.USERNAME}_submitting_jobs")
+
+            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue, the submitting_jobs lens: {len1} --> {len2}, the {self.USERNAME}_submitting_jobs lens: {len3} --> {len4}.")
 
         except Exception as e:
             logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
@@ -206,32 +211,32 @@ class HTC_Scheduler(SchedulerBase):
                 "hold_reason": job_hold_reason
             })
 
-        # raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
-        # for raw_job in raw_jobs:
-        #     job = json.loads(raw_job)
+        raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+        for raw_job in raw_jobs:
+            job = json.loads(raw_job)
 
-        #     job_redis_type = job.get("jobType")
-        #     job_os = job.get("jobReqOS")
-        #     job_status = "SUBMITTING"
-        #     connect_sign = "False"
+            job_redis_type = job.get("jobType")
+            job_os = job.get("jobReqOS")
+            job_status = "SUBMITTING"
+            connect_sign = "False"
 
-        #     if req_job_type:
-        #         req_job_types = req_job_type.split(',')
-        #         if job_redis_type not in req_job_types:
-        #             continue
+            if req_job_type:
+                req_job_types = req_job_type.split(',')
+                if job_redis_type not in req_job_types:
+                    continue
 
-        #     return_list.append({
-        #         "clusterId": self.CLUSTER_TYPE,
-        #         "jobId": "",
-        #         "jobType": job_redis_type,
-        #         "jobSubmitTime": "",
-        #         "jobStatus": job_status,
-        #         "jobStartTime": "",
-        #         "JobNodeList": "",
-        #         "jobrunos": job_os,
-        #         "connect_sign": connect_sign,
-        #         "hold_reason": ""
-        #     })
+            return_list.append({
+                "clusterId": self.CLUSTER_TYPE,
+                "jobId": "",
+                "jobType": job_redis_type,
+                "jobSubmitTime": "",
+                "jobStatus": job_status,
+                "jobStartTime": "",
+                "JobNodeList": "",
+                "jobrunos": job_os,
+                "connect_sign": connect_sign,
+                "hold_reason": ""
+            })
 
         return return_list
 
