@@ -265,6 +265,8 @@ async def submit_job_from_redis():
                 raw_job = None
                 try:
                     raw_job = await r.rpop("submitting_jobs")
+                    logger.debug(f"HTC-LOG: Pop the raw info: {raw_job}")
+
                     if not raw_job:
                         break
 
