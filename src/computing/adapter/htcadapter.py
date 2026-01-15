@@ -206,32 +206,32 @@ class HTC_Scheduler(SchedulerBase):
                 "hold_reason": job_hold_reason
             })
 
-        raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
-        for raw_job in raw_jobs:
-            job = json.loads(raw_job)
+        # raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+        # for raw_job in raw_jobs:
+        #     job = json.loads(raw_job)
 
-            job_redis_type = job.get("jobType")
-            job_os = job.get("jobReqOS")
-            job_status = "SUBMITTING"
-            connect_sign = "False"
+        #     job_redis_type = job.get("jobType")
+        #     job_os = job.get("jobReqOS")
+        #     job_status = "SUBMITTING"
+        #     connect_sign = "False"
 
-            if req_job_type:
-                req_job_types = req_job_type.split(',')
-                if job_redis_type not in req_job_types:
-                    continue
+        #     if req_job_type:
+        #         req_job_types = req_job_type.split(',')
+        #         if job_redis_type not in req_job_types:
+        #             continue
 
-            return_list.append({
-                "clusterId": self.CLUSTER_TYPE,
-                "jobId": "",
-                "jobType": job_redis_type,
-                "jobSubmitTime": "",
-                "jobStatus": job_status,
-                "jobStartTime": "",
-                "JobNodeList": "",
-                "jobrunos": job_os,
-                "connect_sign": connect_sign,
-                "hold_reason": ""
-            })
+        #     return_list.append({
+        #         "clusterId": self.CLUSTER_TYPE,
+        #         "jobId": "",
+        #         "jobType": job_redis_type,
+        #         "jobSubmitTime": "",
+        #         "jobStatus": job_status,
+        #         "jobStartTime": "",
+        #         "JobNodeList": "",
+        #         "jobrunos": job_os,
+        #         "connect_sign": connect_sign,
+        #         "hold_reason": ""
+        #     })
 
         return return_list
 
