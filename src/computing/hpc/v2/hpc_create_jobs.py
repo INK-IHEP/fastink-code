@@ -3,7 +3,7 @@ import threading
 import time as tm
 from pathlib import Path
 from typing import Optional
-from src.common.logger import logger
+#from src.common.logger import logger
 from pydantic import BaseModel, Field
 from src.common.config import get_config
 from datetime import datetime, timedelta
@@ -11,6 +11,10 @@ from src.computing.tools.resources_utils import *
 from src.computing.site import hai, ihep
 from src.computing.site.strategy import get_site, get_submitter
 
+from src.computing.tools.timing import log_step
+import logging
+
+logger = logging.getLogger("ink.create_jobs")
 
 # exec "sbatch --test-only" and get estimated start time
 def get_test_only_start_time(command_output):
@@ -246,7 +250,10 @@ async def create_job_with_path(
 
     site = get_config("computing", "site")
     build_job_env = get_site(site)
-    job_path, token_filename = await build_job_env(uid, job_type, job_script_abs_path, script_file)
+    
+    # ---------- step 1: build job env ----------
+    with log_step("build_job_env"):
+        job_path, token_filename = await build_job_env(uid, job_type, job_script_abs_path, script_file)
 
     parameters = f" --comment={job_type} "
 
@@ -302,24 +309,30 @@ async def create_job_with_path(
 
     try:
         submitter = get_submitter(site, cluster_id)
-        job_id, job_type, job_path = await submitter(sbatch_command, job_type, job_path, uid)
+        # ---------- step 2: sbatch submit ----------
+        with log_step("sbatch_submit"):
+            job_id, job_type, job_path = await submitter(sbatch_command, job_type, job_path, uid)
         
         if not job_id:
             raise ValueError("Failed to get job ID from SLURM response")
 
-        # Insert job info into DB
-        insert_job_info(uid, job_id, output_file, error_file, job_type, job_path, cluster_id)
 
-        # Question : dead loop?
+        # Insert job info into DB
+        # ---------- step 3: insert DB ----------
+        with log_step("insert_job_info"):
+            insert_job_info(uid, job_id, output_file, error_file, job_type, job_path, cluster_id)
+
+        # ---------- step 4: async admincomment (fire & forget) ----------
         def add_admincomment():
-            if job_id:
-                # add admincomment as root
-                admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
-                try:
-                    asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
-                except Exception as e:
-                    tm.sleep(1)
-                    add_admincomment()
+            with log_step("add_admincomment"):
+                if job_id:
+                    # add admincomment as root
+                    admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
+                    try:
+                        asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
+                    except Exception as e:
+                        tm.sleep(1)
+                        add_admincomment()
 
         # fork a thread to run the add_admincomment function
         threading.Thread(target=add_admincomment).start()

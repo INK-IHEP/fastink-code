@@ -11,7 +11,9 @@ from src.computing.tools.db.db_tools import *
 from src.computing.cluster.cluster import SLURM_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
-from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, get_endtime_info, PathChecker
+from src.computing.tools.common.utils import sub_command, create_iptables, delete_iptables
+from src.computing.hpc.v2 import get_job_output 
+from src.computing.common import get_endtime_info, PathChecker
 from time import time
 @scheduler("slurm")
 class HPC_Scheduler(SchedulerBase):
@@ -301,7 +303,7 @@ class HPC_Scheduler(SchedulerBase):
     async def _get_job_out_err():
         pass
         
-    async def query_job(self, request_job_type: Optional[str] = None):
+    async def query_job(self, job_type):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         

@@ -11,6 +11,7 @@ from src.routers.headers import (
     UserValidationMiddleware,
 )
 from src.common.config import get_config
+import src.computing.logger
 
 app = FastAPI()
 if get_config("common", "security_access") is True:
