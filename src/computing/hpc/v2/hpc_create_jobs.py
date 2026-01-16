@@ -252,7 +252,7 @@ async def create_job_with_path(
     build_job_env = get_site(site)
     
     # ---------- step 1: build job env ----------
-    with log_step("build_job_env"):
+    with log_step("build_job_env", logger=logger):
         job_path, token_filename = await build_job_env(uid, job_type, job_script_abs_path, script_file)
 
     parameters = f" --comment={job_type} "
@@ -310,7 +310,7 @@ async def create_job_with_path(
     try:
         submitter = get_submitter(site, cluster_id)
         # ---------- step 2: sbatch submit ----------
-        with log_step("sbatch_submit"):
+        with log_step("sbatch_submit", logger=logger):
             job_id, job_type, job_path = await submitter(sbatch_command, job_type, job_path, uid)
         
         if not job_id:
@@ -319,20 +319,26 @@ async def create_job_with_path(
 
         # Insert job info into DB
         # ---------- step 3: insert DB ----------
-        with log_step("insert_job_info"):
+        with log_step("insert_job_info", logger=logger):
             insert_job_info(uid, job_id, output_file, error_file, job_type, job_path, cluster_id)
 
         # ---------- step 4: async admincomment (fire & forget) ----------
         def add_admincomment():
-            with log_step("add_admincomment"):
-                if job_id:
-                    # add admincomment as root
-                    admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
-                    try:
-                        asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
-                    except Exception as e:
-                        tm.sleep(1)
-                        add_admincomment()
+            if job_id:
+                start = time.monotonic()
+                # add admincomment as root
+                admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
+                try:
+                    asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
+                except Exception as e:
+                    logger.exception("add_admincomment failed job_id=%s", job_id)
+                    tm.sleep(1)
+                    add_admincomment()
+                finally:
+                    logger.info(
+                        "step=add_admincomment cost=%.3fs job_id=%s",
+                        time.monotonic() - start, job_id
+                    )
 
         # fork a thread to run the add_admincomment function
         threading.Thread(target=add_admincomment).start()
