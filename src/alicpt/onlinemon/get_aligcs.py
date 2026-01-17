@@ -51,6 +51,44 @@ def get_es_client():
 
 
 
+def mjd_to_utc(mjd):
+    """
+    Convert MJD time to UTC time
+    Args:
+        mjd (float): MJD time value
+    Returns:
+        datetime: UTC time object
+    Raises:
+        ValueError: Exception thrown when MJD value is invalid
+    """
+    # Check if MJD value is valid
+    if mjd is None:
+        raise ValueError("MJD value is None")
+    
+    if not isinstance(mjd, (int, float)):
+        raise ValueError(f"MJD value type error, should be numeric, actual type: {type(mjd)}")
+    
+    # Check if MJD value is within reasonable range (assuming MJD is between 0-100000)
+    if mjd < 0 or mjd > 100000:
+        raise ValueError(f"MJD value exceeds reasonable range: {mjd} (should be between 0-100000)")
+    
+    # Check if MJD value is NaN or infinite
+    if mjd != mjd or abs(mjd) == float('inf'):
+        raise ValueError(f"MJD value is invalid number: {mjd}")
+    
+    try:
+        # MJD start point: 1858-11-17 00:00:00
+        mjd_start = datetime(1858, 11, 17, 0, 0, 0)
+        # Calculate time difference
+        delta = timedelta(days=mjd)
+        utc_time = mjd_start + delta
+        
+        # Check if converted time is reasonable (not too far in past or future)
+        if utc_time.year < 1900 or utc_time.year > 2100:
+            raise ValueError(f"Converted UTC time exceeds reasonable range: {utc_time}")     
+        return utc_time        
+    except Exception as e:
+        raise ValueError(f"MJD conversion failed: {e}")
 def mjd_to_time(mjd):
     """
     Convert MJD time to local time
@@ -91,6 +129,7 @@ def mjd_to_time(mjd):
         # Check if converted time is reasonable (not too far in past or future)
         if local_time.year < 1900 or local_time.year > 2100:
             raise ValueError(f"Converted local time exceeds reasonable range: {local_time}")
+        print(f"local_time: {local_time}")
         return local_time
     except Exception as e:
         raise ValueError(f"MJD conversion failed: {e}")
@@ -473,11 +512,11 @@ def parse_ups_status(status_string):
 def handle_ups_data():
     try:
         all_ups_data = []
-        for i in range(1, 2):
+        for i in range(1, 6):
             data = query_last_time_data(f'ups_{i}', index="aligcs_monitor", size=10000, use_scroll=False)
 
             ups_data = data['_source'].copy()
-            #print(f"ups_{i} data is {ups_data}")
+            print(f"ups_{i} data is {ups_data}")
 
             if all(key in ups_data for key in ['bypass_voltage_0', 'bypass_voltage_1', 'bypass_voltage_2']):                # 将bypass_voltage_0, bypass_voltage_1, bypass_voltage_2重命名为R,S,T相
 
@@ -514,8 +553,10 @@ def handle_ups_data():
                     ups_status_value = ups_data['ups_status']
                     ups_status_description = parse_ups_status(ups_status_value)
                     ups_data['ups_status'] = ups_status_description    
-            
-            ups_data['timestamp'] = mjd_to_time(ups_data['mjd']).strftime('%Y-%m-%d %H:%M:%S') if 'mjd' in ups_data else None
+            current_time = mjd_to_utc(ups_data['mjd']).isoformat(timespec='seconds') if 'mjd' in ups_data else None
+            print(f"current_time: {current_time}")
+
+            ups_data['timestamp'] = current_time
             ups_data['id'] = ups_data[f"ups_{i}"]
             print(f"ups_{i} data is {ups_data}")
             each_ups_data = {'_source': ups_data}
