@@ -4,26 +4,13 @@ from datetime import datetime, timedelta, timezone
 
 _ES_CLIENT = None
 
-# 获取es配置
-# ES_HOST = get_config('es', 'host', 'localhost')
-# ES_PORT = get_config('es', 'port', 9200)
-# ES_SCHEME = get_config('es', 'scheme', 'http')
-
-
-
 
 #获取es客户端
-#def create_es_client(host, port, username, password, use_ssl=False, verify_certs=False):
 def get_es_client():
     """
     Create Elasticsearch client connection
     """
-    #host = "omattest-es.ihep.ac.cn"
-    #port = 443
-    #username = "omattest"
-    #password = "omattestpasswd"
-    #use_ssl = False
-    #verify_certs = False
+
     host = "omat4alicpt-es.ihep.ac.cn"
     port = 443
     username = "omat4alicpt"
@@ -133,6 +120,7 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
         return []
 
 
+
 def handle_srs_data():
     try:
         data=query_last_24h_data('srs', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -144,13 +132,13 @@ def handle_srs_data():
 def handle_mlc_data():
     try:
         data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
-        '''
+
         query_last_24h_mlc_monitoring()
         for item in data:
             mlc_value = item['_source'].get('mlc')
             if mlc_value is not None:
                 item['_source']['mlc_parsed'] = parse_mlc_bits(mlc_value)
-        '''
+
         return data
     except Exception as e:
         print(f"[handle_mlc_data] Exception: {e}")
@@ -201,35 +189,167 @@ def handle_compressor_data():
         print(f"[handle_compressor_data] Exception: {e}")
         return []
 
+
+def get_inverter_status_description(status_code):
+    """
+    根据inverter_status代码返回描述
+    """
+    status_descriptions = {
+        0: "短路关机",
+        1: "超度关机", 
+        2: "逆变器故障关机",
+        3: "过载关机",
+        4: "手动旁路断路器开关机",
+        5: "直流过压关机",
+        6: "应急关机",
+        7: "未使用"
+    }
+    return status_descriptions.get(status_code, f"未知状态码: {status_code}")
+
+def get_rectifier_status_description(status_code):
+    """
+    根据rectifier_status代码返回描述
+    """
+    status_descriptions = {
+        0: "整流器正在运行",
+        1: "大电流充电",  # 0:浮充
+        2: "备份",  # 0:AC正常
+        3: "单相输出",  # 0:三相输出
+        4: "电池低压",
+        5: "电池低压关机",
+        6: "整流器故障",
+        7: "未使用"
+    }
+    return status_descriptions.get(status_code, f"未知状态码: {status_code}")
+
+def get_ups_status_description(status_code):
+    """
+    根据ups_status代码返回描述
+    """
+    status_descriptions = {
+        0: "正在逆变",
+        1: "静态开关在逆变模式",  # 0:静态开关在旁路模式
+        2: "旁路正常",  # 0:旁路异常
+        3: "手动旁路断路器合上",  # 0:手动旁路断路器打开
+        4: "旁路频率异常",
+        5: "未使用",
+        6: "未使用",
+        7: "未使用"
+    }
+    return status_descriptions.get(status_code, f"未知状态码: {status_code}")
+
+def parse_ups_status(status_string):
+    """
+    解析ups_status字符串，返回对应的状态描述
+    """
+    try:
+        # 将二进制字符串转换为整数
+        status_int = int(status_string, 2)
+        
+        # 检查每一位，找出所有激活的状态
+        active_statuses = []
+        for i in range(8):  # 8位状态码
+            if status_int & (1 << i):
+                if i == 1:  # 位1：静态开关模式
+                    active_statuses.append("静态开关在逆变模式")
+                elif i == 2:  # 位2：旁路状态
+                    active_statuses.append("旁路正常")
+                elif i == 3:  # 位3：手动旁路断路器状态
+                    active_statuses.append("手动旁路断路器合上")
+                elif i == 4:  # 位4：旁路频率异常
+                    active_statuses.append("旁路频率异常")
+                elif i == 0:  # 位0：正在逆变
+                    active_statuses.append("正在逆变")
+                # 位5-7是未使用，不处理
+        
+        # 特殊处理位1、位2、位3的0状态
+        if not (status_int & (1 << 1)):  # 位1为0
+            active_statuses.append("静态开关在旁路模式")
+        if not (status_int & (1 << 2)):  # 位2为0
+            active_statuses.append("旁路异常")
+        if not (status_int & (1 << 3)):  # 位3为0
+            active_statuses.append("手动旁路断路器打开")
+        
+        # 如果没有其他激活的状态，返回"正常"
+        if len(active_statuses) == 3 and "静态开关在旁路模式" in active_statuses and "旁路异常" in active_statuses and "手动旁路断路器打开" in active_statuses:
+            return "正常"
+        
+        # 返回所有状态的组合
+        return ", ".join(active_statuses)
+        
+    except (ValueError, TypeError):
+        return f"无效状态码: {status_string}"
+
+def parse_inverter_status(status_string):
+    """
+    解析inverter_status字符串，返回对应的状态描述
+    """
+    try:
+        # 将二进制字符串转换为整数
+        status_int = int(status_string, 2)
+        
+        # 检查每一位，找出所有激活的状态
+        active_statuses = []
+        for i in range(8):  # 8位状态码
+            if status_int & (1 << i):
+                active_statuses.append(get_inverter_status_description(i))
+        
+        # 如果没有激活的状态，返回"正常"
+        if not active_statuses:
+            return "正常"
+        
+        # 返回所有激活状态的组合
+        return ", ".join(active_statuses)
+        
+    except (ValueError, TypeError):
+        return f"无效状态码: {status_string}"
 def handle_ups_data():
     try:
-        data = query_last_24h_data('ups', index="aligcs_monitor", size=10000, use_scroll=False)
-        print(data)
+        for i in range(1, 6):
+            data = query_last_24h_data(f'ups_{i}', index="aligcs_monitor", size=10000, use_scroll=False)
+            print
+            ups_data = data.copy()
+            if all(key in ups_data for key in ['bypass_voltage_0', 'bypass_voltage_1', 'bypass_voltage_2']):
+                ups_data['bypass_voltage_R'] = float(ups_data['bypass_voltage_0'])
+                ups_data['bypass_voltage_S'] = float(ups_data['bypass_voltage_1'])
+                ups_data['bypass_voltage_T'] = float(ups_data['bypass_voltage_2'])
+            if all(key in ups_data for key in ['ip_voltage_0', 'ip_voltage_1', 'ip_voltage_2']):
+                ups_data['ip_voltage_R'] = float(ups_data['ip_voltage_0'])
+                ups_data['ip_voltage_S'] = float(ups_data['ip_voltage_1'])
+                ups_data['ip_voltage_T'] = float(ups_data['ip_voltage_2'])
+            if all(key in ups_data for key in ['load_percentage_0', 'load_percentage_1', 'load_percentage_2']):
+                ups_data['load_percentage_R'] = float(ups_data['load_percentage_0'])
+                ups_data['load_percentage_S'] = float(ups_data['load_percentage_1'])
+                ups_data['load_percentage_T'] = float(ups_data['load_percentage_2'])
+            if all(key in ups_data for key in ['op_voltage_0', 'op_voltage_1', 'op_voltage_2']):
+                ups_data['op_voltage_R'] = float(ups_data['op_voltage_0'])
+                ups_data['op_voltage_S'] = float(ups_data['op_voltage_1'])
+                ups_data['op_voltage_T'] = float(ups_data['op_voltage_2'])
+            # 处理inverter_status字段
+            if 'inverter_status' in ups_data.keys():
+                    inverter_status_value = ups_data['inverter_status']
+                    inverter_status_description = parse_inverter_status(inverter_status_value)
+                    ups_data['inverter_status'] = inverter_status_description
+                
+            # 处理rectifier_status字段
+            if 'rectifier_status' in ups_data.keys():
+                rectifier_status_value = ups_data['rectifier_status']
+                rectifier_status_description = parse_rectifier_status(rectifier_status_value)
+                ups_data['rectifier_status'] = rectifier_status_description
+                
+                # 处理ups_status字段
+            if 'ups_status' in ups_data.keys():
+                ups_status_value = ups_data['ups_status']
+                ups_status_description = parse_ups_status(ups_status_value)
+                ups_data['ups_status'] = ups_status_description    
+
+        print(ups_data)
         return data
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
         return []
-'''
-def query_last_24h_srs_monitoring():
-    """查询SRS前24小时的数据"""
-    try:
-        es = get_es_client()
-        print("es:", es)
-        if not es:
-            return []
-        return query_last_24h_data("srs")
-    except Exception as e:
-        print(f"[query_last_24h_srs_monitoring] Exception: {e}")
-        return []
 
-# 查询mlc前24小时的数据
-def query_last_24h_mlc_monitoring():
-    """查询MLC前24小时的数据"""
-    try:
-        return query_last_24h_data("mlc")
-    except Exception as e:
-        print(f"[query_last_24h_mlc_monitoring] Exception: {e}")
-        return []
+
 
 #处理mlc中返回的数据
 def parse_mlc_bits(mlc_value):
@@ -269,17 +389,6 @@ def parse_mlc_bits(mlc_value):
         print(f"[parse_mlc_bits] Exception: {e}")
         return {}
 
-
-
-#查询compressor前24小时的数据
-def query_last_24h_compressor_data():
-    """查询Compressor前24小时的数据"""
-    try:
-        return query_last_24h_data("compressor")
-    except Exception as e:
-        print(f"[query_last_24h_compressor_data] Exception: {e}")
-        return []
-
 def handle_compressor_data():
     try:
         data = query_last_24h_compressor_data()
@@ -287,123 +396,9 @@ def handle_compressor_data():
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
         return []
-'''
 
-'''
-#查询UPS最新数据
-def query_latest_ups_data():
-    """查询UPS最新数据（获取每个UPS设备的最新一条记录）"""
-    try:
-        es = get_es_client()
-        if not es:
-            return []
-
-        ups_data = []
-        for i in range(1, 6):  # ups_1 到 ups_5
-            ups_id = f"ups_{i}"
-            now = datetime.now(timezone.utc)
-            last_24h = now - timedelta(hours=24)
-
-            query = {
-                "query": {
-                    "bool": {
-                        "must": [
-                            {
-                                "term": {
-                                    "data_type": ups_id
-                                }
-                            },
-                            {
-                                "range": {
-                                    "@timestamp": {
-                                        "gte": last_24h.isoformat(),
-                                        "lte": now.isoformat(),
-                                        "format": "strict_date_optional_time"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                },
-                "size": 1,
-                "sort": [
-                    {
-                        "@timestamp": {
-                            "order": "desc"
-                        }
-                    }
-                ]
-            }
-            resp = es.search(index="aligcs_monitor", body=query)
-            print(f"Query response for {ups_id}: {resp}")
-            if resp['hits']['hits']:
-                ups_data.append(resp['hits']['hits'][0])
-
-        return ups_data
-    except Exception as e:
-        print(f"[query_latest_ups_data] Exception: {e}")
-        return []
-
-def handle_ups_data():
-    try:
-        data = query_last_24h_data('ups', index="aligcs_monitor", size=10000, use_scroll=False)
-        return data
-    except Exception as e:
-        print(f"[handle_ups_data] Exception: {e}")
-        return []
 
 #查询weather最新数据
-def query_latest_weather_data():
-    """查询Weather最新数据（获取每个气象站的最新一条记录）"""
-    try:
-        es = get_es_client()
-        if not es:
-            return []
-
-        weather_data = []
-        for i in [3, 4]:  # weather_3 和 weather_4
-            weather_id = f"weather_{i}"
-            now = datetime.now(timezone.utc)
-            last_24h = now - timedelta(hours=24)
-
-            query = {
-                "query": {
-                    "bool": {
-                        "must": [
-                            {
-                                "term": {
-                                    "data_type": weather_id
-                                }
-                            },
-                            {
-                                "range": {
-                                    "@timestamp": {
-                                        "gte": last_24h.isoformat(),
-                                        "lte": now.isoformat(),
-                                        "format": "strict_date_optional_time"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                },
-                "size": 1,
-                "sort": [
-                    {
-                        "@timestamp": {
-                            "order": "desc"
-                        }
-                    }
-                ]
-            }
-            resp = es.search(index="aligcs_monitor", body=query)
-            if resp['hits']['hits']:
-                weather_data.append(resp['hits']['hits'][0])
-
-        return weather_data
-    except Exception as e:
-        print(f"[query_latest_weather_data] Exception: {e}")
-        return []
 
 def handle_weather_data():
     try:
@@ -414,13 +409,6 @@ def handle_weather_data():
         return []
 
 #查询airheater前24小时的数据
-def query_last_24h_airheater_data():
-    """查询Airheater前24小时的数据"""
-    try:
-        return query_last_24h_data("airheater", use_scroll=True, size=1000)
-    except Exception as e:
-        print(f"[query_last_24h_airheater_data] Exception: {e}")
-        return []
 
 def handle_airheater_data():
     try:
@@ -431,13 +419,6 @@ def handle_airheater_data():
         return []
 
 #查询ats前24小时的数据
-def query_last_24h_ats_data():
-    """查询ATS前24小时的数据"""
-    try:
-        return query_last_24h_data("airheater_ats")
-    except Exception as e:
-        print(f"[query_last_24h_ats_data] Exception: {e}")
-        return []
 
 def handle_ats_data():
     try:
@@ -447,42 +428,6 @@ def handle_ats_data():
         print(f"[handle_ats_data] Exception: {e}")
         return []
 
-
-#查询imu前24小时的数据
-def query_last_24h_imu_data():
-    """查询IMU前24小时的数据"""
-    try:
-        return query_last_24h_data("imu")
-    except Exception as e:
-        print(f"[query_last_24h_imu_data] Exception: {e}")
-        return []
-def handle_imu_data():
-    try:
-        data = query_last_24h_imu_data()
-        
-        return data
-    except Exception as e:
-        print(f"[handle_imu_data] Exception: {e}")
-        return []
-
-
-#查询titlt前24小时的数据
-
-
-#查询tilt前24小时的数据
-def query_last_24h_tilt_data():
-    """查询Tilt前24小时的数据"""
-    try:
-        tilt_data = []
-        for i in [0, 1, 2]:  # 分别获取 tilt_0, tilt_1, tilt_2 的前24小时数据
-            data = query_last_24h_data(f"tilt_{i}")
-            tilt_data.extend(data)
-        return tilt_data
-    except Exception as e:
-        print(f"[query_last_24h_tilt_data] Exception: {e}")
-        return []
-
-
 def handle_tilt_data():
     try:
         data = query_last_24h_tilt_data()
@@ -491,24 +436,24 @@ def handle_tilt_data():
     except Exception as e:
         print(f"[handle_tilt_data] Exception: {e}")
         return []
-'''
+
 
 def main():
     """Main function to test all data query functions."""
-    
+    '''
     result = handle_srs_data()
     print("[main] handle_srs_data result:")
     print(result)
 
-    '''
+    
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
-    
+    '''    
     ups_result = handle_ups_data()
     print("[main] handle_ups_data result:")
     print(ups_result)
-    
+    '''
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
     print(weather_result)
