@@ -50,6 +50,51 @@ def get_es_client():
         return None
 
 
+
+def mjd_to_time(mjd):
+    """
+    Convert MJD time to local time
+    Args:
+        mjd (float): MJD time value
+    Returns:
+        datetime: local time object
+    Raises:
+        ValueError: Exception thrown when MJD value is invalid
+    """
+    # Check if MJD value is valid
+    if mjd is None:
+        raise ValueError("MJD value is None")
+
+    if not isinstance(mjd, (int, float)):
+        raise ValueError(f"MJD value type error, should be numeric, actual type: {type(mjd)}")
+
+    # Check if MJD value is within reasonable range (assuming MJD is between 0-100000)
+    if mjd < 0 or mjd > 100000:
+        raise ValueError(f"MJD value exceeds reasonable range: {mjd} (should be between 0-100000)")
+
+    # Check if MJD value is NaN or infinite
+    if mjd != mjd or abs(mjd) == float('inf'):
+        raise ValueError(f"MJD value is invalid number: {mjd}")
+
+    try:
+        # MJD start point: 1858-11-17 00:00:00
+        mjd_start = datetime(1858, 11, 17, 0, 0, 0)
+        # Calculate time difference
+        delta = timedelta(days=mjd)
+        utc_time = mjd_start + delta
+
+        # Convert UTC time to local time
+        local_time = utc_time.replace(tzinfo=timezone.utc).astimezone(tz=None)
+        # Remove timezone info to get naive datetime
+        local_time = local_time.replace(tzinfo=None)
+
+        # Check if converted time is reasonable (not too far in past or future)
+        if local_time.year < 1900 or local_time.year > 2100:
+            raise ValueError(f"Converted local time exceeds reasonable range: {local_time}")
+        return local_time
+    except Exception as e:
+        raise ValueError(f"MJD conversion failed: {e}")
+
 def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scroll=False):
     """
     通用查询函数：查询指定data_type前24小时的数据
@@ -470,6 +515,8 @@ def handle_ups_data():
                     ups_status_description = parse_ups_status(ups_status_value)
                     ups_data['ups_status'] = ups_status_description    
             
+            ups_data['timestamp'] = mjd_to_time(ups_data['mjd']).strftime('%Y-%m-%d %H:%M:%S') if 'mjd' in ups_data else None
+            ups_data['id'] = ups_data[f"ups_{i}"]
             print(f"ups_{i} data is {ups_data}")
             each_ups_data = {'_source': ups_data}
             all_ups_data.append(each_ups_data)
