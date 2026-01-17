@@ -471,8 +471,10 @@ def handle_ups_data():
                     ups_data['ups_status'] = ups_status_description    
             
             print(f"ups_{i} data is {ups_data}")
-            all_ups_data.append(ups_data)
+            each_ups_data = {'_source': ups_data}
+            all_ups_data.append(each_ups_data)
         print(all_ups_data)
+
         return all_ups_data
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
