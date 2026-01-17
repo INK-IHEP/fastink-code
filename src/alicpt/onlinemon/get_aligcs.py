@@ -557,7 +557,9 @@ def handle_ups_data():
             print(f"current_time: {current_time}")
 
             ups_data['timestamp'] = current_time
-            ups_data['id'] = ups_data[f"ups_{i}"]
+            print(f"ups_data: {ups_data['timestamp']}")
+            ups_data['id'] = "ups_{i}"
+            print(f"ups_data_id: {ups_data['id']}")
             print(f"ups_{i} data is {ups_data}")
             each_ups_data = {'_source': ups_data}
             all_ups_data.append(each_ups_data)
