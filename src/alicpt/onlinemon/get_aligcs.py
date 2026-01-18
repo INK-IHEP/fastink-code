@@ -16,6 +16,11 @@ def get_es_client():
     username = "omat4alicpt"
     password = "omat4alicptpasswd"
     index = "aligcs_monitor"
+
+    host = "192.168.51.85"
+            #ES_HOST = "omattest-es.ihep.ac.cn"
+    port = 9200
+
     use_ssl = True
     verify_certs = False
     print("before create es client")
@@ -259,11 +264,13 @@ def handle_srs_data():
     except Exception as e:
         print(f"handle_srs_data Exception: {e}")
         return []
+
+'''
 def handle_mlc_data():
     try:
-        data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+#        data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+        data = query_last_time_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
 
-        query_last_24h_mlc_monitoring()
         for item in data:
             mlc_value = item['_source'].get('mlc')
             if mlc_value is not None:
@@ -273,6 +280,45 @@ def handle_mlc_data():
     except Exception as e:
         print(f"[handle_mlc_data] Exception: {e}")
         return []
+'''
+def query_last_24h_mlc_monitoring():
+    try:
+        es = get_es_client()
+        if not es:
+            return []
+        # 使用UTC时间代替本地时间
+        now = datetime.now(timezone.utc)
+        last_24h = now - timedelta(hours=24)
+        query = {
+            "query": {
+                "range": {
+                    "@timestamp": {
+                        "gte": last_24h.isoformat(),
+                        "lte": now.isoformat(),
+                        "format": "strict_date_optional_time"
+                    }
+                }
+            }
+        }
+        resp = es.search(index="mlc_monitoring", body=query, size=10000)  # size可根据需要调整
+        return resp['hits']['hits']
+    except Exception as e:
+        print(f"[query_last_24h_mlc_monitoring] Exception: {e}")
+        return []
+
+def handle_mlc_data():
+    try:
+        data = query_last_24h_mlc_monitoring()
+        for item in data:
+            mlc_value = item['_source'].get('mlc')
+            if mlc_value is not None:
+                item['_source']['mlc_parsed'] = parse_mlc_bits(mlc_value)
+        return data
+    except Exception as e:
+        print(f"[handle_mlc_data] Exception: {e}")
+        return []
+
+
 def handle_weather_data():
     try:
         data = query_last_24h_data('weather', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -670,10 +716,14 @@ def main():
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
-    '''    
+    
     ups_result = handle_ups_data()
     print("[main] handle_ups_data result:")
     print(ups_result)
+'''
+    mlc_result = handle_mlc_data()
+    print("[main] handle_ups_data result:")
+    print(mlc_result)
     '''
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
