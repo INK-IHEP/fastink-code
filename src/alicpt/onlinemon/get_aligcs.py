@@ -592,10 +592,16 @@ def handle_ups_data():
                 ups_data['load_percentage_R'] = float(ups_data['load_percentage_0'])
                 ups_data['load_percentage_S'] = float(ups_data['load_percentage_1'])
                 ups_data['load_percentage_T'] = float(ups_data['load_percentage_2'])
+                del ups_data['load_percentage_0']
+                del ups_data['load_percentage_1']
+                del ups_data['load_percentage_2']
             if all(key in ups_data for key in ['op_voltage_0', 'op_voltage_1', 'op_voltage_2']):
                 ups_data['op_voltage_R'] = float(ups_data['op_voltage_0'])
                 ups_data['op_voltage_S'] = float(ups_data['op_voltage_1'])
                 ups_data['op_voltage_T'] = float(ups_data['op_voltage_2'])
+                del ups_data['op_voltage_0']
+                del ups_data['op_voltage_1']
+                del ups_data['op_voltage_2']
             # 处理inverter_status字段
             if 'inverter_status' in ups_data.keys():
                     inverter_status_value = ups_data['inverter_status']
