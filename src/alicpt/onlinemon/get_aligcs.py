@@ -572,7 +572,7 @@ def parse_ups_status(status_string):
 def handle_ups_data():
     try:
         all_ups_data = []
-        for i in range(1, 6):
+        for i in range(1, 2):
             data = query_last_time_data(f'ups_{i}', index="aligcs_monitor", size=10000, use_scroll=False)
 
             ups_data = data['_source'].copy()
@@ -618,7 +618,7 @@ def handle_ups_data():
 
             ups_data['timestamp'] = current_time
             print(f"ups_data: {ups_data['timestamp']}")
-            ups_data['id'] = "ups_{i}"
+            ups_data['id'] = f"ups_{i}"
             print(f"ups_data_id: {ups_data['id']}")
             print(f"ups_{i} data is {ups_data}")
             each_ups_data = {'_source': ups_data}
@@ -730,15 +730,16 @@ def main():
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
-    
+    '''
     ups_result = handle_ups_data()
     print("[main] handle_ups_data result:")
     print(ups_result)
-'''
+
+    '''
     mlc_result = handle_mlc_data()
     print("[main] handle_ups_data result:")
     print(mlc_result)
-    '''
+    
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
     print(weather_result)
