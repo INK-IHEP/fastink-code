@@ -17,13 +17,16 @@ def get_es_client():
     password = "omat4alicptpasswd"
     index = "aligcs_monitor"
 
-    host = "192.168.51.85"
-            #ES_HOST = "omattest-es.ihep.ac.cn"
-    port = 9200
-
+    
     use_ssl = True
     verify_certs = False
     print("before create es client")
+    '''
+    host = "192.168.51.85"
+    port = 9200
+    index = "mlc_monitoring"
+    use_ssl = False
+    '''
     try:
         if use_ssl:
             es_client = Elasticsearch(
@@ -35,6 +38,7 @@ def get_es_client():
                 retry_on_timeout=True
             )
         else:
+            
             es_client = Elasticsearch(
                 [f'https://{host}:{port}'],
                 http_auth=(username, password),
@@ -42,7 +46,15 @@ def get_es_client():
                 max_retries=3,
                 retry_on_timeout=True
             )
-        
+            '''
+            xupei ES 
+            es_client = Elasticsearch(
+                [f'http://{host}:{port}'],
+                timeout=30,
+                max_retries=3,
+                retry_on_timeout=True
+            )
+            '''
         # Test connection
         if es_client.ping():
             return es_client
@@ -301,6 +313,7 @@ def query_last_24h_mlc_monitoring():
             }
         }
         resp = es.search(index="mlc_monitoring", body=query, size=10000)  # size可根据需要调整
+        print(f"resp -s {resp}")
         return resp['hits']['hits']
     except Exception as e:
         print(f"[query_last_24h_mlc_monitoring] Exception: {e}")
@@ -308,6 +321,7 @@ def query_last_24h_mlc_monitoring():
 
 def handle_mlc_data():
     try:
+        print("start handle_mlc_data")
         data = query_last_24h_mlc_monitoring()
         for item in data:
             mlc_value = item['_source'].get('mlc')
