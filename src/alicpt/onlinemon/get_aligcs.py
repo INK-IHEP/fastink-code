@@ -572,7 +572,7 @@ def parse_ups_status(status_string):
 def handle_ups_data():
     try:
         all_ups_data = []
-        for i in range(1, 2):
+        for i in range(1, 6):
             data = query_last_time_data(f'ups_{i}', index="aligcs_monitor", size=10000, use_scroll=False)
 
             ups_data = data['_source'].copy()
