@@ -332,7 +332,11 @@ async def delete_common_job(
 ):
     try:
         if not job_id:
-            return 
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": f"Delete successfully.",
+                "data": {}
+            }
 
         adapter = get_scheduler(cluster_id, username)
         await adapter.cancel_job(job_id)
