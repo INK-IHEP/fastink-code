@@ -46,7 +46,7 @@ async def draw(username:str, TargetPath:str, Type:str, create:bool = False):
             data += chunk
         data = base64.b64encode(data).decode('utf-8')
         logger.debug(f"I've got drawio files:{data}")
-        if data['type'] == 'svg' or data['type'] == 'xml':
+        if Type in ['svg', 'xml', 'drawio']:
             data_src = f"data:image/svg+xml;base64,{data}"
             html_content = svg_template.substitute(data = data_src)
         else:
@@ -56,5 +56,5 @@ async def draw(username:str, TargetPath:str, Type:str, create:bool = False):
         response = HTMLResponse(content=html_content, status_code=200)
         return response
     except Exception as e:
-        logger.error(f"Failed to get {TargetPath}. Err:str(e)")
+        logger.error(f"Failed to get {TargetPath}. Err:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to Open TaretPath {TargetPath}. Unknown Error.", "data": None}
