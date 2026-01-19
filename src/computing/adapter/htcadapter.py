@@ -260,6 +260,9 @@ class HTC_Scheduler(SchedulerBase):
         
         JOB_KEY = f"cluster_jobs:{self.USERNAME}:{str(job_id)}"
         IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+        
+        logger.debug(f"HTC-LOG: the JOB_KEY: {JOB_KEY}, the IDX_KEY: {IDX_KEY}")
+        
         pipe.delete(JOB_KEY)
         pipe.srem(IDX_KEY, str(job_id))
         await pipe.execute()
