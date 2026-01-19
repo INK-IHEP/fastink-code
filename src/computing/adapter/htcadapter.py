@@ -155,7 +155,7 @@ class HTC_Scheduler(SchedulerBase):
 
             try:
                 job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-                logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
+                logger.info(f"HTC-LOG: Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
             except NoResultFound:
                 job_path = job_iwd
                 insert_job_info(self.UID, job_id, job_output_path, job_err_path, job_condor_type, job_path, self.CLUSTER_TYPE)
@@ -176,13 +176,13 @@ class HTC_Scheduler(SchedulerBase):
                                 await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
                             except Exception as e:
                                 connect_sign = "False"
-                                logger.error(f"{job_id} iptables set failed, the details: {e}")
+                                logger.error(f"HTC-LOG: {job_id} iptables set failed, the details: {e}")
                         update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
                         update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
                         
             elif job_status == '4':
                 job_status = "COMPLETED"
-
+            
             elif job_status == '5':
                 job_status = "HOLDING"
 
