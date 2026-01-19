@@ -123,15 +123,15 @@ class HTC_Scheduler(SchedulerBase):
         IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
         job_ids = await r.smembers(IDX_KEY)
         job_keys = [f"cluster_jobs:{self.USERNAME}:{jid.decode() if isinstance(jid,(bytes,bytearray)) else jid}" for jid in job_ids]
-
+        
         pipe = r.pipeline(transaction=False)
         for k in job_keys:
             pipe.hgetall(k)
         jobs = await pipe.execute()
-
+        logger.debug(f"HTC-LOG: Get {self.USERNAME} joblist from redis: {jobs}")
+        
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         start_keywords = get_config("computing", "start_keywords")
-        logger.info(f"Get {self.USERNAME} jobs: {jobs}")
 
         return_list = [] 
 
@@ -208,6 +208,8 @@ class HTC_Scheduler(SchedulerBase):
             })
 
         raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+        logger.debug(f"HTC-LOG: Get {self.USERNAME} submitting_jobs from redis: {raw_job}")
+        
         for raw_job in raw_jobs:
             job = json.loads(raw_job)
             
