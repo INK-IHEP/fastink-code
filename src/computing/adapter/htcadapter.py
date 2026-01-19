@@ -94,6 +94,7 @@ class HTC_Scheduler(SchedulerBase):
             submit_param = {
                 "username": self.USERNAME,
                 "jobType": htc_job_params.job_type,
+                "jobStatus": "SUBMITTING",
                 "jobReqCPU": htc_job_params.cpu,
                 "jobReqMEM": htc_job_params.mem,
                 "jobReqOS": htc_job_params.os,
@@ -185,10 +186,11 @@ class HTC_Scheduler(SchedulerBase):
             
             elif job_status == '5':
                 job_status = "HOLDING"
-
+                
             else:
-                job_status = "OTHER" 
-                continue
+                if job_status != "SUBMITTING":
+                    job_status = "OTHER" 
+                    continue
             
             if db_job_status != job_status: 
                 update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
@@ -215,7 +217,7 @@ class HTC_Scheduler(SchedulerBase):
             
             job_redis_type = job.get("jobType")
             job_os = job.get("jobReqOS")
-            job_status = "SUBMITTING"
+            job_status = job.get("jobStatus")
             connect_sign = "False"
 
             if req_job_type:
