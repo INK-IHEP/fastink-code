@@ -235,7 +235,8 @@ class HTC_Scheduler(SchedulerBase):
                 "JobNodeList": "",
                 "jobrunos": job_os,
                 "connect_sign": connect_sign,
-                "hold_reason": ""
+                "hold_reason": "",
+                "jobtimelimit": ""
             })
 
         return return_list
