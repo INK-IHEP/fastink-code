@@ -74,7 +74,7 @@ async def app_drawio(
     create:bool = Query(False, description="Create new file")):
 
     try:
-        response = await drawio.draw(username = username, TargetPath = TargetPath, create = create)
+        response = await drawio.draw(username = username, TargetPath = TargetPath, Type = Type, create = create)
     except Exception as e:
         logger.error(f"Failed to load drawio app. Err:{str(e)}")
         return {"status": InkStatus.APP_UNKNOWN, "msg": f"Failed to load drawio app. Err:{str(e)}", "data": None}
