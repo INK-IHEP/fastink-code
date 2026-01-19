@@ -73,7 +73,7 @@ async def update_completed_jobs():
 
                     job_owner = safe_get(job_param_list, 0)
                     job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
-                    job_clusterid = safe_get(job_param_list, 1)
+                    job_clusterid = safe_int(safe_get(job_param_list, 1))
                     qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
                     start_ts = safe_int(safe_get(job_param_list, 6), default=None)
 
@@ -109,7 +109,7 @@ async def update_completed_jobs():
                     
                     JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
                     IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
-                    pipe.sadd(IDX_KEY, job_clusterid)
+                    pipe.sadd(IDX_KEY, str(job_clusterid))
                     pipe.hset(JOB_KEY, mapping=job_record)
                     
                 await pipe.execute()
@@ -147,7 +147,7 @@ async def update_completed_jobs():
                         JOB_KEY = f"cluster_jobs:{job_user}:{key}"
                         IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
                         pipe.delete(JOB_KEY)
-                        pipe.srem(IDX_KEY, key)
+                        pipe.srem(IDX_KEY, str(key))
                     else:
                         to_delete.append(key)
                         
@@ -308,7 +308,7 @@ async def submit_job_from_redis():
                     
                     JOB_KEY = f"cluster_jobs:{job_owner}:{job_id}"
                     IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
-                    pipe.sadd(IDX_KEY, job_id)
+                    pipe.sadd(IDX_KEY, str(job_id))
                     pipe.hset(JOB_KEY, mapping=job)
                     await pipe.execute()
 
