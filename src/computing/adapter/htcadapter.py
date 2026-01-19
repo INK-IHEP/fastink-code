@@ -258,13 +258,16 @@ class HTC_Scheduler(SchedulerBase):
         r = redis_connect()
         pipe = r.pipeline(transaction=False)
         
-        JOB_KEY = f"cluster_jobs:{self.USERNAME}:{str(job_id)}"
+        JOB_KEY = f"cluster_jobs:{self.USERNAME}:{job_id}"
         IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+        
+        
         
         logger.debug(f"HTC-LOG: the JOB_KEY: {JOB_KEY}, the IDX_KEY: {IDX_KEY}")
         
         pipe.delete(JOB_KEY)
         pipe.srem(IDX_KEY, str(job_id))
-        await pipe.execute()
-        
-        
+        res = await pipe.execute()
+        logger.debug(f"HTC-LOG: redis del/srem result: {res}")  # DEL: 0/1, SREM: 0/1
+        exists = await r.exists(JOB_KEY)
+        logger.debug(f"HTC-LOG: after delete, exists={exists}")
