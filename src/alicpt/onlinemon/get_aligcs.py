@@ -277,61 +277,98 @@ def handle_srs_data():
         print(f"handle_srs_data Exception: {e}")
         return []
 
-'''
-def handle_mlc_data():
-    try:
-#        data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
-        data = query_last_time_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
 
-        for item in data:
-            mlc_value = item['_source'].get('mlc')
-            if mlc_value is not None:
-                item['_source']['mlc_parsed'] = parse_mlc_bits(mlc_value)
-
-        return data
-    except Exception as e:
-        print(f"[handle_mlc_data] Exception: {e}")
-        return []
-'''
-def query_last_24h_mlc_monitoring():
+#处理mlc中返回的数据
+def parse_mlc_bits(mlc_value):
     try:
-        es = get_es_client()
-        if not es:
-            return []
-        # 使用UTC时间代替本地时间
-        now = datetime.now(timezone.utc)
-        last_24h = now - timedelta(hours=24)
-        query = {
-            "query": {
-                "range": {
-                    "@timestamp": {
-                        "gte": last_24h.isoformat(),
-                        "lte": now.isoformat(),
-                        "format": "strict_date_optional_time"
-                    }
-                }
-            }
+        """
+        解析mlc字段的bit位，返回dict
+        """
+        bits = [(mlc_value >> i) & 1 for i in range(12)]  # 取前12位
+        mlc_state = (mlc_value >> 8) & 0b11  # bit8-9
+        zero_setting = (mlc_value >> 10) & 0b11  # bit10-11
+
+        mlc_state_map = {
+            0b00: "IDLE",
+            0b01: "Scanning",
+            0b10: "scan pause",
+            0b11: "Unknown"
         }
-        resp = es.search(index="mlc_monitoring", body=query, size=10000)  # size可根据需要调整
-        print(f"resp -s {resp}")
-        return resp['hits']['hits']
+        zero_setting_map = {
+            0b00: "none",
+            0b01: "AZ",
+            0b10: "DK",
+            0b11: "Both"
+        }
+        return {
+            "power_module_power": "yes" if bits[0] else "no",
+            "control_mode": "local" if bits[1] else "remote",
+            "estop_status": "yes" if bits[2] else "no",
+            "stow_status": "yes" if bits[3] else "no",
+            "mlc_status": "error" if bits[4] else "normal",
+            "unlock_limit": "yes" if bits[5] else "no",
+            "lock_limit": "yes" if bits[6] else "no",
+            "stack_full": "yes" if bits[7] else "no",
+            "mlc_state": mlc_state_map.get(mlc_state, "Unknown"),
+            "zero_setting": zero_setting_map.get(zero_setting, "Unknown")
+        }
     except Exception as e:
-        print(f"[query_last_24h_mlc_monitoring] Exception: {e}")
-        return []
+        print(f"[parse_mlc_bits] Exception: {e}")
+        return {}
 
 def handle_mlc_data():
+    all_mlc_data = []
     try:
-        print("start handle_mlc_data")
-        data = query_last_24h_mlc_monitoring()
-        for item in data:
-            mlc_value = item['_source'].get('mlc')
-            if mlc_value is not None:
-                item['_source']['mlc_parsed'] = parse_mlc_bits(mlc_value)
-        return data
+        data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+#        data = query_last_time_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+       
+        for each in data:
+            item = each['_source']
+            
+            if all(key in item  for key in ['attitude_0', 'attitude_1', 'attitude_2']):
+                item['attitude_az'] = float(item['attitude_0'])
+                item['attitude_el'] = float(item['attitude_1'])
+                item['attitude_dk'] = float(item['attitude_2'])
+                del item['attitude_0']
+                del item['attitude_1']
+                del item['attitude_2']
+            else:
+                item['attitude_az'] = None
+                item['attitude_el'] = None
+                item['attitude_dk'] = None
+            if all(key in item  for key in ['command_0', 'command_1', 'command_2']):
+                item['command_az'] = float(item['command_0'])
+                item['command_el'] = float(item['command_1'])
+                item['attitude_dk'] = float(item['command_2'])
+                del item['command_0']
+                del item['command_1']
+                del item['command_2']
+            else:
+                item['command_az'] = None
+                item['command_el'] = None
+                item['command_dk'] = None
+            
+            for i in range(1, 7):
+                try:
+                    if all(key in item for key in [f'drive_{i}_0', f'drive_{i}_1', f'drive_{i}_2', f'drive_{i}_3', f'drive_{i}_4']):   
+                        item[f'drive_{i}_status'] = int(item[f'drive_{i}_0'])
+                        item[f'drive_{i}_current'] = float(item[f'drive_{i}_1'])
+                        item[f'drive_{i}_temperature'] = float(item[f'drive_{i}_2'])
+                        item[f'drive_{i}_speed'] = float(item[f'drive_{i}_3'])
+                        item[f'drive_{i}_position'] = float(item[f'drive_{i}_4'])
+                        #print(f"✅ 解析驱动{i}: 状态={item[f'drive_{i}_status']}, 电流={item[f'drive_{i}_current']}, 温度={item[f'drive_{i}_temperature']}, 速度={item[f'drive_{i}_speed']}, 位置={item[f'drive_{i}_position']}")
+                except (ValueError, IndexError, KeyError) as e:
+                    print(f"⚠️ 驱动{i}解析失败: {e}")
+            
+            if item['mlc'] is not None:
+                item['mlc_parsed'] = parse_mlc_bits(int(item['mlc']))
+            each_mlc_data = {'_source': item}
+            #print(f"each_mlc_data: {each_mlc_data}")
+            all_mlc_data.append(each_mlc_data)
+        return all_mlc_data 
     except Exception as e:
         print(f"[handle_mlc_data] Exception: {e}")
         return []
-
 
 def handle_weather_data():
     try:
@@ -638,43 +675,7 @@ def handle_ups_data():
 
 
 
-#处理mlc中返回的数据
-def parse_mlc_bits(mlc_value):
-    try:
-        """
-        解析mlc字段的bit位，返回dict
-        """
-        bits = [(mlc_value >> i) & 1 for i in range(12)]  # 取前12位
-        mlc_state = (mlc_value >> 8) & 0b11  # bit8-9
-        zero_setting = (mlc_value >> 10) & 0b11  # bit10-11
 
-        mlc_state_map = {
-            0b00: "IDLE",
-            0b01: "Scanning",
-            0b10: "scan pause",
-            0b11: "Unknown"
-        }
-        zero_setting_map = {
-            0b00: "none",
-            0b01: "AZ",
-            0b10: "DK",
-            0b11: "Both"
-        }
-        return {
-            "power_module_power": "yes" if bits[0] else "no",
-            "control_mode": "local" if bits[1] else "remote",
-            "estop_status": "yes" if bits[2] else "no",
-            "stow_status": "yes" if bits[3] else "no",
-            "mlc_status": "error" if bits[4] else "normal",
-            "unlock_limit": "yes" if bits[5] else "no",
-            "lock_limit": "yes" if bits[6] else "no",
-            "stack_full": "yes" if bits[7] else "no",
-            "mlc_state": mlc_state_map.get(mlc_state, "Unknown"),
-            "zero_setting": zero_setting_map.get(zero_setting, "Unknown")
-        }
-    except Exception as e:
-        print(f"[parse_mlc_bits] Exception: {e}")
-        return {}
 
 def handle_compressor_data():
     try:
@@ -736,16 +737,16 @@ def main():
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
-    '''
+    
     ups_result = handle_ups_data()
     print("[main] handle_ups_data result:")
     print(ups_result)
 
     '''
     mlc_result = handle_mlc_data()
-    print("[main] handle_ups_data result:")
+    print("[main] handle_mlc_data result:")
     print(mlc_result)
-    
+    '''
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
     print(weather_result)
@@ -769,24 +770,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
