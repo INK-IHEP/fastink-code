@@ -105,8 +105,13 @@ class HTC_Scheduler(SchedulerBase):
                 "clusterId": htc_job_params.cluster_id
             }
             
-            await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            async with r.pipeline(transaction=True) as p:
+                p.rpush("submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+                p.rpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))   
+                await p.execute()
+            
+            #await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            #await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
             logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
 
         except Exception as e:
@@ -119,23 +124,22 @@ class HTC_Scheduler(SchedulerBase):
         
         r = redis_connect()
 
-        raw_cluster_jobs = await r.get("cluster_jobs")
-        if not raw_cluster_jobs:
-            cluster_jobs = {}
-        else:
-            if isinstance(raw_cluster_jobs, (bytes, bytearray)):
-                raw_cluster_jobs = raw_cluster_jobs("utf-8")
-            cluster_jobs = json.loads(raw_cluster_jobs)
-        job_list = cluster_jobs.get(self.USERNAME, [])
+        IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+        job_ids = await r.smembers(IDX_KEY)
+        job_keys = [f"cluster_jobs:{self.USERNAME}:{jid.decode() if isinstance(jid,(bytes,bytearray)) else jid}" for jid in job_ids]
+
+        pipe = r.pipeline(transaction=False)
+        for k in job_keys:
+            pipe.hgetall(k)
+        jobs = await pipe.execute()
 
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         start_keywords = get_config("computing", "start_keywords")
-
-        logger.info(f"Get {self.USERNAME} jobs: {job_list}")
+        logger.info(f"Get {self.USERNAME} jobs: {jobs}")
 
         return_list = [] 
 
-        for job in job_list:
+        for job in jobs:
             job_id = job.get("jobId")
             job_condor_type = job.get("jobType")
             job_status = job.get("jobStatus")
