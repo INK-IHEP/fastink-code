@@ -258,7 +258,7 @@ class HTC_Scheduler(SchedulerBase):
         r = redis_connect()
         pipe = r.pipeline(transaction=False)
         
-        JOB_KEY = f"cluster_jobs:{self.USERNAME}:{job_id}"
+        JOB_KEY = f"cluster_jobs:{self.USERNAME}:{str(job_id)}"
         IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
         pipe.delete(JOB_KEY)
         pipe.srem(IDX_KEY, str(job_id))
