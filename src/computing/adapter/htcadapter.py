@@ -140,14 +140,14 @@ class HTC_Scheduler(SchedulerBase):
             job_id = job.get("jobId")
             job_condor_type = job.get("jobType")
             job_status = job.get("jobStatus")
-            job_output_path = job.get("joboutpath")
-            job_err_path = job.get("joberrpath")
-            job_iwd = job.get("jobiwd")
-            job_submit_time = job.get("jobSubmitTime")
-            job_start_time = job.get("jobStartTime")
-            job_node_list = job.get("jobNodeList")
-            job_runos = job.get("jobrunos")
-            job_hold_reason = job.get("hold_reason")
+            job_output_path = job.get("joboutpath") or ""
+            job_err_path = job.get("joberrpath") or ""
+            job_iwd = job.get("jobiwd") or ""
+            job_submit_time = job.get("jobSubmitTime") or ""
+            job_start_time = job.get("jobStartTime") or ""
+            job_node_list = job.get("jobNodeList") or ""
+            job_runos = job.get("jobrunos") or ""
+            job_hold_reason = job.get("hold_reason") or ""
 
             if req_job_type:
                 req_job_types = req_job_type.split(',')
@@ -216,7 +216,7 @@ class HTC_Scheduler(SchedulerBase):
             job = json.loads(raw_job)
             
             job_redis_type = job.get("jobType")
-            job_os = job.get("jobReqOS")
+            job_os = job.get("jobReqOS") or ""
             job_status = job.get("jobStatus")
             connect_sign = "False"
 
