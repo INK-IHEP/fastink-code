@@ -203,7 +203,8 @@ class HTC_Scheduler(SchedulerBase):
                 "JobNodeList": job_node_list,
                 "jobrunos": job_runos,
                 "connect_sign": connect_sign,
-                "hold_reason": job_hold_reason
+                "hold_reason": job_hold_reason,
+                "jobtimelimit": "24:00:00",
             })
 
         raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
