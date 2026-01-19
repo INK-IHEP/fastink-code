@@ -12,6 +12,9 @@ from src.common.logger import logger
 from src.routers.status import *
 from src.apps.drawio.template import png_template, svg_template
 
+params = common.storage_init()
+xrd_host = params['mgm_url']
+
 async def draw(username:str, TargetPath:str, Type:str, create:bool = False):
 
     #### Check if we need to create
