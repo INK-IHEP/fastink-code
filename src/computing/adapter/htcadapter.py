@@ -188,6 +188,7 @@ class HTC_Scheduler(SchedulerBase):
 
             else:
                 job_status = "OTHER" 
+                continue
             
             if db_job_status != job_status: 
                 update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
