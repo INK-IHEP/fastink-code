@@ -91,6 +91,10 @@ async def update_completed_jobs():
                     
                     if job_clusterid in need_change_status_jobs.keys():
                         del need_change_status_jobs[job_clusterid]
+                        
+                    tomb = await r.exists(f"cluster_jobs:deleted:{job_owner}:{job_clusterid}")
+                    if tomb:
+                        continue 
                     
                     job_record = {
                         "ClusterId": "HTCondor",
