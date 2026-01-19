@@ -21,7 +21,7 @@ async def draw(username:str, TargetPath:str, Type:str, create:bool = False):
             is_exist, path_type = await common.path_exist(name = TargetPath, username = username, mgm = xrd_host)
             if is_exist:
                 logger.error("TargetPath {TargetPath} exists... Failed to created it...")
-                return {"status": InkStatus.PATH_EXIST, "msg": {f"Failed to create {TaragetPath}. Path exists..."}, "data": None}
+                return {"status": InkStatus.PATH_EXIST, "msg": {f"Failed to create {TargetPath}. Path exists..."}, "data": None}
             await common.upload_file(src_data = '', dst = TargetPath, username = username, mgm = xrd_host)
             is_exist, path_type = await common.path_exist(TargetPath, username = username, mgm = xrd_host)
             if is_exist and path_type == PathType.FILE:
