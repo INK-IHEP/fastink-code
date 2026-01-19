@@ -207,6 +207,7 @@ class HTC_Scheduler(SchedulerBase):
                 "jobtimelimit": "24:00:00",
             })
 
+        raw_jobs = None
         raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
         logger.debug(f"HTC-LOG: Get {self.USERNAME} submitting_jobs from redis: {raw_job}")
         
