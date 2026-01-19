@@ -8,7 +8,7 @@ from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.inkdb.inkredis import redis_connect
 from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids, insert_job_info, needto_change_status_jobs
-from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command
+from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value
 
 router = APIRouter()
 
@@ -98,24 +98,22 @@ async def update_completed_jobs():
                     
                     job_record = {
                         "ClusterId": "HTCondor",
-                        "jobId": job_clusterid,
-                        "jobType": job_type,
-                        "jobStatus": job_status,
-                        "jobSubmitTime": job_submit_time,
-                        "jobStartTime": job_start_time,
-                        "jobNodeList": job_remote_host,
-                        "jobrunos": job_request_os,
-                        "jobiwd": job_iwd,
-                        "joboutpath": job_out_path,
-                        "joberrpath": job_err_path,
-                        "hold_reason": job_hold_reason
+                        "jobId": clean_query_value(job_clusterid),
+                        "jobType": clean_query_value(job_type),
+                        "jobStatus": clean_query_value(job_status),
+                        "jobSubmitTime": clean_query_value(job_submit_time),
+                        "jobStartTime": clean_query_value(job_start_time),
+                        "jobNodeList": clean_query_value(job_remote_host),
+                        "jobrunos": clean_query_value(job_request_os),
+                        "jobiwd": clean_query_value(job_iwd),
+                        "joboutpath": clean_query_value(job_out_path),
+                        "joberrpath": clean_query_value(job_err_path),
+                        "hold_reason": clean_query_value(job_hold_reason),
                     }
-                    
-                    job_record = {k: ("" if v is None else str(v)) for k, v in job_record.items()}
                     
                     JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
                     IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
-                    pipe.sadd(IDX_KEY, str(job_clusterid))
+                    pipe.sadd(IDX_KEY, job_clusterid)
                     pipe.hset(JOB_KEY, mapping=job_record)
                     
                 await pipe.execute()
