@@ -156,8 +156,10 @@ class HTC_Scheduler(SchedulerBase):
 
             try:
                 job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-                logger.info(f"HTC-LOG: Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
+                logger.debug(f"HTC-LOG: Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
             except NoResultFound:
+                logger.debug("HTC-LOG: TEST")
+                raise
                 job_path = job_iwd
                 insert_job_info(self.UID, job_id, job_output_path, job_err_path, job_condor_type, job_path, self.CLUSTER_TYPE)
                 job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)

@@ -309,11 +309,26 @@ async def submit_job_from_redis():
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
                     logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
                     
+                    job_record = {
+                        "ClusterId": "HTCondor",
+                        "jobId": job_id,
+                        "jobType": job_type or "",
+                        "jobStatus": "1",
+                        "jobSubmitTime": "",
+                        "jobStartTime": "",
+                        "jobNodeList": "",
+                        "jobrunos": job_os or "",
+                        "jobiwd": job_dir or "",
+                        "joboutpath": output or "",
+                        "joberrpath": errpath or "",
+                        "hold_reason": ""
+                    }
+                    
                     JOB_KEY = f"cluster_jobs:{job_owner}:{job_id}"
                     IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
                     async with r.pipeline(transaction=True) as pipe:
                         pipe.sadd(IDX_KEY, str(job_id))
-                        pipe.hset(JOB_KEY, mapping=job)
+                        pipe.hset(JOB_KEY, mapping=job_record)
                         pipe.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                         await pipe.execute()
 
