@@ -45,13 +45,14 @@ async def draw(username:str, TargetPath:str, Type:str, create:bool = False):
         async for chunk in common.get_file_stream(username = username, fname = TargetPath):
             data += chunk
         data = base64.b64encode(data).decode('utf-8')
-
+        logger.debug(f"I've got drawio files:{data}")
         if data['type'] == 'svg' or data['type'] == 'xml':
             data_src = f"data:image/svg+xml;base64,{data}"
             html_content = svg_template.substitute(data = data_src)
         else:
             data_src = f"data:image/png;base64,{png_src}"
             html_content = png_template.substitute(data = data_src)
+        logger.debug(f"I wanna return {html_content}")
         response = HTMLResponse(content=html_content, status_code=200)
         return response
     except Exception as e:
