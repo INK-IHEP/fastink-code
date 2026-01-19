@@ -310,12 +310,11 @@ async def submit_job_from_redis():
                     logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
                     
                     pipe = r.pipeline(transaction=False)
-                    pipe.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
-                    
                     JOB_KEY = f"cluster_jobs:{job_owner}:{job_id}"
                     IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
                     pipe.sadd(IDX_KEY, str(job_id))
                     pipe.hset(JOB_KEY, mapping=job)
+                    pipe.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                     await pipe.execute()
 
                 except Exception as e:
