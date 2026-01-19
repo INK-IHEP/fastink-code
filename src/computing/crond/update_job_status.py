@@ -107,6 +107,8 @@ async def update_completed_jobs():
                         "hold_reason": job_hold_reason
                     }
                     
+                    job_record = {k: ("" if v is None else str(v)) for k, v in job_record.items()}
+                    
                     JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
                     IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
                     pipe.sadd(IDX_KEY, str(job_clusterid))
