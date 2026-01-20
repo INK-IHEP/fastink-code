@@ -290,7 +290,7 @@ async def query_system_jobs():
 
 
 @router.post("/create_job")
-async def create_common_job(
+async def create_normal_job(
     username: str = Depends(get_username),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
@@ -312,6 +312,33 @@ async def create_common_job(
             "data": {}
         }
 
+@router.post("create_common_job")
+async def create_common_job(
+    username: str = Depends(get_username),
+    jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id")
+):
+    if jobclass.job_type != "common":
+        return {
+            "status": InkStatus.WRONG_JOB_TYPE,
+            "msg": f"Valid job type is common, current job type is {jobclass.job_type}, please use /create_job to submit interactive jobs.",
+            "data": {}
+        }
+    
+    try:
+        adapter = get_scheduler(jobclass.cluster_id, username)
+        await adapter.submit_common_job(jobclass)
+        return {
+            "status" : InkStatus.SUCCESS,
+            "msg" : f"Create common job successfully.",
+            "data" : {}
+        }
+    except Exception as e:
+        logger.exception()
+        return {
+            "status": InkStatus.SERVER_INTERNAL_ERROR,
+            "msg": f"Create common job failed with error : {e}",
+            "data": {}
+        }
 
 @router.get("/query_jobs")
 async def query_common_job(

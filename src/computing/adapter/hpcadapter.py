@@ -12,7 +12,7 @@ from src.computing.cluster.cluster import SLURM_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
 from src.computing.tools.common.utils import sub_command, create_iptables, delete_iptables
-from src.computing.hpc.v2 import get_job_output 
+from src.computing.hpc.v2.hpc_check_job import get_job_output 
 from src.computing.common import get_endtime_info, PathChecker
 from time import time
 @scheduler("slurm")
@@ -335,8 +335,6 @@ class HPC_Scheduler(SchedulerBase):
                     if job_type in get_config("computing", "iptables_jobtype"):
                         job_output_path = f"{job_path}/{job_clusterid}.out"
                         job_errput_path = f"{job_path}/{job_clusterid}.err"
-                    else:
-                        pass
                     
                     insert_job_info(self.UID, job_clusterid, job_output_path, job_errput_path, job_slurm_type, job_path, self.CLUSTER_TYPE)
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -365,8 +363,8 @@ class HPC_Scheduler(SchedulerBase):
                             update_connect_status(self.UID, job_clusterid, connect_sign, self.CLUSTER_TYPE)
                             update_start_time(self.UID, job_clusterid, job_start_time, self.CLUSTER_TYPE)
                             
-                elif job_status == "COMPLETED" or job_status.startswith("CANCELLED"):
-                    job_status = "COMPLETED"
+                elif job_status == "COMPLETED" or job_status.startswith("CANCELLED") or job_status == "FAILED":
+                    
                     db_end_time = get_endtime_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
                     if not db_end_time:
                         update_end_time(self.UID, job_clusterid, job_end_time, self.CLUSTER_TYPE)
