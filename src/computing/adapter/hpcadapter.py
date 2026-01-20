@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from src.storage import common
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from src.common.logger import logger
 from src.common.config import get_config
 from sqlalchemy.exc import NoResultFound
@@ -13,7 +13,7 @@ from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
 from src.computing.tools.common.utils import sub_command, create_iptables, delete_iptables
 from src.computing.hpc.v2.hpc_check_job import get_job_output 
-from src.computing.common import get_endtime_info, PathChecker
+from src.computing.common import get_endtime_info, PathChecker, parse_sbatch_out_err
 from time import time
 @scheduler("slurm")
 class HPC_Scheduler(SchedulerBase):
@@ -299,15 +299,12 @@ class HPC_Scheduler(SchedulerBase):
         finally:
             if token_filename and os.path.exists(token_filename):
                 os.remove(token_filename)
-    
-    async def _get_job_out_err():
-        pass
         
     async def query_job(self, job_type):
         job_list = []
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         
-        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir,Time -P -X -n")
+        command = (f"sacct -u {self.USERNAME} --format=JobID,Partition,State,Elapsed,NNodes,NodeList,WCkey,Submit,Start,End,WorkDir,Time,SubmitLine -P -X -n")
         stdout = await sub_command(command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.info(f"Get user({self.USERNAME}) slurm cluster jobs: {stdout}")
         lines = stdout.decode().strip().split('\n')
@@ -325,17 +322,14 @@ class HPC_Scheduler(SchedulerBase):
                 job_start_time = job_param_list[8].replace("T", " "),
                 job_end_time = job_param_list[9].replace("T", " "),
                 job_time_limit = job_param_list[11]
+                job_submit_cmd = job_param_list[12]
 
                 try:
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
                     logger.info(f"Find the job {job_clusterid} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
                 except NoResultFound:
                     job_path = job_param_list[10]
-                    job_output_path, job_errput_path = "", ""
-                    if job_type in get_config("computing", "iptables_jobtype"):
-                        job_output_path = f"{job_path}/{job_clusterid}.out"
-                        job_errput_path = f"{job_path}/{job_clusterid}.err"
-                    
+                    job_output_path, job_errput_path = parse_sbatch_out_err(job_submit_cmd, job_clusterid)
                     insert_job_info(self.UID, job_clusterid, job_output_path, job_errput_path, job_slurm_type, job_path, self.CLUSTER_TYPE)
                     job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
                 connect_sign, = get_job_connect_info(self.UID, job_clusterid, self.CLUSTER_TYPE)
@@ -393,19 +387,24 @@ class HPC_Scheduler(SchedulerBase):
 
     
     async def cancel_job(self, job_id):
+        try:
+            job_type, job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+            if job_status not in ("COMPLETED", "FAILED", "CANCELLED"):
+                cancel_command = f"sudo -u {self.USERNAME} scancel {job_id}"
+                _ = await sub_command(cancel_command, timeoutsec=10, errinfo="scancel err",tminfo="scancel timeout")
+                
+                iptables_jobtype = get_config("computing", "iptables_jobtype")
+                if job_type in iptables_jobtype:
+                    if job_iptables_status != 0 and job_iptables_clean == 0:
+                        delete_iptables(self.UID, job_id, job_iptables_status, self.CLUSTER_TYPE)
+                
+                if job_status not in ("PENDING", "QUEUEING", "RUNNING", "COMPLETING", "SUSPENDED"):
+                    update_job_status(self.UID, job_id, 'CANCELLED', self.CLUSTER_TYPE)
 
-        cancel_command = f"sudo -u {self.USERNAME} scancel {job_id}"
-        _ = await sub_command(cancel_command, timeoutsec=10, errinfo="scancel err",tminfo="scancel timeout")
-        job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-
-        iptables_jobtype = get_config("computing", "iptables_jobtype")
-        if job_type in iptables_jobtype:
-            if job_iptables_status != 0 and job_iptables_clean == 0:
-                delete_iptables(self.UID, job_id, job_iptables_status, self.CLUSTER_TYPE)
-        update_job_status(self.UID, job_id, 'COMPLETED', self.CLUSTER_TYPE)
-
-        job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        update_end_time(self.UID, job_id, job_end_time, self.CLUSTER_TYPE)
+                job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                update_end_time(self.UID, job_id, job_end_time, self.CLUSTER_TYPE)
+        except Exception as e:
+            return
 
 
 

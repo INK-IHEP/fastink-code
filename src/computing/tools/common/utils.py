@@ -466,8 +466,6 @@ def generate_submit_command(username: str, job_dir: str, job_type: str, submitfi
     return command
 
 
-
-
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     process = await asyncio.create_subprocess_shell(
         command,
