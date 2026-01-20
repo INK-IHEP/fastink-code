@@ -96,7 +96,7 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
         user_info = pwd.getpwuid(uid)
         user_shell = user_info.pw_shell
     
-    with log_step("read_config", sbatch_logger):
+    with log_step("read_config", logger=sbatch_logger):
         krb5_enabled = get_config("common", "krb5_enabled")
     
     with log_step("build_sbatch_command", logger=sbatch_logger):
