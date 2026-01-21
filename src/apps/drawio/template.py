@@ -5,7 +5,7 @@ from string import Template
 png_html="""
 <html lang="en">
 <head>
-	<script type="text/javascript" src="/apps/js/diagram-editor.js"></script>
+	<script type="text/javascript" src="/draw/js/diagram-editor.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta charset="UTF-8">
     <title>Drawio for INK</title>

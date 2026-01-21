@@ -43,6 +43,7 @@ setup(
         "typing-inspect",
         "ujson",
         "uvicorn",
+        "jwt",
         "websockets",
     ],
 )
