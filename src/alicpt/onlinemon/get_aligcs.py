@@ -358,10 +358,10 @@ def query_data_by_date(data_type, index="aligcs_monitor", daq_date=None, size=10
 
 def handle_srs_data(daq_date=None):
     try:
-        #data=query_last_24h_data(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
-        data=query_data_by_date(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
+        data=query_last_24h_data(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
+        #data=query_data_by_date(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
 
-        print(f"srs data: {data}")
+        #print(f"srs data: {data}")
 
         return data
     except Exception as e:
