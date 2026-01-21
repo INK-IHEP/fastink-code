@@ -15,7 +15,7 @@ router = APIRouter()
 #srs数据接口
 @router.get("/elk/get_srs")
 async def get_srs_info(
-    daq_date: str = Query(..., description="daq_date"),
+    daq_date: str = Query(None, description="daq_date"),
     username: str = Depends(get_username),
     token: str = Depends(get_token)
 ):
