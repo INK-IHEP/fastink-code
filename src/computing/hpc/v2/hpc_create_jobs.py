@@ -336,7 +336,7 @@ async def create_job_with_path(
                     add_admincomment()
                 finally:
                     logger.info(
-                        "step=add_admincomment cost=%.3fs job_id=%s",
+                        "phase=thread_add_comment step=add_admincomment cost=%.3fs job_id=%s",
                         time.monotonic() - start, job_id
                     )
 
