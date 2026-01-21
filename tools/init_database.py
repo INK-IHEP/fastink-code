@@ -34,6 +34,7 @@ def init_db():
         "elk",
         "compile",
         "lhaasogpu",
+        "juno_daq",
     ]
     for perm in perm_list:
         try:
