@@ -9,18 +9,20 @@ def log_step(
     step: str,
     *,
     logger: Optional[logging.Logger] = None,
+    phase: str = "default",
     extra: str = ""
 ):
     """
     Log execution time of a code block.
 
     Usage:
-        with log_step("sbatch_submit", logger):
+        with log_step("execute_sbatch", logger=sbatch_logger, phase="sbatch_submit"):
             ...
 
     Args:
-        step: step name, e.g. 'sbatch_submit'
-        logger: logging.Logger, default getLogger("ink.hpc")
+        step: step name, e.g. 'execute_sbatch'
+        logger: logging.Logger, default logging.getLogger("ink.hpc")
+        phase: logical phase, e.g. 'build_job_env', 'sbatch_submit'
         extra: extra info appended to log
     """
     if logger is None:
@@ -32,7 +34,8 @@ def log_step(
     finally:
         cost = time.monotonic() - start
         logger.info(
-            "step=%s cost=%.3fs %s",
+            "phase=%s step=%s cost=%.3fs %s",
+            phase,
             step,
             cost,
             extra

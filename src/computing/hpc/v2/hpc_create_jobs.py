@@ -252,7 +252,7 @@ async def create_job_with_path(
     build_job_env = get_site(site)
     
     # ---------- step 1: build job env ----------
-    with log_step("build_job_env", logger=logger):
+    with log_step("build_job_env", logger=logger, phase="build_job_env"):
         job_path, token_filename = await build_job_env(uid, job_type, job_script_abs_path, script_file)
 
     parameters = f" --comment={job_type} "
@@ -310,7 +310,7 @@ async def create_job_with_path(
     try:
         submitter = get_submitter(site, cluster_id)
         # ---------- step 2: sbatch submit ----------
-        with log_step("sbatch_submit", logger=logger):
+        with log_step("sbatch_submit", logger=logger, phase="sbatch_submit"):
             job_id, job_type, job_path = await submitter(sbatch_command, job_type, job_path, uid)
         
         if not job_id:
@@ -319,7 +319,7 @@ async def create_job_with_path(
 
         # Insert job info into DB
         # ---------- step 3: insert DB ----------
-        with log_step("insert_job_info", logger=logger):
+        with log_step("insert_job_info", logger=logger, phase="insert_job_info"):
             insert_job_info(uid, job_id, output_file, error_file, job_type, job_path, cluster_id)
 
         # ---------- step 4: async admincomment (fire & forget) ----------
