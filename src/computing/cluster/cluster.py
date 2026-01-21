@@ -3,13 +3,13 @@ from typing import Optional, Literal
 
 
 class Base_JOB(BaseModel):
-    job_script: Optional[str] = Field(None, description="Job Script Content")
-    job_parameters: Optional[str] = Field(None, description="User job parameters")
+    job_script: Optional[str] = Field("", description="Job Script Content")
+    job_parameters: Optional[str] = Field("", description="User job parameters")
     cpu: Optional[int] = Field(1, gt=0, description="CPU requirement")
     mem: Optional[int] = Field(..., gt=0, description="Memory requirement (MB)")
     gpu_num: Optional[int] = Field(0, ge=0, description="GPU requirement")
-    job_name: str = Field(f"", description="Job name")
-    job_type: str = Field(f"", description="Job type")
+    job_name: str = Field("", description="Job name")
+    job_type: str = Field("", description="Job type")
     cluster_id: Literal["slurm", "htcondor"] 
 
 
@@ -28,9 +28,9 @@ class SLURM_JOB(Base_JOB):
 
 
 class HTC_JOB(Base_JOB):
-    os: Optional[str] = Field(None, description="操作系统镜像") # 可选
-    wn: str = Field(f"", description="woker node host")  # 可选
-    arch: str = Field(f"", description="woker node arch")  # 可选
-    schedd: Optional[str] = Field(None, description="Schedd Host") # 可选
-    cm: Optional[str] = Field(None, description="CM Host") # 可选
+    os: Optional[str] = Field("", description="操作系统镜像") # 可选
+    wn: str = Field("", description="woker node host")  # 可选
+    arch: str = Field("", description="woker node arch")  # 可选
+    schedd: Optional[str] = Field("", description="Schedd Host") # 可选
+    cm: Optional[str] = Field("", description="CM Host") # 可选
     cluster_id: Literal["htcondor"] = "htcondor"

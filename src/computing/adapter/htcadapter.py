@@ -10,7 +10,7 @@ from src.computing.cluster.cluster import HTC_JOB
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
 from src.inkdb.inkredis import redis_connect
-from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables
+from src.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, jobid_sort_key
 
 @scheduler("htcondor")
 class HTC_Scheduler(SchedulerBase):
@@ -66,18 +66,16 @@ class HTC_Scheduler(SchedulerBase):
     async def submit_job(self, htc_job_params: HTC_JOB):
         try:
             r = redis_connect()
-            cluster_jobs = await r.get("cluster_jobs")
+            IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+            job_ids = await r.smembers(IDX_KEY)
+            job_keys = [f"cluster_jobs:{self.USERNAME}:{jid.decode() if isinstance(jid,(bytes,bytearray)) else jid}" for jid in job_ids]
             
-            if not cluster_jobs:
-                cluster_jobs = {}
-            else:
-                if isinstance(cluster_jobs, (bytes, bytearray)):
-                    cluster_jobs = cluster_jobs.decode("utf-8")
-                cluster_jobs = json.loads(cluster_jobs)
-            user_job_list = cluster_jobs.get(self.USERNAME, [])
-            logger.debug(f"HTC-LOG: Get {self.USERNAME} cluster_jobs: {user_job_list}")
+            pipe = r.pipeline(transaction=False)
+            for k in job_keys:
+                pipe.hgetall(k)
+            jobs = await pipe.execute()            
 
-            for job in user_job_list:
+            for job in jobs:
                 if job.get("jobType") == htc_job_params.job_type:
                     logger.debug(f"HTC-LOG: Submit job {htc_job_params.job_type} exsit in cluster_jobs: {job}")
                     return
@@ -96,6 +94,7 @@ class HTC_Scheduler(SchedulerBase):
             submit_param = {
                 "username": self.USERNAME,
                 "jobType": htc_job_params.job_type,
+                "jobStatus": "SUBMITTING",
                 "jobReqCPU": htc_job_params.cpu,
                 "jobReqMEM": htc_job_params.mem,
                 "jobReqOS": htc_job_params.os,
@@ -105,8 +104,11 @@ class HTC_Scheduler(SchedulerBase):
                 "clusterId": htc_job_params.cluster_id
             }
             
-            await r.lpush(f"submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
-            await r.lpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+            async with r.pipeline(transaction=True) as p:
+                p.rpush("submitting_jobs", json.dumps(submit_param, ensure_ascii=False))
+                p.rpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))   
+                await p.execute()
+            
             logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
 
         except Exception as e:
@@ -119,34 +121,33 @@ class HTC_Scheduler(SchedulerBase):
         
         r = redis_connect()
 
-        raw_cluster_jobs = await r.get("cluster_jobs")
-        if not raw_cluster_jobs:
-            cluster_jobs = {}
-        else:
-            if isinstance(raw_cluster_jobs, (bytes, bytearray)):
-                raw_cluster_jobs = raw_cluster_jobs("utf-8")
-            cluster_jobs = json.loads(raw_cluster_jobs)
-        job_list = cluster_jobs.get(self.USERNAME, [])
-
+        IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+        job_ids = await r.smembers(IDX_KEY)
+        job_keys = [f"cluster_jobs:{self.USERNAME}:{jid.decode() if isinstance(jid,(bytes,bytearray)) else jid}" for jid in job_ids]
+        
+        pipe = r.pipeline(transaction=False)
+        for k in job_keys:
+            pipe.hgetall(k)
+        jobs = await pipe.execute()
+        logger.debug(f"HTC-LOG: Get {self.USERNAME} joblist from redis: {jobs}")
+        
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         start_keywords = get_config("computing", "start_keywords")
 
-        logger.info(f"Get {self.USERNAME} jobs: {job_list}")
-
         return_list = [] 
 
-        for job in job_list:
+        for job in jobs:
             job_id = job.get("jobId")
             job_condor_type = job.get("jobType")
             job_status = job.get("jobStatus")
-            job_output_path = job.get("joboutpath")
-            job_err_path = job.get("joberrpath")
-            job_iwd = job.get("jobiwd")
-            job_submit_time = job.get("jobSubmitTime")
-            job_start_time = job.get("jobStartTime")
-            job_node_list = job.get("jobNodeList")
-            job_runos = job.get("jobrunos")
-            job_hold_reason = job.get("hold_reason")
+            job_output_path = job.get("joboutpath") or ""
+            job_err_path = job.get("joberrpath") or ""
+            job_iwd = job.get("jobiwd") or ""
+            job_submit_time = job.get("jobSubmitTime") or ""
+            job_start_time = job.get("jobStartTime") or ""
+            job_node_list = job.get("jobNodeList") or ""
+            job_runos = job.get("jobrunos") or ""
+            job_hold_reason = job.get("hold_reason") or ""
 
             if req_job_type:
                 req_job_types = req_job_type.split(',')
@@ -155,7 +156,7 @@ class HTC_Scheduler(SchedulerBase):
 
             try:
                 job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-                logger.info(f"Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
+                logger.debug(f"HTC-LOG: Find the job {job_id} in the DB, and the details are: {job_type}, {db_job_status}, {job_iptables_status}, {job_iptables_clean}")       
             except NoResultFound:
                 job_path = job_iwd
                 insert_job_info(self.UID, job_id, job_output_path, job_err_path, job_condor_type, job_path, self.CLUSTER_TYPE)
@@ -176,18 +177,20 @@ class HTC_Scheduler(SchedulerBase):
                                 await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
                             except Exception as e:
                                 connect_sign = "False"
-                                logger.error(f"{job_id} iptables set failed, the details: {e}")
+                                logger.error(f"HTC-LOG: {job_id} iptables set failed, the details: {e}")
                         update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
                         update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
                         
             elif job_status == '4':
                 job_status = "COMPLETED"
-
+            
             elif job_status == '5':
                 job_status = "HOLDING"
-
+                
             else:
-                job_status = "OTHER" 
+                if job_status != "SUBMITTING":
+                    job_status = "OTHER" 
+                    continue
             
             if db_job_status != job_status: 
                 update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
@@ -202,16 +205,19 @@ class HTC_Scheduler(SchedulerBase):
                 "JobNodeList": job_node_list,
                 "jobrunos": job_runos,
                 "connect_sign": connect_sign,
-                "hold_reason": job_hold_reason
+                "hold_reason": job_hold_reason,
+                "jobtimelimit": "24:00:00",
             })
 
         raw_jobs = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
+        logger.debug(f"HTC-LOG: Get {self.USERNAME} submitting_jobs from redis: {raw_jobs}")
+        
         for raw_job in raw_jobs:
             job = json.loads(raw_job)
-
+            
             job_redis_type = job.get("jobType")
-            job_os = job.get("jobReqOS")
-            job_status = "SUBMITTING"
+            job_os = job.get("jobReqOS") or ""
+            job_status = job.get("jobStatus")
             connect_sign = "False"
 
             if req_job_type:
@@ -229,8 +235,11 @@ class HTC_Scheduler(SchedulerBase):
                 "JobNodeList": "",
                 "jobrunos": job_os,
                 "connect_sign": connect_sign,
-                "hold_reason": ""
+                "hold_reason": "",
+                "jobtimelimit": ""
             })
+
+        return_list.sort(key=jobid_sort_key, reverse=True)
 
         return return_list
 
@@ -253,4 +262,16 @@ class HTC_Scheduler(SchedulerBase):
         job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         update_end_time(self.UID, job_id, job_end_time, "htcondor")
         
+        r = redis_connect()
+        pipe = r.pipeline(transaction=False)
         
+        JOB_KEY = f"cluster_jobs:{self.USERNAME}:{job_id}"
+        IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+        
+        logger.debug(f"HTC-LOG: the JOB_KEY: {JOB_KEY}, the IDX_KEY: {IDX_KEY}")
+        
+        pipe.delete(JOB_KEY)
+        pipe.srem(IDX_KEY, str(job_id))
+        pipe.setex(f"cluster_jobs:deleted:{self.USERNAME}:{job_id}", 60, "1")
+        
+        await pipe.execute()

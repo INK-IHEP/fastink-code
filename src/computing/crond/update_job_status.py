@@ -8,7 +8,7 @@ from filelock import FileLock, Timeout
 from fastapi_utils.tasks import repeat_every
 from src.inkdb.inkredis import redis_connect
 from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids, insert_job_info, needto_change_status_jobs
-from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command
+from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value
 
 router = APIRouter()
 
@@ -55,11 +55,9 @@ LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
 @router.on_event("startup")
 @repeat_every(seconds=5, wait_first=False, raise_exceptions=False, logger=logger)
 async def update_completed_jobs():
-    lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
-    cluster_jobs: dict[str, list[dict]] = {}
+    lock = FileLock(str(LOCK_PATH1), timeout=0.1)
     try:
         with lock:
-            
             iptables_jobtype = get_config("computing", "iptables_jobtype")
             need_change_status_jobs = needto_change_status_jobs()
             query_command = query_cluster_jobs()
@@ -68,12 +66,14 @@ async def update_completed_jobs():
             to_delete = []
             
             if lines != ['']:
+                r = redis_connect()
+                pipe = r.pipeline(transaction=False)
                 for line in lines:
                     job_param_list = shlex.split(line, posix=True)
 
                     job_owner = safe_get(job_param_list, 0)
                     job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
-                    job_clusterid = safe_int(safe_get(job_param_list, 1), default=None)
+                    job_clusterid = safe_int(safe_get(job_param_list, 1))
                     qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
                     start_ts = safe_int(safe_get(job_param_list, 6), default=None)
 
@@ -88,38 +88,43 @@ async def update_completed_jobs():
                     job_out_path = safe_get(job_param_list, 11)
                     job_err_path = safe_get(job_param_list, 12)
                     job_hold_reason = " ".join(job_param_list[13:]) if len(job_param_list) > 13 else ""
-
-                    cluster_jobs.setdefault(job_owner, []).append(
-                        {
-                            "ClusterId": "HTCondor",
-                            "jobId": job_clusterid,
-                            "jobType": job_type,
-                            "jobStatus": job_status,
-                            "jobSubmitTime": job_submit_time,
-                            "jobStartTime": job_start_time,
-                            "jobNodeList": job_remote_host,
-                            "jobrunos": job_request_os,
-                            "jobiwd": job_iwd,
-                            "joboutpath": job_out_path,
-                            "joberrpath": job_err_path,
-                            "hold_reason": job_hold_reason
-                        }
-                    )
-                
+                    
                     if job_clusterid in need_change_status_jobs.keys():
                         del need_change_status_jobs[job_clusterid]
-
-            r = redis_connect()
-            await r.set("cluster_jobs", json.dumps(cluster_jobs, ensure_ascii=False))
-            #logger.debug(f"HTCondor joblist insert to redis, the list: {cluster_jobs}")
+                        
+                    tomb = await r.exists(f"cluster_jobs:deleted:{job_owner}:{job_clusterid}")
+                    if tomb:
+                        continue 
+                    
+                    job_record = {
+                        "ClusterId": "HTCondor",
+                        "jobId": clean_query_value(job_clusterid),
+                        "jobType": clean_query_value(job_type),
+                        "jobStatus": clean_query_value(job_status),
+                        "jobSubmitTime": clean_query_value(job_submit_time),
+                        "jobStartTime": clean_query_value(job_start_time),
+                        "jobNodeList": clean_query_value(job_remote_host),
+                        "jobrunos": clean_query_value(job_request_os),
+                        "jobiwd": clean_query_value(job_iwd),
+                        "joboutpath": clean_query_value(job_out_path),
+                        "joberrpath": clean_query_value(job_err_path),
+                        "hold_reason": clean_query_value(job_hold_reason),
+                    }
+                    
+                    JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
+                    IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
+                    pipe.sadd(IDX_KEY, job_clusterid)
+                    pipe.hset(JOB_KEY, mapping=job_record)
+                    
+                await pipe.execute()
+                    
 
             if need_change_status_jobs:
-                
+                pipe = r.pipeline(transaction=False)
                 for key in need_change_status_jobs:
                     query_history_command = get_condor_history_command(key)
                     stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
                     history_job_lines = stdout.decode().strip().split('\n')
-                    #logger.debug(f"The history result: {history_job_lines}")
 
                     if history_job_lines != [""]:
                         job_param_list = history_job_lines[0].split()
@@ -137,13 +142,20 @@ async def update_completed_jobs():
                             sshd_job_iptables_clean = need_change_status_jobs[key][2]
                             if gateway_port != 0 and sshd_job_iptables_clean == 0:
                                 delete_iptables(job_uid, key, gateway_port, "htcondor")
+                        
                         update_job_status(job_uid, key, 'COMPLETED', "htcondor")
                         update_start_time(job_uid, key, job_start_time, "htcondor")
                         update_end_time(job_uid, key, job_end_time, "htcondor")
                         logger.debug(f"Update job {key} status to COMPLETED.")
-                    
+                        
+                        JOB_KEY = f"cluster_jobs:{job_user}:{key}"
+                        IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
+                        pipe.delete(JOB_KEY)
+                        pipe.srem(IDX_KEY, str(key))
                     else:
                         to_delete.append(key)
+                        
+                await pipe.execute()
                 
                 if to_delete:
                     logger.debug(f"Need to delete jobs: {to_delete}")
@@ -259,17 +271,14 @@ async def submit_job_from_redis():
         with lock:   
             r = redis_connect()
             while True:
-                job_owner = None
                 raw_job = None
                 try:
                     raw_job = await r.rpop("submitting_jobs")
-                    logger.debug(f"HTC-LOG: Pop the raw info: {raw_job}")
-
                     if not raw_job:
                         break
+                    logger.debug(f"HTC-LOG: Pop the raw info: {raw_job}")
 
                     job = json.loads(raw_job)
-
                     job_owner = job.get("username")
                     job_type = job.get("jobType")
                     job_cpu = job.get("jobReqCPU")
@@ -297,10 +306,32 @@ async def submit_job_from_redis():
 
                     insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
                     logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
-                    await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
+                    
+                    job_record = {
+                        "ClusterId": "HTCondor",
+                        "jobId": job_id,
+                        "jobType": job_type or "",
+                        "jobStatus": "1",
+                        "jobSubmitTime": "",
+                        "jobStartTime": "",
+                        "jobNodeList": "",
+                        "jobrunos": job_os or "",
+                        "jobiwd": job_dir or "",
+                        "joboutpath": output or "",
+                        "joberrpath": errpath or "",
+                        "hold_reason": ""
+                    }
+                    
+                    JOB_KEY = f"cluster_jobs:{job_owner}:{job_id}"
+                    IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
+                    async with r.pipeline(transaction=True) as pipe:
+                        pipe.sadd(IDX_KEY, str(job_id))
+                        pipe.hset(JOB_KEY, mapping=job_record)
+                        pipe.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
+                        await pipe.execute()
 
                 except Exception as e:
-                    if job_owner:
+                    if raw_job:
                         await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
                     logger.error(f"HTC-LOG: Submit job failed, {e}")
                     continue

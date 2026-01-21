@@ -103,7 +103,7 @@ async def connect_common_job(
             }
         
         elif job_type == "vscode" or job_type == "npu" or job_type == "compile":
-            hostname, port, passwd = await connect_vscode_job(job_id=job_id, uid=uid, clusterid=cluster_id)
+            hostname, port, passwd, vscode_url = await connect_vscode_job(job_id=job_id, uid=uid, clusterid=cluster_id)
             return {
                 "status": InkStatus.SUCCESS,
                 "msg": "Request Success",
@@ -111,6 +111,7 @@ async def connect_common_job(
                     "host": hostname,
                     "port": port,
                     "passwd": passwd,
+                    "url": vscode_url,
                     "jobId": job_id,
                     "connect_type": "vscode"
                 }
@@ -332,7 +333,11 @@ async def delete_common_job(
 ):
     try:
         if not job_id:
-            return 
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": f"Delete successfully.",
+                "data": {}
+            }
 
         adapter = get_scheduler(cluster_id, username)
         await adapter.cancel_job(job_id)

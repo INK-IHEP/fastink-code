@@ -82,6 +82,37 @@ def ts_to_str(ts: Optional[int]) -> str:
     return datetime.fromtimestamp(ts, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def clean_query_value(v: object) -> str:
+    _BAD_LOWER = {"undefined", "null", "none", "unknown", "n/a", "na", "nil"}
+    if v is None:
+        return ""
+    if isinstance(v, (bytes, bytearray)):
+        v = v.decode("utf-8", errors="ignore")
+    
+    s = str(v).strip()
+    
+    if len(s) >= 2 and ((s[0] == s[-1] == '"') or (s[0] == s[-1] == "'")):
+        s = s[1:-1].strip()
+    
+    if s.lower() in _BAD_LOWER:
+        return ""
+    
+    return " ".join(s.split())
+
+
+def jobid_sort_key(x: dict) -> int:
+    jid = (x.get("jobId") or "").strip()
+    if not jid:
+        return 10**18
+    try:
+        return int(jid)
+    except ValueError:
+        try:
+            return int(jid.split(".")[0])
+        except Exception:
+            return 0
+
+
 def build_requirements(request_wn=None, request_arch=None) -> str:
     conds = []
     if request_wn:
@@ -143,17 +174,19 @@ async def connect_vscode_job(job_id, uid, clusterid):
     try:
 
         login_info = await read_file(uid, info_file)
+        NGINX_NODE = get_config("computing", "nginx_node")
 
         host = parse_info(login_info, "HOST")
         port = parse_info(login_info, "PORT")
         passwd = parse_info(login_info, "PASSWD")
+        vscode_url = f"{NGINX_NODE}/vscode/{host}/{port}/login"
 
         logger.info(f"Get User: {uid} connect info, Host: {host}, Port: {port}, Passwd: {passwd}, login_info: {login_info}")
 
         if not host or not port or not passwd:
             raise HTTPException(status_code=500, detail="No host and port record in vscode loginfile.")
 
-        return host, port, passwd
+        return host, port, passwd, vscode_url
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
