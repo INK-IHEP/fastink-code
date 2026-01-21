@@ -151,7 +151,7 @@ def mjd_to_time(mjd):
     except Exception as e:
         raise ValueError(f"MJD conversion failed: {e}")
 
-def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scroll=False):
+def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scroll=False, daq_date=None):
     """
     通用查询函数：查询指定data_type前24小时的数据
 
@@ -160,6 +160,7 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
         index: ES索引名，默认为 "aligcs_monitor"
         size: 返回结果数量，默认10000
         use_scroll: 是否使用scroll查询，默认False
+        daq_date: 可选日期参数，格式为 yyyy-mm-dd。如果提供，则查询该日期的24小时数据
 
     Returns:
         查询结果列表
@@ -169,8 +170,17 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
         if not es:
             return []
 
-        now = datetime.now(timezone.utc)
-        last_24h = now - timedelta(hours=24)
+        if daq_date:
+            # 如果指定了日期，查询该日期的24小时数据
+            from datetime import datetime
+            date_obj = datetime.strptime(daq_date, "%Y-%m-%d")
+            start_time = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = date_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            # 默认查询前24小时数据
+            now = datetime.now(timezone.utc)
+            start_time = now - timedelta(hours=24)
+            end_time = now
 
         query = {
             "query": {
@@ -184,8 +194,8 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
                         {
                             "range": {
                                 "@timestamp": {
-                                    "gte": last_24h.isoformat(),
-                                    "lte": now.isoformat(),
+                                    "gte": start_time.isoformat(),
+                                    "lte": end_time.isoformat(),
                                     "format": "strict_date_optional_time"
                                 }
                             }
@@ -266,12 +276,93 @@ def query_last_time_data(data_type, index="aligcs_monitor",size=10000, use_scrol
         return None
 
 
+def query_data_by_date(data_type, index="aligcs_monitor", daq_date=None, size=10000, use_scroll=False):
+    """
+    按指定日期查询数据，如果没有指定日期则查询24小时前至当前时间的数据
 
-def handle_srs_data():
+    Args:
+        data_type: 数据类型标识 (如 "srs", "mlc", "compressor", "ups_1" 等)
+        index: ES索引名，默认为 "aligcs_monitor"
+        daq_date: 可选日期参数，格式为 yyyy-mm-dd。如果提供，则查询该日期的24小时数据
+        size: 返回结果数量，默认10000
+        use_scroll: 是否使用scroll查询，默认False
+
+    Returns:
+        查询结果列表
+    """
     try:
-        data=query_last_24h_data('srs', index="aligcs_monitor", size=10000, use_scroll=False)
+        es = get_es_client()
+        if not es:
+            return []
+
+        if daq_date:
+            # 如果指定了日期，查询该日期的24小时数据
+            date_obj = datetime.strptime(daq_date, "%Y-%m-%d")
+            start_time = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = date_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+        else:
+            # 默认查询前24小时数据
+            now = datetime.now(timezone.utc)
+            start_time = now - timedelta(hours=24)
+            end_time = now
+
+        query = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "term": {
+                                "data_type": data_type
+                            }
+                        },
+                        {
+                            "range": {
+                                "@timestamp": {
+                                    "gte": start_time.isoformat(),
+                                    "lte": end_time.isoformat(),
+                                    "format": "strict_date_optional_time"
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            "size": size
+        }
+
+        if use_scroll:
+            # 使用scroll查询获取大量数据
+            resp = es.search(
+                index=index,
+                body=query,
+                scroll='5m'
+            )
+            scroll_id = resp['_scroll_id']
+            all_data = resp['hits']['hits']
+
+            while len(resp['hits']['hits']) > 0:
+                resp = es.scroll(scroll_id=scroll_id, scroll='5m')
+                all_data.extend(resp['hits']['hits'])
+
+            es.clear_scroll(scroll_id=scroll_id)
+            return all_data
+        else:
+            resp = es.search(index=index, body=query)
+            return resp['hits']['hits']
+
+    except Exception as e:
+        print(f"[query_data_by_date] Exception: {e}, data_type: {data_type}")
+        return []
+
+
+
+def handle_srs_data(daq_date=None):
+    try:
+        #data=query_last_24h_data(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
+        data=query_data_by_date(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
+
         print(f"srs data: {data}")
-        
+
         return data
     except Exception as e:
         print(f"handle_srs_data Exception: {e}")
@@ -728,12 +819,12 @@ def handle_tilt_data():
 
 def main():
     """Main function to test all data query functions."""
-    '''
+    
     result = handle_srs_data()
     print("[main] handle_srs_data result:")
     print(result)
     
-    
+    '''
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
@@ -742,11 +833,11 @@ def main():
     print("[main] handle_ups_data result:")
     print(ups_result)
 
-    '''
+    
     mlc_result = handle_mlc_data()
     print("[main] handle_mlc_data result:")
     print(mlc_result)
-    '''
+    
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
     print(weather_result)

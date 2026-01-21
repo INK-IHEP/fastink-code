@@ -13,12 +13,17 @@ router = APIRouter()
 
 #srs数据接口
 @router.get("/elk/get_srs")
-async def get_mlc_info():
+async def get_srs_info(
+    daq_date: str = Query(..., description="daq_date"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
+):
     try:
+        data = handle_srs_data(daq_date) if daq_date else handle_srs_data()
         return {
             "status": "200",
             "msg": "success",
-            "data": handle_srs_data()
+            "data": data
         }
     except Exception as e:
         return {
@@ -45,6 +50,7 @@ async def get_mlc_info():
 #压缩机数据接口
 @router.get("/elk/get_compressor")
 async def get_compressor_info():
+    """Get compressor data from monitoring system"""
     try:
         return {
             "status": "200",
@@ -52,7 +58,7 @@ async def get_compressor_info():
             "data": handle_compressor_data()
         }
     except Exception as e:
-          return {
+        return {
             "status": "500",
             "msg": f"Exception: {e}",
             "data": []
