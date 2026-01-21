@@ -174,17 +174,19 @@ async def connect_vscode_job(job_id, uid, clusterid):
     try:
 
         login_info = await read_file(uid, info_file)
+        NGINX_NODE = get_config("computing", "nginx_node")
 
         host = parse_info(login_info, "HOST")
         port = parse_info(login_info, "PORT")
         passwd = parse_info(login_info, "PASSWD")
+        vscode_url = f"{NGINX_NODE}/vscode/{host}/{port}/login"
 
         logger.info(f"Get User: {uid} connect info, Host: {host}, Port: {port}, Passwd: {passwd}, login_info: {login_info}")
 
         if not host or not port or not passwd:
             raise HTTPException(status_code=500, detail="No host and port record in vscode loginfile.")
 
-        return host, port, passwd
+        return host, port, passwd, vscode_url
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
