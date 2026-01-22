@@ -151,7 +151,7 @@ def mjd_to_time(mjd):
     except Exception as e:
         raise ValueError(f"MJD conversion failed: {e}")
 
-def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scroll=False, daq_date=None):
+def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scroll=False):
     """
     通用查询函数：查询指定data_type前24小时的数据
 
@@ -170,17 +170,10 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
         if not es:
             return []
 
-        if daq_date:
-            # 如果指定了日期，查询该日期的24小时数据
-            from datetime import datetime
-            date_obj = datetime.strptime(daq_date, "%Y-%m-%d")
-            start_time = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_time = date_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
-        else:
-            # 默认查询前24小时数据
-            now = datetime.now(timezone.utc)
-            start_time = now - timedelta(hours=24)
-            end_time = now
+        # 默认查询前24小时数据
+        now = datetime.now(timezone.utc)
+        start_time = now - timedelta(hours=24)
+        end_time = now
 
         query = {
             "query": {
@@ -358,10 +351,10 @@ def query_data_by_date(data_type, index="aligcs_monitor", daq_date=None, size=10
 
 def handle_srs_data(daq_date=None):
     try:
-        data=query_last_24h_data(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
-        #data=query_data_by_date(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False )
-
-        #print(f"srs data: {data}")
+        if daq_date is None:
+            data = query_last_24h_data(data_type='srs', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_date(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False)
 
         return data
     except Exception as e:
@@ -764,10 +757,6 @@ def handle_ups_data():
         print(f"[handle_compressor_data] Exception: {e}")
         return []
 
-
-
-
-
 def handle_compressor_data():
     try:
         data = query_last_24h_compressor_data()
@@ -820,6 +809,7 @@ def handle_tilt_data():
 def main():
     """Main function to test all data query functions."""
     
+    #result = handle_srs_data(daq_date="2026-01-19")
     result = handle_srs_data()
     print("[main] handle_srs_data result:")
     print(result)
