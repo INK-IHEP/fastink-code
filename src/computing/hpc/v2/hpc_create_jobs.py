@@ -16,6 +16,9 @@ import logging
 
 logger = logging.getLogger("ink.create_jobs")
 
+import uuid
+from src.computing.tools.timing_context import submit_id_var
+
 # exec "sbatch --test-only" and get estimated start time
 def get_test_only_start_time(command_output):
     match = re.search(r"start at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", command_output)
@@ -238,6 +241,10 @@ async def create_job_with_path(
     cluster_id,
     job_type="common"
 ):
+    # for performace traing
+    submit_id = uuid.uuid4().hex[:12]
+    submit_id_var.set(submit_id)
+    logger.info("start job submission submit_id=%s", submit_id)
 
     sbatch_command = []
     

@@ -2,6 +2,8 @@ import time
 import logging
 from contextlib import contextmanager
 from typing import Optional
+from src.computing.tools.timing_context import submit_id_var
+
 
 
 @contextmanager
@@ -28,13 +30,15 @@ def log_step(
     if logger is None:
         logger = logging.getLogger("ink.hpc")
 
+    submit_id = submit_id_var.get()
     start = time.monotonic()
     try:
         yield
     finally:
         cost = time.monotonic() - start
         logger.info(
-            "phase=%s step=%s cost=%.3fs %s",
+            "submit_id=%s phase=%s step=%s cost=%.3fs %s",
+            submit_id,
             phase,
             step,
             cost,
