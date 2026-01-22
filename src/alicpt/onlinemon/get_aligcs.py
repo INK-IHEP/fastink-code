@@ -809,8 +809,8 @@ def handle_tilt_data():
 def main():
     """Main function to test all data query functions."""
     
-    #result = handle_srs_data(daq_date="2026-01-19")
-    result = handle_srs_data()
+    result = handle_srs_data(daq_date="2026-01-19")
+    # result = handle_srs_data()
     print("[main] handle_srs_data result:")
     print(result)
     
