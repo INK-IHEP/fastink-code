@@ -491,6 +491,7 @@ def handle_tilt_data():
         print(f"[handle_tilt_data] Exception: {e}")
         return []
 
+'''
 def handle_compressor_data():
     try:
         data = query_last_24h_data('compressor', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -499,7 +500,7 @@ def handle_compressor_data():
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
         return []
-
+'''
 
 def get_inverter_status_description(status_code):
     """
@@ -757,13 +758,199 @@ def handle_ups_data():
         print(f"[handle_compressor_data] Exception: {e}")
         return []
 
+def parse_compressor_map(alarm_value, operating, pressure_scale, temp_scale, running, warning):
+    """
+    解析压缩机的参数值，返回对应的描述信息
+
+    Args:
+        alarm_value: 报警值（整数）
+        operating: 运行状态（整数）
+        pressure_scale: 压力单位（整数）
+        temp_scale: 温度单位（整数）
+        running: 运行状态（整数）
+        warning: 警告状态（整数）
+
+    Returns:
+        包含所有参数描述的字典
+
+    Raises:
+        ValueError: 当参数值不存在时抛出异常
+    """
+    result = {}
+    print(f"Processing compressor data: alarm={alarm_value}, operating={operating}, pressure_scale={pressure_scale}, temp_scale={temp_scale}, running={running}, warning={warning}")
+    # 处理 alarm_value
+    if alarm_value is not None:
+        alarm_map = {
+            0: "No Errors",
+            1: "Coolant IN High",
+            2: "Coolant IN Low",
+            4: "Coolant OUT High",
+            8: "Coolant OUT Low",
+            16: "Oil High",
+            32: "Oil Low",
+            64: "Helium High",
+            128: "Helium Low",
+            256: "Low Pressure High",
+            512: "Low Pressure Low",
+            1024: "High Pressure High",
+            2048: "High Pressure Low",
+            4096: "Delta Pressure High",
+            8192: "Delta Pressure Low",
+            16384: "Motor Current Low",
+            32768: "Three Phase Error",
+            65536: "Power Supply Error",
+            131072: "Static Pressure High",
+            262144: "Static Pressure Low"
+        }
+        if alarm_value not in alarm_map:
+            raise ValueError(f"Unknown alarm_value: {alarm_value}")
+        result['alarm'] = alarm_map[alarm_value]
+    else:
+        result['alarm'] = None
+
+    # 处理 operating - 运行状态
+    if operating is not None:
+        operating_map = {
+            0: "Idling - ready to start",
+            2: "Starting",
+            3: "Running",
+            5: "Stopping",
+            6: "Error Lockout",
+            7: "Error",
+            8: "Helium Cool Down",
+            9: "Power related Error",
+            15: "Recovered from Error"
+        }
+        if operating not in operating_map:
+            raise ValueError(f"Unknown operating value: {operating}")
+        result['operating'] = operating_map[operating]
+    else:
+        result['operating'] = None
+
+    # 处理 pressure_scale - 压力单位
+    if pressure_scale is not None:
+        pressure_scale_map = {
+            0: "PSI",
+            1: "Bar",
+            2: "KPA"
+        }
+        if pressure_scale not in pressure_scale_map:
+            raise ValueError(f"Unknown pressure_scale value: {pressure_scale}")
+        result['pressure_scale'] = pressure_scale_map[pressure_scale]
+    else:
+        result['pressure_scale'] = None
+
+    # 处理 temp_scale - 温度单位
+    if temp_scale is not None:
+        temp_scale_map = {
+            0: "Fahrenheit",
+            1: "Celsius",
+            2: "Kelvin"
+        }
+        if temp_scale not in temp_scale_map:
+            raise ValueError(f"Unknown temp_scale value: {temp_scale}")
+        result['temp_scale'] = temp_scale_map[temp_scale]
+    else:
+        result['temp_scale'] = None
+
+    # 处理 running - 运行状态
+    if running is not None:
+        running_map = {
+            0: "Off",
+            1: "On"
+        }
+        if running not in running_map:
+            raise ValueError(f"Unknown running value: {running}")
+        result['running'] = running_map[running]
+    else:
+        result['running'] = None
+
+    # 处理 warning - 警告状态
+    if warning is not None:
+        warning_map = {
+            0: "No warnings",
+            1: "Coolant IN running High",
+            2: "Coolant IN running Low",
+            4: "Coolant OUT running High",
+            8: "Coolant OUT running Low",
+            16: "Oil running High",
+            32: "Oil running Low",
+            64: "Helium running High",
+            128: "Helium running Low",
+            256: "Low Pressure running High",
+            512: "Low Pressure running Low",
+            1024: "High Pressure running High",
+            2048: "High Pressure running Low",
+            4096: "Delta Pressure running High",
+            8192: "Delta Pressure running Low",
+            131072: "Static Pressure running High",
+            262144: "Static Pressure running Low",
+            524288: "Cold head motor Stall"
+        }
+        if warning not in warning_map:
+            raise ValueError(f"Unknown warning value: {warning}")
+        result['warning'] = warning_map[warning]
+    else:
+        result['warning'] = None
+
+    return result
+
 def handle_compressor_data():
     try:
-        data = query_last_24h_compressor_data()
-        return data
+        all_compressor_data = []  
+        data = query_last_24h_data(f'compressor', index="aligcs_monitor", size=10000, use_scroll=False)
+        for each in data:
+            item = each['_source']
+            print(f"item is {item}")
+
+            if item['alarm'] is not None and item['operating'] is not None and item['pressure_scale'] is not None and item['temp_scale'] is not None and item['running'] is not None and item['warning'] is not None:
+                map_result = parse_compressor_map(int(item['alarm']), item['operating'], item['pressure_scale'], item['temp_scale'], item['running'], int(item['warning']))
+                for each_map in map_result:
+                    item[each_map] = map_result[each_map]
+                    #item['fields'][each_map] = [map_result[each_map]]
+
+            if all(key in item  for key in ['coolant_temp_0','coolant_temp_1']):
+                item['coolant_in_temp'] = float(item['coolant_temp_0'])
+                item['coolant_out_temp'] = float(item['coolant_temp_1'])
+                del item['coolant_temp_0']
+                del item['coolant_temp_1']
+                #item['fields']['coolant_in_temp'] = [item['coolant_in_temp']]
+                #item['fields']['coolant_out_temp'] = [item['coolant_out_temp']]
+
+            if all(key in item for key in ['high_pressure_0','high_pressure_1']):
+                item['high_pressure'] = float(item['high_pressure_0'])
+                item['high_average_pressure'] = float(item['high_pressure_1'])
+                del item['high_pressure_0']
+                del item['high_pressure_1']
+                #item['fields']['high_pressure'] = [item['high_pressure']]
+                #item['fields']['high_average_pressure'] = [item['high_average_pressure']]
+
+            if all(key in item for key in ['low_pressure_0','low_pressure_1']):
+                item['low_pressure'] = float(item['low_pressure_0'])
+                item['low_average_pressure'] = float(item['low_pressure_1'])
+                del item['low_pressure_0']
+                del item['low_pressure_1']
+                #item['fields']['low_pressure'] = [item['low_pressure']]
+                #item['fields']['low_average_pressure'] = [item['low_average_pressure']]
+            
+            if all(key in item for key in ['hours','pressure_scale','mjd', 'helium_temp','oil_temp', 'motor_current','sn','delta_pressure','soft']):
+                item['fields']['hours'] = [item['hours']]
+                item['fields']['pressure_scale'] = [item['pressure_scale']]
+                item['fields']['mjd'] = [item['mjd']]
+                item['fields']['helium_temp'] = [item['helium_temp']]
+                item['fields']['oil_temp'] = [item['oil_temp']]
+                item['fields']['motor_current'] = [item['motor_current']]
+                item['fields']['sn'] = [item['sn']]
+                item['fields']['delta_pressure'] = [item['delta_pressure']]
+                item['fields']['soft'] = [item['soft']]
+            
+            each_compressor_data = {'_source': item}
+            all_compressor_data.append(each_compressor_data)
+        return all_compressor_data 
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
         return []
+
 
 
 #查询weather最新数据
@@ -808,7 +995,7 @@ def handle_tilt_data():
 
 def main():
     """Main function to test all data query functions."""
-    
+    '''
     result = handle_srs_data(daq_date="2026-01-19")
     # result = handle_srs_data()
     print("[main] handle_srs_data result:")
@@ -818,7 +1005,7 @@ def main():
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
-    
+    '''
     ups_result = handle_ups_data()
     print("[main] handle_ups_data result:")
     print(ups_result)
