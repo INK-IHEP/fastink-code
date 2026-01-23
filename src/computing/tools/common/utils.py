@@ -232,13 +232,15 @@ def generate_userotp(uid, hostname):
         command = f"sudo -iu {username} /cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
         stdin, stdout, stderr = client.exec_command(command)
 
-        output = stdout.read().decode().strip()
-        error = stderr.read().decode().strip()
         exit_status = stdout.channel.recv_exit_status()
 
         if exit_status != 0:
+            error = stderr.read().decode().strip()
             raise RuntimeError(f"Generate user OTP failed, exit_status={exit_status}, stderr: {error}")
         
+        raw = stdout.read().decode(errors="ignore")
+        output = next((ln.strip() for ln in reversed(raw.splitlines()) if ln.strip()), "")
+
     except Exception as e:
         raise RuntimeError(f"Generate user OTP failed. {e}")
     
