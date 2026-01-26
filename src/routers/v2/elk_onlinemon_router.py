@@ -21,7 +21,7 @@ async def get_srs_info(
     token: str = Depends(get_token)
 ):
     try:
-        data = handle_srs_data(daq_start_time, daq_end_time) if (daq_start_time is not none) and (daq_end_time is not none) else handle_srs_data()
+                data = handle_srs_data(daq_start_time, daq_end_time) if (daq_start_time is not None) and (daq_end_time is not None) else handle_srs_data()
         return {
             "status": "200",
             "msg": "success",
