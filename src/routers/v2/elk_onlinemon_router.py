@@ -15,12 +15,13 @@ router = APIRouter()
 #srs数据接口
 @router.get("/elk/get_srs")
 async def get_srs_info(
-    daq_date: str = Query(None, description="daq_date"),
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
     username: str = Depends(get_username),
     token: str = Depends(get_token)
 ):
     try:
-        data = handle_srs_data(daq_date) if daq_date else handle_srs_data()
+        data = handle_srs_data(daq_start_time, daq_end_time) if (daq_start_time is not none) and (daq_end_time is not none) else handle_srs_data()
         return {
             "status": "200",
             "msg": "success",

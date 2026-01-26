@@ -269,14 +269,15 @@ def query_last_time_data(data_type, index="aligcs_monitor",size=10000, use_scrol
         return None
 
 
-def query_data_by_date(data_type, index="aligcs_monitor", daq_date=None, size=10000, use_scroll=False):
+def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, daq_end_time=None, size=10000, use_scroll=False):
     """
-    按指定日期查询数据，如果没有指定日期则查询24小时前至当前时间的数据
+    按指定时间范围查询数据，如果没有指定时间范围则查询24小时前至当前时间的数据
 
     Args:
         data_type: 数据类型标识 (如 "srs", "mlc", "compressor", "ups_1" 等)
         index: ES索引名，默认为 "aligcs_monitor"
-        daq_date: 可选日期参数，格式为 yyyy-mm-dd。如果提供，则查询该日期的24小时数据
+        daq_start_time: 可选起始时间参数，格式为 yyyy-mm-dd HH:MM:SS
+        daq_end_time: 可选结束时间参数，格式为 yyyy-mm-dd HH:MM:SS
         size: 返回结果数量，默认10000
         use_scroll: 是否使用scroll查询，默认False
 
@@ -288,11 +289,10 @@ def query_data_by_date(data_type, index="aligcs_monitor", daq_date=None, size=10
         if not es:
             return []
 
-        if daq_date:
-            # 如果指定了日期，查询该日期的24小时数据
-            date_obj = datetime.strptime(daq_date, "%Y-%m-%d")
-            start_time = date_obj.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_time = date_obj.replace(hour=23, minute=59, second=59, microsecond=999999)
+        if daq_start_time and daq_end_time:
+            # 如果指定了时间范围，查询该时间范围内的数据
+            start_time = datetime.strptime(daq_start_time, "%Y-%m-%d %H:%M:%S")
+            end_time = datetime.strptime(daq_end_time, "%Y-%m-%d %H:%M:%S")
         else:
             # 默认查询前24小时数据
             now = datetime.now(timezone.utc)
@@ -344,17 +344,17 @@ def query_data_by_date(data_type, index="aligcs_monitor", daq_date=None, size=10
             return resp['hits']['hits']
 
     except Exception as e:
-        print(f"[query_data_by_date] Exception: {e}, data_type: {data_type}")
+        print(f"[query_data_by_time] Exception: {e}, data_type: {data_type}")
         return []
 
 
 
-def handle_srs_data(daq_date=None):
+def handle_srs_data(daq_start_time=None, daq_end_time=None):
     try:
-        if daq_date is None:
+        if daq_start_time is None or daq_end_time is None:
             data = query_last_24h_data(data_type='srs', index="aligcs_monitor", size=10000, use_scroll=False)
         else:
-            data = query_data_by_date(data_type='srs', index="aligcs_monitor", daq_date=daq_date, size=10000, use_scroll=False)
+            data = query_data_by_time(data_type='srs', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
 
         return data
     except Exception as e:
@@ -404,7 +404,7 @@ def handle_mlc_data():
     all_mlc_data = []
     try:
         data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
-#        data = query_last_time_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+
        
         for each in data:
             item = each['_source']
@@ -490,17 +490,6 @@ def handle_tilt_data():
     except Exception as e:
         print(f"[handle_tilt_data] Exception: {e}")
         return []
-
-'''
-def handle_compressor_data():
-    try:
-        data = query_last_24h_data('compressor', index="aligcs_monitor", size=10000, use_scroll=False)
-        print(data)
-        return data
-    except Exception as e:
-        print(f"[handle_compressor_data] Exception: {e}")
-        return []
-'''
 
 def get_inverter_status_description(status_code):
     """
@@ -649,7 +638,6 @@ def parse_rectifier_status(status_string):
         
     except (ValueError, TypeError):
         return f"无效状态码: {status_string}"
-
 def parse_ups_status(status_string):
     """
     解析ups_status字符串，返回对应的状态描述
@@ -777,7 +765,7 @@ def parse_compressor_map(alarm_value, operating, pressure_scale, temp_scale, run
         ValueError: 当参数值不存在时抛出异常
     """
     result = {}
-    print(f"Processing compressor data: alarm={alarm_value}, operating={operating}, pressure_scale={pressure_scale}, temp_scale={temp_scale}, running={running}, warning={warning}")
+    #print(f"Processing compressor data: alarm={alarm_value}, operating={operating}, pressure_scale={pressure_scale}, temp_scale={temp_scale}, running={running}, warning={warning}")
     # 处理 alarm_value
     if alarm_value is not None:
         alarm_map = {
@@ -946,15 +934,13 @@ def handle_compressor_data():
             
             each_compressor_data = {'_source': item}
             all_compressor_data.append(each_compressor_data)
+            print(f"all_compressor_data: {all_compressor_data}")
         return all_compressor_data 
     except Exception as e:
         print(f"[handle_compressor_data] Exception: {e}")
         return []
 
-
-
 #查询weather最新数据
-
 def handle_weather_data():
     try:
         data = query_latest_weather_data()
@@ -995,11 +981,10 @@ def handle_tilt_data():
 
 def main():
     """Main function to test all data query functions."""
-    '''
-    result = handle_srs_data(daq_date="2026-01-19")
-    # result = handle_srs_data()
-    print("[main] handle_srs_data result:")
-    print(result)
+    
+    result = handle_srs_data(daq_start_time="2026-01-19 10:00:00", daq_end_time="2026-01-20 10:00:00")
+    # result = handle_srs_time()
+    print(f"srs_result is {result}")
     
     '''
     compressor_result = handle_compressor_data()
@@ -1010,7 +995,7 @@ def main():
     print("[main] handle_ups_data result:")
     print(ups_result)
 
-    
+    '''
     mlc_result = handle_mlc_data()
     print("[main] handle_mlc_data result:")
     print(mlc_result)
