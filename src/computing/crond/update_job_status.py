@@ -58,6 +58,7 @@ async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)
     try:
         with lock:
+            r = redis_connect()
             iptables_jobtype = get_config("computing", "iptables_jobtype")
             need_change_status_jobs = needto_change_status_jobs()
             query_command = query_cluster_jobs()
@@ -66,7 +67,6 @@ async def update_completed_jobs():
             to_delete = []
             
             if lines != ['']:
-                r = redis_connect()
                 pipe = r.pipeline(transaction=False)
                 for line in lines:
                     job_param_list = shlex.split(line, posix=True)

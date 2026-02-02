@@ -245,33 +245,33 @@ class HTC_Scheduler(SchedulerBase):
 
     
     async def cancel_job(self, job_id):
-        
-        cancel_command = f"sudo -u {self.USERNAME} condor_rm -name {self.SCHEDD_HOST} -pool {self.CM_HOST} {job_id}"
 
-        _ = await sub_command(cancel_command, timeoutsec=10, errinfo="condor_rm job failed", tminfo="condor_rm job timeout")
+        try:
         
-        job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
-        
-        iptables_jobtype = get_config("computing", "iptables_jobtype")
+            cancel_command = f"sudo -u {self.USERNAME} condor_rm -name {self.SCHEDD_HOST} -pool {self.CM_HOST} {job_id}"
+            _ = await sub_command(cancel_command, timeoutsec=10, errinfo="condor_rm job failed", tminfo="condor_rm job timeout")
+            job_type, _, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+            iptables_jobtype = get_config("computing", "iptables_jobtype")
 
-        if job_type in iptables_jobtype:
-            if job_iptables_status != 0 and job_iptables_clean == 0:
-                delete_iptables(self.UID, job_id, job_iptables_status, self.CLUSTER_TYPE)
-        update_job_status(self.UID, job_id, 'COMPLETED', self.CLUSTER_TYPE)
+            if job_type in iptables_jobtype:
+                if job_iptables_status != 0 and job_iptables_clean == 0:
+                    delete_iptables(self.UID, job_id, job_iptables_status, self.CLUSTER_TYPE)
+            update_job_status(self.UID, job_id, 'COMPLETED', self.CLUSTER_TYPE)
 
-        job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        update_end_time(self.UID, job_id, job_end_time, "htcondor")
+            job_end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            update_end_time(self.UID, job_id, job_end_time, "htcondor")
         
-        r = redis_connect()
-        pipe = r.pipeline(transaction=False)
-        
-        JOB_KEY = f"cluster_jobs:{self.USERNAME}:{job_id}"
-        IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
-        
-        logger.debug(f"HTC-LOG: the JOB_KEY: {JOB_KEY}, the IDX_KEY: {IDX_KEY}")
-        
-        pipe.delete(JOB_KEY)
-        pipe.srem(IDX_KEY, str(job_id))
-        pipe.setex(f"cluster_jobs:deleted:{self.USERNAME}:{job_id}", 60, "1")
-        
-        await pipe.execute()
+        finally:
+            r = redis_connect()
+            pipe = r.pipeline(transaction=False)
+            
+            JOB_KEY = f"cluster_jobs:{self.USERNAME}:{job_id}"
+            IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
+            
+            logger.debug(f"HTC-LOG: the JOB_KEY: {JOB_KEY}, the IDX_KEY: {IDX_KEY}")
+            
+            pipe.delete(JOB_KEY)
+            pipe.srem(IDX_KEY, str(job_id))
+            pipe.setex(f"cluster_jobs:deleted:{self.USERNAME}:{job_id}", 60, "1")
+            
+            await pipe.execute()
