@@ -64,6 +64,7 @@ async def update_completed_jobs():
             query_command = query_cluster_jobs()
             stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
             lines = stdout.decode().strip().split('\n')
+            logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
             to_delete = []
             
             if lines != ['']:
