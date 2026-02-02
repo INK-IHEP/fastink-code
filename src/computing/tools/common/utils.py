@@ -490,3 +490,4 @@ async def sub_command(command, timeoutsec, errinfo, tminfo):
         raise Exception(f"{errinfo} {error_msg}")
 
     return stdout
+

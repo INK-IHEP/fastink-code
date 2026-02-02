@@ -10,8 +10,47 @@ from src.inkdb.inkredis import redis_connect
 from src.computing.tools.db.db_tools import needto_change_status_jobs
 from src.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids, insert_job_info
 from src.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command
+from src.computing.adapter.strategy import get_scheduler
+from functools import wraps
 
 router = APIRouter()
+
+def is_cluster_enabled(cluster: str) -> bool:
+    """
+    Check whether submit worker for the given cluster is enabled via YAML config.
+    """
+    enabled_clusters = get_config("crond", "submit_workers", default=[])
+
+    if not isinstance(enabled_clusters, (list, tuple)):
+        logger.error("crond.submit_workers must be a list")
+        return False
+
+    return cluster in enabled_clusters
+
+def cluster_enabled(cluster: str):
+    """
+    Decorator to enable/disable a crond worker based on YAML config.
+    If the cluster is disabled, the wrapped function becomes a no-op.
+    """
+
+    def decorator(func):
+        enabled = is_cluster_enabled(cluster)
+
+        if not enabled:
+            logger.info(
+                f"Crond worker for cluster '{cluster}' is disabled by config"
+            )
+
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            if not enabled:
+                # Do nothing if this cluster is disabled
+                return
+            return await func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 def query_cluster_jobs():
 
@@ -53,8 +92,9 @@ def get_condor_history_command(job_id: str) -> str:
 
 
 LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
-#@router.on_event("startup")
-#@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+@cluster_enabled("htcondor")
+@router.on_event("startup")
+@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     cluster_jobs: dict[str, list[dict]] = {}
@@ -179,8 +219,9 @@ def gen_history_list_command() -> str:
 
 
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
-#@router.on_event("startup")
-#@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+@cluster_enabled("htcondor")
+@router.on_event("startup")
+@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
 async def resert_start_end_time():
     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
     try:
@@ -252,6 +293,7 @@ async def resert_start_end_time():
 
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
+@cluster_enabled("htcondor")
 @router.on_event("startup")
 @repeat_every(seconds=5, wait_first=False, raise_exceptions=True, logger=logger)
 async def submit_job_from_redis():
@@ -312,5 +354,62 @@ async def submit_job_from_redis():
         logger.error(f"Some Wrong in Submit job, the details: {e}")
         raise e
     
+#@cluster_enabled("htcondor")
+#@router.on_event("startup")
+#@repeat_every(seconds=5, raise_exceptions=False)
+#async def submit_htcondor_jobs():
+#    """
+#    Periodic worker for submitting HTCondor async jobs.
+#    """
+#    await submit_from_queue("htcondor")
 
-            
+@cluster_enabled("slurm")
+@router.on_event("startup")
+@repeat_every(seconds=5, raise_exceptions=False)
+async def submit_slurm_jobs():
+    """
+    Periodic worker for submitting Slurm async jobs.
+    """
+    await submit_from_queue("slurm")
+
+async def submit_from_queue(cluster: str):
+    """
+    Submit jobs from redis queue for the given cluster.
+    This function is cluster-agnostic and shared by all workers.
+    """
+    
+    lock_path = Path("src") / "computing" / "crond" / "submit_{cluster}.lock"
+    lock = FileLock(str(lock_path), timeout=0.1)
+
+    try:
+        with lock:
+            r = redis_connect()
+            queue_key = f"submitting_jobs:{cluster}"
+
+            while True:
+                raw_job = await r.rpop(queue_key)
+                if not raw_job:
+                    break
+
+                try:
+                    job = json.loads(raw_job)
+                    logger.info(f"[{cluster}] Pop async job: {job}")
+
+                    scheduler = get_scheduler(cluster, job["username"])
+                    job_id = await scheduler.submit_job_from_queue(job)
+
+                    logger.info(
+                        f"[{cluster}] Job submitted successfully, job_id={job_id}"
+                    )
+
+                except Exception as e:
+                    logger.error(
+                        f"[{cluster}] Failed to submit job: {raw_job}",
+                        exc_info=True
+                    )
+                    # Optional: push to dead-letter queue
+                    await r.lpush(f"failed_jobs:{cluster}", raw_job)
+
+    except TimeoutError:
+        # Another worker instance is running
+        logger.debug(f"[{cluster}] Worker lock is held by another process")

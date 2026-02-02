@@ -14,7 +14,7 @@ from src.inkdb.inkredis import *
 from src.routers.status import InkStatus
 from src.common.logger import logger
 from src.computing.adapter.strategy import get_scheduler
-from src.computing.cluster.cluster import HTC_JOB, SLURM_JOB
+from src.computing.cluster.cluster import HTC_JOB, SLURM_JOB, SubmitMode
 
 router = APIRouter()
 
@@ -312,33 +312,36 @@ async def create_normal_job(
             "data": {}
         }
 
-@router.post("create_common_job")
+@router.post("/create_common_job")
 async def create_common_job(
     username: str = Depends(get_username),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id")
 ):
-    if jobclass.job_type != "common":
-        return {
-            "status": InkStatus.WRONG_JOB_TYPE,
-            "msg": f"Valid job type is common, current job type is {jobclass.job_type}, please use /create_job to submit interactive jobs.",
-            "data": {}
-        }
-    
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
-        await adapter.submit_common_job(jobclass)
-        return {
-            "status" : InkStatus.SUCCESS,
-            "msg" : f"Create common job successfully.",
-            "data" : {}
-        }
+        result = await adapter.submit_job(jobclass)
+
+        if jobclass.submit_mode == SubmitMode.sync:
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": "Submit job synchronously succeeded.",
+                "data": result   # contains job_id
+            }
+        else:
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": "Submit job asynchronously accepted.",
+                "data": {}       # async has no job_id yet
+            }
+
     except Exception as e:
         logger.exception()
         return {
             "status": InkStatus.SERVER_INTERNAL_ERROR,
-            "msg": f"Create common job failed with error : {e}",
-            "data": {}
+            "msg": f"Create common job failed: {e}",
+            "data": {},
         }
+
 
 @router.get("/query_jobs")
 async def query_common_job(

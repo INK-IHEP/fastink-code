@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-
+from enum import Enum
+class SubmitMode(str, Enum):
+    ASYNC = "async"
+    SYNC = "sync"
 
 class Base_JOB(BaseModel):
     job_script: Optional[str] = Field(None, description="Job Script Content")
@@ -10,7 +13,8 @@ class Base_JOB(BaseModel):
     gpu_num: Optional[int] = Field(0, ge=0, description="GPU requirement")
     job_name: str = Field(f"", description="Job name")
     job_type: str = Field(f"", description="Job type")
-    cluster_id: Literal["slurm", "htcondor"] 
+    cluster_id: Literal["slurm", "htcondor"]
+    submit_mode: SubmitMode = SubmitMode.ASYNC
 
 
 class SLURM_JOB(Base_JOB):
