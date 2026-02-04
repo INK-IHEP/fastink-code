@@ -472,7 +472,32 @@ def handle_airheater_data():
             data = query_last_24h_data(data_type='airheater', index="aligcs_monitor", size=10000, use_scroll=False)
         else:
             data = query_data_by_time(data_type='airheater', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
-        return data  
+        all_airheater_data = []
+        for each in data:
+            item = each['_source']
+            # 提取公共字段
+            timestamp = item.get('@timestamp')
+            mjd = item.get('mjd')
+            
+            # 遍历6个airheater (0-5)
+            for i in range(6):
+                prefix = f'{i}'
+                airheater_item = {
+                    'control': item.get(f'{prefix}.control'),
+                    'fan': item.get(f'{prefix}.fan'),
+                    'fanSet': item.get(f'{prefix}.fanSet'),
+                    'heat': item.get(f'{prefix}.heat'),
+                    'heatSet': item.get(f'{prefix}.heatSet'),
+                    'temperature': item.get(f'{prefix}.temperature'),
+                    'valid': item.get(f'{prefix}.valid'),
+                    'airheater_id': str(i),
+                    'timestamp': timestamp,
+                    'mjd': mjd
+                }
+                each_airheater_data = {'_source': airheater_item}
+                all_airheater_data.append(each_airheater_data)
+        
+        return all_airheater_data  
     except Exception as e:
         print(f"[handle_airheater_data] Exception: {e}")
         return []
