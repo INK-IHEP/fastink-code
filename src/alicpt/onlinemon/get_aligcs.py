@@ -223,7 +223,6 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
         print(f"[query_last_24h_data] Exception: {e}, data_type: {data_type}")
         return []
 
-
 def query_last_time_data(data_type, index="aligcs_monitor",size=10000, use_scroll=False):
     """
     查询ES中指定data_type最后一个时间戳的数据
@@ -267,7 +266,6 @@ def query_last_time_data(data_type, index="aligcs_monitor",size=10000, use_scrol
     except Exception as e:
         print(f"[query_last_time_data] Exception: {e}, data_type: {data_type}")
         return None
-
 
 def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, daq_end_time=None, size=10000, use_scroll=False):
     """
@@ -347,8 +345,6 @@ def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, d
         print(f"[query_data_by_time] Exception: {e}, data_type: {data_type}")
         return []
 
-
-
 def handle_srs_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
@@ -360,7 +356,6 @@ def handle_srs_data(daq_start_time=None, daq_end_time=None):
     except Exception as e:
         print(f"handle_srs_data Exception: {e}")
         return []
-
 
 #处理mlc中返回的数据
 def parse_mlc_bits(mlc_value):
@@ -466,6 +461,7 @@ def handle_weather_data():
     except Exception as e:
         print(f"[handle_weather_data] Exception: {e}")
         return []
+
 def handle_airheater_data():
     try:
         if daq_start_time is None or daq_end_time is None:
@@ -501,6 +497,7 @@ def handle_airheater_data():
     except Exception as e:
         print(f"[handle_airheater_data] Exception: {e}")
         return []
+
 def handle_ats_data():
     try:
         if daq_start_time is None or daq_end_time is None:
@@ -925,7 +922,6 @@ def parse_compressor_map(alarm_value, operating, pressure_scale, temp_scale, run
         result['warning'] = None
 
     return result
-
 def handle_compressor_data():
     try:
         all_compressor_data = []  
