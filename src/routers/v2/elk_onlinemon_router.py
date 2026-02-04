@@ -36,6 +36,10 @@ async def get_srs_info(
 #mlc数据接口
 @router.get("/elk/get_mlc")
 async def get_mlc_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -53,6 +57,10 @@ async def get_mlc_info():
 @router.get("/elk/get_compressor")
 async def get_compressor_info():
     """Get compressor data from monitoring system"""
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -69,6 +77,10 @@ async def get_compressor_info():
 #ups数据接口
 @router.get("/elk/get_ups")
 async def get_ups_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -85,6 +97,10 @@ async def get_ups_info():
 #天气数据接口
 @router.get("/elk/get_weather")
 async def get_weather_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -100,6 +116,10 @@ async def get_weather_info():
 #获取airheater数据
 @router.get("/elk/get_airheater")
 async def get_airheater_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -115,6 +135,10 @@ async def get_airheater_info():
 #获取ats数据
 @router.get("/elk/get_ats")
 async def get_ats_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -132,6 +156,10 @@ async def get_ats_info():
 #获取imu数据
 @router.get("/elk/get_imu")
 async def get_imu_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
@@ -147,6 +175,10 @@ async def get_imu_info():
 #获取tilt数据
 @router.get("/elk/get_tilt")
 async def get_tilt_info():
+    daq_start_time: str = Query(None, description="daq_start_time"),
+    daq_end_time: str = Query(None, description="daq_end_time"),
+    username: str = Depends(get_username),
+    token: str = Depends(get_token)
     try:
         return {
             "status": "200",
