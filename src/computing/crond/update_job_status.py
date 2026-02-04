@@ -58,15 +58,16 @@ async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)
     try:
         with lock:
+            r = redis_connect()
             iptables_jobtype = get_config("computing", "iptables_jobtype")
             need_change_status_jobs = needto_change_status_jobs()
             query_command = query_cluster_jobs()
             stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
             lines = stdout.decode().strip().split('\n')
+            logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
             to_delete = []
             
             if lines != ['']:
-                r = redis_connect()
                 pipe = r.pipeline(transaction=False)
                 for line in lines:
                     job_param_list = shlex.split(line, posix=True)
@@ -162,10 +163,10 @@ async def update_completed_jobs():
                     delete_jobinfo_by_jobids(to_delete)
                         
     except Timeout:
-        return
+        pass
     
-    except Exception:
-        logger.exception("update_completed_jobs: failed")
+    except Exception as e:
+        logger.exception(f"HTC-LOG: update_completed_jobs: failed, the details: {e}")
 
 
 
@@ -256,7 +257,7 @@ async def resert_start_end_time():
                 delete_jobinfo_by_jobids(list(delete_jobs))
             
     except Timeout:
-        return
+        pass
     
     except Exception:
         logger.exception("resert_start_end_time: failed")
@@ -337,7 +338,7 @@ async def submit_job_from_redis():
                     continue
 
     except Timeout:
-        return
+        pass
         
     except Exception as e:
         logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
