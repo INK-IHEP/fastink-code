@@ -403,9 +403,11 @@ def parse_mlc_bits(mlc_value):
 def handle_mlc_data():
     all_mlc_data = []
     try:
-        data = query_last_24h_data('mlc', index="aligcs_monitor", size=10000, use_scroll=False)
-
-       
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='mlc', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='mlc', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+        
         for each in data:
             item = each['_source']
             
@@ -456,36 +458,52 @@ def handle_mlc_data():
 
 def handle_weather_data():
     try:
-        data = query_last_24h_data('weather', index="aligcs_monitor", size=10000, use_scroll=False)
-        return data
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='weather', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='weather', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+        return data   
     except Exception as e:
         print(f"[handle_weather_data] Exception: {e}")
         return []
 def handle_airheater_data():
     try:
-        data = query_last_24h_data('airheater', index="aligcs_monitor", size=10000, use_scroll=False)
-        return data
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='airheater', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='airheater', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+        return data  
     except Exception as e:
         print(f"[handle_airheater_data] Exception: {e}")
         return []
 def handle_ats_data():
     try:
-        data = query_last_24h_data('ats', index="aligcs_monitor", size=10000, use_scroll=False)
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='ats', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='ats', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
         return data
     except Exception as e:
         print(f"[handle_ats_data] Exception: {e}")
         return []
 def handle_imu_data():
     try:
-        data = query_last_24h_data('imu', index="aligcs_monitor", size=10000, use_scroll=False)     
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='imu', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='imu ', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
         return data
+
     except Exception as e:
         print(f"[handle_imu_data] Exception: {e}")
         return []
 def handle_tilt_data():
     try:
-        data = query_last_24h_data('tilt', index="aligcs_monitor", size=10000, use_scroll=False)
-        print(data)
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='tilt', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='tilt', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+        return data
         return data
     except Exception as e:
         print(f"[handle_tilt_data] Exception: {e}")
@@ -886,7 +904,12 @@ def parse_compressor_map(alarm_value, operating, pressure_scale, temp_scale, run
 def handle_compressor_data():
     try:
         all_compressor_data = []  
-        data = query_last_24h_data(f'compressor', index="aligcs_monitor", size=10000, use_scroll=False)
+
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='compressor', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='compressor', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+
         for each in data:
             item = each['_source']
             print(f"item is {item}")
