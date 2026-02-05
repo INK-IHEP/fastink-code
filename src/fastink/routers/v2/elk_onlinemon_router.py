@@ -152,7 +152,6 @@ async def get_ats_info():
             "data": []
         }
 
-
 #获取imu数据
 @router.get("/elk/get_imu")
 async def get_imu_info():

@@ -456,7 +456,7 @@ def handle_airheater_data(daq_start_time=None, daq_end_time=None):
             data = query_last_24h_data(data_type='airheater', index="aligcs_monitor", size=10000, use_scroll=False)
         else:
             data = query_data_by_time(data_type='airheater', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
-        print(f"data:{data}")
+        #print(f"data:{data}")
         all_airheater_data = []
         for each in data:
             item = each['_source']
@@ -481,7 +481,7 @@ def handle_airheater_data(daq_start_time=None, daq_end_time=None):
                 }
                 each_airheater_data = {'_source': airheater_item}
                 all_airheater_data.append(each_airheater_data)
-        
+                #print(f"each_airheater_data: {each_airheater_data}")
         return all_airheater_data  
     except Exception as e:
         print(f"[handle_airheater_data] Exception: {e}")
@@ -1031,7 +1031,7 @@ def main():
     '''
     airheater_result = handle_airheater_data()
     print("[main] handle_airheater_data result:")
-    #print(airheater_result)
+    print(airheater_result)
     '''
     ats_result = handle_ats_data()
     print("[main] handle_ats_data result:")
