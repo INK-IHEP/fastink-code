@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-from src.auth.permission import (
+from fastink.auth.permission import (
     has_permission,
     check_user_permission,
     query_user_permissions,
 )
-from src.auth.common import (
+from fastink.auth.common import (
     add_permission,
     add_user,
     add_user_permission,

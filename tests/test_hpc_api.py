@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
-from src.auth.krb5 import get_krb5
-from src.common.config import get_config
-from src.main import app
-from src.routers.status import InkStatus
+from fastink.auth.krb5 import get_krb5
+from fastink.common.config import get_config
+from fastink.main import app
+from fastink.routers.status import InkStatus
 
 
 client = TestClient(app)

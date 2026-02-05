@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from sqlalchemy.exc import IntegrityError
-from src.auth.common import (
+from fastink.auth.common import (
     add_user,
     get_user,
     update_user,
@@ -8,7 +8,7 @@ from src.auth.common import (
     add_user_permission,
     get_permission,
 )
-from src.auth.krb5 import get_krb5, create_krb5
+from fastink.auth.krb5 import get_krb5, create_krb5
 
 
 def prepare():

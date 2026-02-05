@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from sqlalchemy import create_engine
 
-from src.common.config import get_config
-from src.common.logger import logger
-from src.database.sqla.models import BASE
-from src.auth import permission, common
+from fastink.common.config import get_config
+from fastink.common.logger import logger
+from fastink.database.sqla.models import BASE
+from fastink.auth import permission, common
 
 
 def init_db():

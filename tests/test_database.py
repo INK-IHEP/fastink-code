@@ -3,7 +3,7 @@ import time
 import pytest
 from datetime import datetime, timedelta
 
-from src.auth.common import (
+from fastink.auth.common import (
     add_user,
     get_user,
     update_user,

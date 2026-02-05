@@ -2,15 +2,16 @@ import glob
 from setuptools import setup, find_packages
 
 setup(
-    name="ink",
+    name="fastink",
     version="1.0.0",
     author="Computing Center, IHEP",
     author_email="shijy@ihep.ac.cn",
-    description="INK computing platform",
+    description="FastINK computing platform",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://code.ihep.ac.cn/INK/ink",
-    packages=find_packages(),
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     scripts=glob.glob("bin/ink*"),
     classifiers=[
         "Programming Language :: Python :: 3",

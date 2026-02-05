@@ -10,12 +10,12 @@ from urllib.parse import urlparse
 
 from fastapi.testclient import TestClient
 
-from src.auth.krb5 import get_krb5
-from src.auth.token import query_token
-from src.common.config import get_config
-from src.main import app
-from src.routers.status import InkStatus
-from src.service.common import push_root_script, remote_is_exist, remote_ssh_connect
+from fastink.auth.krb5 import get_krb5
+from fastink.auth.token import query_token
+from fastink.common.config import get_config
+from fastink.main import app
+from fastink.routers.status import InkStatus
+from fastink.service.common import push_root_script, remote_is_exist, remote_ssh_connect
 
 # Initialize the test client
 client = TestClient(app)
