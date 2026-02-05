@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Query, Request, Body, Depends
 from fastink.routers.headers import get_username, get_token
-from  src.alicpt.onlinemon.get_aligcs  import handle_srs_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_mlc_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_compressor_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_ups_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_weather_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_airheater_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_ats_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_imu_data
-from  src.alicpt.onlinemon.get_aligcs  import handle_tilt_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_srs_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_mlc_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_compressor_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_ups_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_weather_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_airheater_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_ats_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_imu_data
+from fastink.alicpt.onlinemon.get_aligcs import handle_tilt_data
 
 router = APIRouter()
 
