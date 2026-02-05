@@ -490,10 +490,38 @@ def handle_airheater_data(daq_start_time=None, daq_end_time=None):
 def handle_ats_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
-            data = query_last_24h_data(data_type='ats', index="aligcs_monitor", size=10000, use_scroll=False)
+            data = query_last_24h_data(data_type='airheater_ats', index="aligcs_monitor", size=10000, use_scroll=False)
         else:
-            data = query_data_by_time(data_type='ats', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
-        return data
+            data = query_data_by_time(data_type='airheater_ats', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+        all_ats_data = []
+        for each in data:
+            item = each['_source']
+            # 提取公共字段
+            timestamp = item.get('@timestamp')
+            mjd = item.get('mjd')
+
+            # 遍历所有ats项 (s0, s1, s2等)
+            for key in item.keys():
+                if key.startswith('s') and '.' in key:
+                    # 提取ats_id (如's0')
+                    ats_id = key.split('.')[0]
+
+                    # 避免重复处理同一个ats_id
+                    if not any(d.get('_source', {}).get('ats_id') == ats_id for d in all_ats_data):
+                        ats_item = {
+                            'ab': item.get(f'{ats_id}.ab'),
+                            'bc': item.get(f'{ats_id}.bc'),
+                            'ca': item.get(f'{ats_id}.ca'),
+                            'status': item.get(f'{ats_id}.status'),
+                            'valid': item.get(f'{ats_id}.valid'),
+                            'ats_id': ats_id,
+                            'timestamp': timestamp,
+                            'mjd': mjd
+                        }
+                        each_ats_data = {'_source': ats_item}
+                        all_ats_data.append(each_ats_data)
+
+        return all_ats_data
     except Exception as e:
         print(f"[handle_ats_data] Exception: {e}")
         return []
@@ -982,18 +1010,6 @@ def handle_weather_data(daq_start_time=None, daq_end_time=None):
         print(f"[handle_weather_data] Exception: {e}")
         return []
 
-
-
-#查询ats前24小时的数据
-
-def handle_ats_data(daq_start_time=None, daq_end_time=None):
-    try:
-        data = query_last_24h_ats_data()
-        return data
-    except Exception as e:
-        print(f"[handle_ats_data] Exception: {e}")
-        return []
-
 def handle_tilt_data(daq_start_time=None, daq_end_time=None):
     try:
         data = query_last_24h_tilt_data()
@@ -1028,15 +1044,15 @@ def main():
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
     print(weather_result)
-    '''
+    
     airheater_result = handle_airheater_data()
     print("[main] handle_airheater_data result:")
     print(airheater_result)
     '''
     ats_result = handle_ats_data()
     print("[main] handle_ats_data result:")
-    #print(ats_result)
-
+    print(ats_result)
+    '''
     imu_result = handle_imu_data()
     print("[main] handle_imu_data result:")
     #print(imu_result)
