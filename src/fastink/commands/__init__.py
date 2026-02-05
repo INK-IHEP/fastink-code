@@ -1,0 +1,1 @@
+from fastink.commands.user import User

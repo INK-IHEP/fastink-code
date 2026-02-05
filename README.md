@@ -11,7 +11,7 @@ pip install -r requirements.txt
 
 To start service
 ``` bash
-python -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8001 --log-level info --log-config src/misc/uvicorn_log_config.yaml
+python -m uvicorn fastink.main:app --reload --host 0.0.0.0 --port 8001 --log-level info --log-config src/fastink/misc/uvicorn_log_config.yaml
 
 
 To deploy your own development environment by docker:

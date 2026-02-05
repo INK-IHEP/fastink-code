@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from src.apps.statistic.htc_statistics import ink_sta_job
+from fastink.apps.statistic.htc_statistics import ink_sta_job
 
 
 def gethtc():
