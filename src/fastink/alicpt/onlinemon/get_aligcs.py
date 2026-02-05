@@ -508,12 +508,22 @@ def handle_ats_data(daq_start_time=None, daq_end_time=None):
 
                     # 避免重复处理同一个ats_id
                     if not any(d.get('_source', {}).get('ats_id') == ats_id for d in all_ats_data):
+                        # 获取status值并转换为整型
+                        status_value = item.get(f'{ats_id}.status')
+                        if status_value is not None:
+                            status_value = int(status_value)
+
+                        # 获取valid值，确保为布尔类型
+                        valid_value = item.get(f'{ats_id}.valid')
+                        if valid_value is not None:
+                            valid_value = str(valid_value).lower() 
+
                         ats_item = {
                             'ab': item.get(f'{ats_id}.ab'),
                             'bc': item.get(f'{ats_id}.bc'),
                             'ca': item.get(f'{ats_id}.ca'),
-                            'status': item.get(f'{ats_id}.status'),
-                            'valid': item.get(f'{ats_id}.valid'),
+                            'status': status_value,
+                            'valid': valid_value,
                             'ats_id': ats_id,
                             'timestamp': timestamp,
                             'mjd': mjd
