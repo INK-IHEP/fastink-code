@@ -395,7 +395,7 @@ def parse_mlc_bits(mlc_value):
         print(f"[parse_mlc_bits] Exception: {e}")
         return {}
 
-def handle_mlc_data():
+def handle_mlc_data(daq_start_time=None, daq_end_time=None):
     all_mlc_data = []
     try:
         if daq_start_time is None or daq_end_time is None:
@@ -451,7 +451,7 @@ def handle_mlc_data():
         print(f"[handle_mlc_data] Exception: {e}")
         return []
 
-def handle_weather_data():
+def handle_weather_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
             data = query_last_24h_data(data_type='weather', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -462,7 +462,7 @@ def handle_weather_data():
         print(f"[handle_weather_data] Exception: {e}")
         return []
 
-def handle_airheater_data():
+def handle_airheater_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
             data = query_last_24h_data(data_type='airheater', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -498,7 +498,7 @@ def handle_airheater_data():
         print(f"[handle_airheater_data] Exception: {e}")
         return []
 
-def handle_ats_data():
+def handle_ats_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
             data = query_last_24h_data(data_type='ats', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -508,7 +508,7 @@ def handle_ats_data():
     except Exception as e:
         print(f"[handle_ats_data] Exception: {e}")
         return []
-def handle_imu_data():
+def handle_imu_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
             data = query_last_24h_data(data_type='imu', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -519,7 +519,7 @@ def handle_imu_data():
     except Exception as e:
         print(f"[handle_imu_data] Exception: {e}")
         return []
-def handle_tilt_data():
+def handle_tilt_data(daq_start_time=None, daq_end_time=None):
     try:
         if daq_start_time is None or daq_end_time is None:
             data = query_last_24h_data(data_type='tilt', index="aligcs_monitor", size=10000, use_scroll=False)
@@ -922,7 +922,7 @@ def parse_compressor_map(alarm_value, operating, pressure_scale, temp_scale, run
         result['warning'] = None
 
     return result
-def handle_compressor_data():
+def handle_compressor_data(daq_start_time=None, daq_end_time=None):
     try:
         all_compressor_data = []  
 
@@ -985,7 +985,7 @@ def handle_compressor_data():
         return []
 
 #查询weather最新数据
-def handle_weather_data():
+def handle_weather_data(daq_start_time=None, daq_end_time=None):
     try:
         data = query_latest_weather_data()
         return data
@@ -995,7 +995,7 @@ def handle_weather_data():
 
 #查询airheater前24小时的数据
 
-def handle_airheater_data():
+def handle_airheater_data(daq_start_time=None, daq_end_time=None):
     try:
         data = query_last_24h_airheater_data()
         return data
