@@ -22,10 +22,7 @@ def get_es_client():
     verify_certs = False
     print("before create es client")
     '''
-    host = "192.168.51.85"
-    port = 9200
-    index = "mlc_monitoring"
-    use_ssl = False
+
     '''
     try:
         if use_ssl:
@@ -46,15 +43,6 @@ def get_es_client():
                 max_retries=3,
                 retry_on_timeout=True
             )
-            '''
-            xupei ES 
-            es_client = Elasticsearch(
-                [f'http://{host}:{port}'],
-                timeout=30,
-                max_retries=3,
-                retry_on_timeout=True
-            )
-            '''
         # Test connection
         if es_client.ping():
             return es_client
@@ -468,6 +456,7 @@ def handle_airheater_data(daq_start_time=None, daq_end_time=None):
             data = query_last_24h_data(data_type='airheater', index="aligcs_monitor", size=10000, use_scroll=False)
         else:
             data = query_data_by_time(data_type='airheater', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+        print(f"data:{data}")
         all_airheater_data = []
         for each in data:
             item = each['_source']
@@ -993,19 +982,11 @@ def handle_weather_data(daq_start_time=None, daq_end_time=None):
         print(f"[handle_weather_data] Exception: {e}")
         return []
 
-#查询airheater前24小时的数据
 
-def handle_airheater_data(daq_start_time=None, daq_end_time=None):
-    try:
-        data = query_last_24h_airheater_data()
-        return data
-    except Exception as e:
-        print(f"[handle_airheater_data] Exception: {e}")
-        return []
 
 #查询ats前24小时的数据
 
-def handle_ats_data():
+def handle_ats_data(daq_start_time=None, daq_end_time=None):
     try:
         data = query_last_24h_ats_data()
         return data
@@ -1013,7 +994,7 @@ def handle_ats_data():
         print(f"[handle_ats_data] Exception: {e}")
         return []
 
-def handle_tilt_data():
+def handle_tilt_data(daq_start_time=None, daq_end_time=None):
     try:
         data = query_last_24h_tilt_data()
         print(data)
@@ -1025,21 +1006,21 @@ def handle_tilt_data():
 
 def main():
     """Main function to test all data query functions."""
-    
+    '''
     result = handle_srs_data(daq_start_time="2026-01-19 10:00:00", daq_end_time="2026-01-20 10:00:00")
     # result = handle_srs_time()
     print(f"srs_result is {result}")
     
-    '''
+    
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
-    '''
+    
     ups_result = handle_ups_data()
     print("[main] handle_ups_data result:")
     print(ups_result)
 
-    '''
+    
     mlc_result = handle_mlc_data()
     print("[main] handle_mlc_data result:")
     print(mlc_result)
@@ -1047,11 +1028,11 @@ def main():
     weather_result = handle_weather_data()
     print("[main] handle_weather_data result:")
     print(weather_result)
-    
+    '''
     airheater_result = handle_airheater_data()
     print("[main] handle_airheater_data result:")
     #print(airheater_result)
-    
+    '''
     ats_result = handle_ats_data()
     print("[main] handle_ats_data result:")
     #print(ats_result)
@@ -1067,3 +1048,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
