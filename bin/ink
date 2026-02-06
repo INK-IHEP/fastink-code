@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+from src.commands.basecommand import Commands
+
+
+def main():
+    parser_object = Commands._add_parsers()
+    args = parser_object.parse_args()
+    Commands(args=args)()
+
+
+if __name__ == "__main__":
+    main()

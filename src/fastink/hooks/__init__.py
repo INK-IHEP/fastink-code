@@ -1,0 +1,1 @@
+"""Example hooks for FastINK customization."""
