@@ -1,16 +1,11 @@
 import json, shlex
 from shlex import quote
-from pathlib import Path
-from fastapi import APIRouter
 from fastink.common.logger import logger
 from fastink.common.config import get_config
-from filelock import FileLock, Timeout
-from fastapi_utils.tasks import repeat_every
 from fastink.inkdb.inkredis import redis_connect
 from fastink.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids, insert_job_info, needto_change_status_jobs
 from fastink.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value
 
-router = APIRouter()
 
 def query_cluster_jobs():
 
