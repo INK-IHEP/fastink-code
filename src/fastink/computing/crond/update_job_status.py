@@ -16,7 +16,7 @@ def query_cluster_jobs():
 
     SCHEDD_HOST = get_config("computing", "schedd_host")
 
-    BASE_CMD = f"condor_q -name {quote(SCHEDD_HOST)}"
+    BASE_CMD = f"condor_q -name {quote(SCHEDD_HOST)} --allusers "
     BASE_ATTRS = [
         "Owner", "ClusterId", "ProcId", "HepJob_RealGroup", "Qdate",
         "JobStatus", "JobStartDate", "RemoteHost", "HepJob_JobType", "HepJob_RequestOS"
