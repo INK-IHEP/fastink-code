@@ -62,8 +62,8 @@ async def update_completed_jobs():
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         need_change_status_jobs = needto_change_status_jobs()
         query_command = query_cluster_jobs()
-        stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         logger.debug(f"HTC-CROND-LOG: The queue command: {query_command}")
+        stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         lines = stdout.decode().strip().split('\n')
         logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
         to_delete = []
