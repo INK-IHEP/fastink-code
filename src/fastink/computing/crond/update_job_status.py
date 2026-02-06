@@ -51,119 +51,120 @@ def get_condor_history_command(job_id: str) -> str:
     return command
 
 
-LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
+#LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
 # @router.on_event("startup")
 # @repeat_every(seconds=5, wait_first=False, raise_exceptions=False, logger=logger)
 async def update_completed_jobs():
-    lock = FileLock(str(LOCK_PATH1), timeout=0.1)
+    #lock = FileLock(str(LOCK_PATH1), timeout=0.1)
     try:
-        with lock:
-            r = redis_connect()
-            iptables_jobtype = get_config("computing", "iptables_jobtype")
-            need_change_status_jobs = needto_change_status_jobs()
-            query_command = query_cluster_jobs()
-            stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
-            lines = stdout.decode().strip().split('\n')
-            logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
-            to_delete = []
-            
-            if lines != ['']:
-                pipe = r.pipeline(transaction=False)
-                for line in lines:
-                    job_param_list = shlex.split(line, posix=True)
+        #with lock:
+        r = redis_connect()
+        iptables_jobtype = get_config("computing", "iptables_jobtype")
+        need_change_status_jobs = needto_change_status_jobs()
+        query_command = query_cluster_jobs()
+        stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
+        logger.debug(f"HTC-CROND-LOG: The queue command: {query_command}")
+        lines = stdout.decode().strip().split('\n')
+        logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
+        to_delete = []
+        
+        if lines != ['']:
+            pipe = r.pipeline(transaction=False)
+            for line in lines:
+                job_param_list = shlex.split(line, posix=True)
 
-                    job_owner = safe_get(job_param_list, 0)
-                    job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
-                    job_clusterid = safe_int(safe_get(job_param_list, 1))
-                    qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
-                    start_ts = safe_int(safe_get(job_param_list, 6), default=None)
+                job_owner = safe_get(job_param_list, 0)
+                job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
+                job_clusterid = safe_int(safe_get(job_param_list, 1))
+                qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
+                start_ts = safe_int(safe_get(job_param_list, 6), default=None)
 
-                    job_submit_time = ts_to_str(qdate_ts)
-                    job_start_time  = ts_to_str(start_ts)
+                job_submit_time = ts_to_str(qdate_ts)
+                job_start_time  = ts_to_str(start_ts)
 
-                    job_status = safe_get(job_param_list, 5)
-                    job_remote_host = safe_get(job_param_list, 7)
-                    job_type = safe_get(job_param_list, 8)
-                    job_request_os = safe_get(job_param_list, 9)
-                    job_iwd = safe_get(job_param_list, 10)
-                    job_out_path = safe_get(job_param_list, 11)
-                    job_err_path = safe_get(job_param_list, 12)
-                    job_hold_reason = " ".join(job_param_list[13:]) if len(job_param_list) > 13 else ""
-                    
-                    if job_clusterid in need_change_status_jobs.keys():
-                        del need_change_status_jobs[job_clusterid]
-                        
-                    tomb = await r.exists(f"cluster_jobs:deleted:{job_owner}:{job_clusterid}")
-                    if tomb:
-                        continue 
-                    
-                    job_record = {
-                        "ClusterId": "HTCondor",
-                        "jobId": clean_query_value(job_clusterid),
-                        "jobType": clean_query_value(job_type),
-                        "jobStatus": clean_query_value(job_status),
-                        "jobSubmitTime": clean_query_value(job_submit_time),
-                        "jobStartTime": clean_query_value(job_start_time),
-                        "jobNodeList": clean_query_value(job_remote_host),
-                        "jobrunos": clean_query_value(job_request_os),
-                        "jobiwd": clean_query_value(job_iwd),
-                        "joboutpath": clean_query_value(job_out_path),
-                        "joberrpath": clean_query_value(job_err_path),
-                        "hold_reason": clean_query_value(job_hold_reason),
-                    }
-                    
-                    JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
-                    IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
-                    pipe.sadd(IDX_KEY, job_clusterid)
-                    pipe.hset(JOB_KEY, mapping=job_record)
-                    
-                await pipe.execute()
-                    
-
-            if need_change_status_jobs:
-                pipe = r.pipeline(transaction=False)
-                for key in need_change_status_jobs:
-                    query_history_command = get_condor_history_command(key)
-                    stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
-                    history_job_lines = stdout.decode().strip().split('\n')
-
-                    if history_job_lines != [""]:
-                        job_param_list = history_job_lines[0].split()
-                        job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
-                        if job_param_list[2] != "NULL":
-                            job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
-                        else:
-                            job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
-                        job_type = job_param_list[6]
-                        job_user = job_param_list[7]
-                        job_uid = change_username_to_uid(job_user)
-
-                        if job_type in iptables_jobtype:
-                            gateway_port = need_change_status_jobs[key][1]
-                            sshd_job_iptables_clean = need_change_status_jobs[key][2]
-                            if gateway_port != 0 and sshd_job_iptables_clean == 0:
-                                delete_iptables(job_uid, key, gateway_port, "htcondor")
-                        
-                        update_job_status(job_uid, key, 'COMPLETED', "htcondor")
-                        update_start_time(job_uid, key, job_start_time, "htcondor")
-                        update_end_time(job_uid, key, job_end_time, "htcondor")
-                        logger.debug(f"Update job {key} status to COMPLETED.")
-                        
-                        JOB_KEY = f"cluster_jobs:{job_user}:{key}"
-                        IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
-                        pipe.delete(JOB_KEY)
-                        pipe.srem(IDX_KEY, str(key))
-                    else:
-                        to_delete.append(key)
-                        
-                await pipe.execute()
+                job_status = safe_get(job_param_list, 5)
+                job_remote_host = safe_get(job_param_list, 7)
+                job_type = safe_get(job_param_list, 8)
+                job_request_os = safe_get(job_param_list, 9)
+                job_iwd = safe_get(job_param_list, 10)
+                job_out_path = safe_get(job_param_list, 11)
+                job_err_path = safe_get(job_param_list, 12)
+                job_hold_reason = " ".join(job_param_list[13:]) if len(job_param_list) > 13 else ""
                 
-                if to_delete:
-                    logger.debug(f"Need to delete jobs: {to_delete}")
-                    delete_jobinfo_by_jobids(to_delete)
+                if job_clusterid in need_change_status_jobs.keys():
+                    del need_change_status_jobs[job_clusterid]
+                    
+                tomb = await r.exists(f"cluster_jobs:deleted:{job_owner}:{job_clusterid}")
+                if tomb:
+                    continue 
+                
+                job_record = {
+                    "ClusterId": "HTCondor",
+                    "jobId": clean_query_value(job_clusterid),
+                    "jobType": clean_query_value(job_type),
+                    "jobStatus": clean_query_value(job_status),
+                    "jobSubmitTime": clean_query_value(job_submit_time),
+                    "jobStartTime": clean_query_value(job_start_time),
+                    "jobNodeList": clean_query_value(job_remote_host),
+                    "jobrunos": clean_query_value(job_request_os),
+                    "jobiwd": clean_query_value(job_iwd),
+                    "joboutpath": clean_query_value(job_out_path),
+                    "joberrpath": clean_query_value(job_err_path),
+                    "hold_reason": clean_query_value(job_hold_reason),
+                }
+                
+                JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
+                IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
+                pipe.sadd(IDX_KEY, job_clusterid)
+                pipe.hset(JOB_KEY, mapping=job_record)
+                
+            await pipe.execute()
+                
+
+        if need_change_status_jobs:
+            pipe = r.pipeline(transaction=False)
+            for key in need_change_status_jobs:
+                query_history_command = get_condor_history_command(key)
+                stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
+                history_job_lines = stdout.decode().strip().split('\n')
+
+                if history_job_lines != [""]:
+                    job_param_list = history_job_lines[0].split()
+                    job_end_time = f"{job_param_list[0]} {job_param_list[1]}" 
+                    if job_param_list[2] != "NULL":
+                        job_start_time = f"{job_param_list[2]} {job_param_list[3]}"
+                    else:
+                        job_start_time = f"{job_param_list[4]} {job_param_list[5]}"
+                    job_type = job_param_list[6]
+                    job_user = job_param_list[7]
+                    job_uid = change_username_to_uid(job_user)
+
+                    if job_type in iptables_jobtype:
+                        gateway_port = need_change_status_jobs[key][1]
+                        sshd_job_iptables_clean = need_change_status_jobs[key][2]
+                        if gateway_port != 0 and sshd_job_iptables_clean == 0:
+                            delete_iptables(job_uid, key, gateway_port, "htcondor")
+                    
+                    update_job_status(job_uid, key, 'COMPLETED', "htcondor")
+                    update_start_time(job_uid, key, job_start_time, "htcondor")
+                    update_end_time(job_uid, key, job_end_time, "htcondor")
+                    logger.debug(f"Update job {key} status to COMPLETED.")
+                    
+                    JOB_KEY = f"cluster_jobs:{job_user}:{key}"
+                    IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
+                    pipe.delete(JOB_KEY)
+                    pipe.srem(IDX_KEY, str(key))
+                else:
+                    to_delete.append(key)
+                    
+            await pipe.execute()
+            
+            if to_delete:
+                logger.debug(f"Need to delete jobs: {to_delete}")
+                delete_jobinfo_by_jobids(to_delete)
                         
-    except Timeout:
-        pass
+    #except Timeout:
+    #    pass
     
     except Exception as e:
         logger.exception(f"HTC-LOG: update_completed_jobs: failed, the details: {e}")
