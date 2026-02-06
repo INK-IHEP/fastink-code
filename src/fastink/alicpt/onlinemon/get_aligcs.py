@@ -158,10 +158,13 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
         if not es:
             return []
 
-        # 默认查询前24小时数据
-        now = datetime.now(timezone.utc)
-        start_time = now - timedelta(hours=24)
-        end_time = now
+        # 查询前24小时数据（使用本地时间）
+        now = datetime.now()
+        start_time_local = now - timedelta(hours=24)
+        end_time_local = now
+        # 转换为UTC时间来查询ES
+        start_time = start_time_local.replace(tzinfo=timezone.utc)
+        end_time = end_time_local.replace(tzinfo=timezone.utc)
 
         query = {
             "query": {
@@ -202,10 +205,35 @@ def query_last_24h_data(data_type, index="aligcs_monitor", size=10000, use_scrol
                 all_data.extend(resp['hits']['hits'])
 
             es.clear_scroll(scroll_id=scroll_id)
+            # 将返回的UTC时间戳转换为本地时间
+            for hit in all_data:
+                if '_source' in hit and '@timestamp' in hit['_source']:
+                    try:
+                        utc_time_str = hit['_source']['@timestamp']
+                        utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+                        if utc_time.tzinfo is None:
+                            utc_time = utc_time.replace(tzinfo=timezone.utc)
+                        local_time = utc_time.astimezone(tz=None)
+                        hit['_source']['@timestamp'] = local_time.replace(tzinfo=None).isoformat()
+                    except Exception as e:
+                        print(f"[query_last_24h_data] 时间转换失败: {e}")
             return all_data
         else:
             resp = es.search(index=index, body=query)
-            return resp['hits']['hits']
+            hits = resp['hits']['hits']
+            # 将返回的UTC时间戳转换为本地时间
+            for hit in hits:
+                if '_source' in hit and '@timestamp' in hit['_source']:
+                    try:
+                        utc_time_str = hit['_source']['@timestamp']
+                        utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+                        if utc_time.tzinfo is None:
+                            utc_time = utc_time.replace(tzinfo=timezone.utc)
+                        local_time = utc_time.astimezone(tz=None)
+                        hit['_source']['@timestamp'] = local_time.replace(tzinfo=None).isoformat()
+                    except Exception as e:
+                        print(f"[query_last_24h_data] 时间转换失败: {e}")
+            return hits
 
     except Exception as e:
         print(f"[query_last_24h_data] Exception: {e}, data_type: {data_type}")
@@ -247,7 +275,19 @@ def query_last_time_data(data_type, index="aligcs_monitor",size=10000, use_scrol
         hits = resp['hits']['hits']
 
         if hits:
-            return hits[0]
+            # 将返回数据中的UTC时间戳转换为本地时间
+            result = hits[0]
+            if '_source' in result and '@timestamp' in result['_source']:
+                utc_time_str = result['_source']['@timestamp']
+                try:
+                    utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+                    if utc_time.tzinfo is None:
+                        utc_time = utc_time.replace(tzinfo=timezone.utc)
+                    local_time = utc_time.astimezone(tz=None)
+                    result['_source']['@timestamp'] = local_time.replace(tzinfo=None).isoformat()
+                except Exception as e:
+                    print(f"[query_last_time_data] 时间转换失败: {e}")
+            return result
         else:
             return None
 
@@ -276,14 +316,20 @@ def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, d
             return []
 
         if daq_start_time and daq_end_time:
-            # 如果指定了时间范围，查询该时间范围内的数据
-            start_time = datetime.strptime(daq_start_time, "%Y-%m-%d %H:%M:%S")
-            end_time = datetime.strptime(daq_end_time, "%Y-%m-%d %H:%M:%S")
+            # 如果指定了时间范围，将本地时间转换为UTC时间来查询ES
+            start_time_local = datetime.strptime(daq_start_time, "%Y-%m-%d %H:%M:%S")
+            end_time_local = datetime.strptime(daq_end_time, "%Y-%m-%d %H:%M:%S")
+            # 转换为UTC时间
+            start_time = start_time_local.replace(tzinfo=timezone.utc)
+            end_time = end_time_local.replace(tzinfo=timezone.utc)
         else:
-            # 默认查询前24小时数据
-            now = datetime.now(timezone.utc)
-            start_time = now - timedelta(hours=24)
-            end_time = now
+            # 默认查询前24小时数据（使用本地时间）
+            now = datetime.now()
+            start_time_local = now - timedelta(hours=24)
+            end_time_local = now
+            # 转换为UTC时间
+            start_time = start_time_local.replace(tzinfo=timezone.utc)
+            end_time = end_time_local.replace(tzinfo=timezone.utc)
 
         query = {
             "query": {
@@ -324,10 +370,35 @@ def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, d
                 all_data.extend(resp['hits']['hits'])
 
             es.clear_scroll(scroll_id=scroll_id)
+            # 将返回的UTC时间戳转换为本地时间
+            for hit in all_data:
+                if '_source' in hit and '@timestamp' in hit['_source']:
+                    try:
+                        utc_time_str = hit['_source']['@timestamp']
+                        utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+                        if utc_time.tzinfo is None:
+                            utc_time = utc_time.replace(tzinfo=timezone.utc)
+                        local_time = utc_time.astimezone(tz=None)
+                        hit['_source']['@timestamp'] = local_time.replace(tzinfo=None).isoformat()
+                    except Exception as e:
+                        print(f"[query_data_by_time] 时间转换失败: {e}")
             return all_data
         else:
             resp = es.search(index=index, body=query)
-            return resp['hits']['hits']
+            hits = resp['hits']['hits']
+            # 将返回的UTC时间戳转换为本地时间
+            for hit in hits:
+                if '_source' in hit and '@timestamp' in hit['_source']:
+                    try:
+                        utc_time_str = hit['_source']['@timestamp']
+                        utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
+                        if utc_time.tzinfo is None:
+                            utc_time = utc_time.replace(tzinfo=timezone.utc)
+                        local_time = utc_time.astimezone(tz=None)
+                        hit['_source']['@timestamp'] = local_time.replace(tzinfo=None).isoformat()
+                    except Exception as e:
+                        print(f"[query_data_by_time] 时间转换失败: {e}")
+            return hits
 
     except Exception as e:
         print(f"[query_data_by_time] Exception: {e}, data_type: {data_type}")
@@ -344,6 +415,8 @@ def handle_srs_data(daq_start_time=None, daq_end_time=None):
     except Exception as e:
         print(f"handle_srs_data Exception: {e}")
         return []
+
+#处理mlc中返回的数据
 
 #处理mlc中返回的数据
 def parse_mlc_bits(mlc_value):
@@ -383,6 +456,7 @@ def parse_mlc_bits(mlc_value):
         print(f"[parse_mlc_bits] Exception: {e}")
         return {}
 
+#处理mlc中返回的数据
 def handle_mlc_data(daq_start_time=None, daq_end_time=None):
     all_mlc_data = []
     try:
@@ -1014,7 +1088,10 @@ def handle_compressor_data(daq_start_time=None, daq_end_time=None):
 #查询weather最新数据
 def handle_weather_data(daq_start_time=None, daq_end_time=None):
     try:
-        data = query_latest_weather_data()
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='weather', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='weather', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
         return data
     except Exception as e:
         print(f"[handle_weather_data] Exception: {e}")
@@ -1022,7 +1099,11 @@ def handle_weather_data(daq_start_time=None, daq_end_time=None):
 
 def handle_tilt_data(daq_start_time=None, daq_end_time=None):
     try:
-        data = query_last_24h_tilt_data()
+        if daq_start_time is None or daq_end_time is None:
+            data = query_last_24h_data(data_type='tilt', index="aligcs_monitor", size=10000, use_scroll=False)
+        else:
+            data = query_data_by_time(data_type='tilt', index="aligcs_monitor", daq_start_time=daq_start_time, daq_end_time=daq_end_time, size=10000, use_scroll=False)
+
         print(data)
         return data
     except Exception as e:
@@ -1032,12 +1113,13 @@ def handle_tilt_data(daq_start_time=None, daq_end_time=None):
 
 def main():
     """Main function to test all data query functions."""
-    '''
-    result = handle_srs_data(daq_start_time="2026-01-19 10:00:00", daq_end_time="2026-01-20 10:00:00")
+    
+    #result = handle_srs_data(daq_start_time="2026-01-19 10:00:00", daq_end_time="2026-01-20 10:00:00")
+    result = handle_srs_data()
     # result = handle_srs_time()
     print(f"srs_result is {result}")
     
-    
+    '''
     compressor_result = handle_compressor_data()
     print("[main] handle_compressor_data result:")
     print(compressor_result)
@@ -1046,7 +1128,6 @@ def main():
     print("[main] handle_ups_data result:")
     print(ups_result)
 
-    
     mlc_result = handle_mlc_data()
     print("[main] handle_mlc_data result:")
     print(mlc_result)
@@ -1058,11 +1139,11 @@ def main():
     airheater_result = handle_airheater_data()
     print("[main] handle_airheater_data result:")
     print(airheater_result)
-    '''
+    
     ats_result = handle_ats_data()
     print("[main] handle_ats_data result:")
     print(ats_result)
-    '''
+    
     imu_result = handle_imu_data()
     print("[main] handle_imu_data result:")
     #print(imu_result)
