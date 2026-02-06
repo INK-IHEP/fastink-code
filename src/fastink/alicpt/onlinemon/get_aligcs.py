@@ -1117,7 +1117,7 @@ def main():
     #result = handle_srs_data(daq_start_time="2026-01-19 10:00:00", daq_end_time="2026-01-20 10:00:00")
     result = handle_srs_data()
     # result = handle_srs_time()
-    print(f"srs_result is {result}")
+    print(result)
     
     '''
     compressor_result = handle_compressor_data()
