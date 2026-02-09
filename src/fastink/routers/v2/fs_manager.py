@@ -82,14 +82,14 @@ async def fileList(workdir:str = Query(default=None, description = "Directory to
 
         # _, is_dir = await common.path_exist(name = work_directory, krb5ccname = krb5ccname, username = username, mgm = xrd_host)
         logger.debug(f"Checking if {work_directory} exists.....")
-        _, is_dir = await common.path_exist(name = work_directory, username = username, mgm = xrd_host)
-        if is_dir != PathType.DIR:
+        is_exist, _ = await common.path_exist(name = work_directory, username = username, mgm = xrd_host)
+        if not is_exist :
             return {"status": InkStatus.PATH_NOT_EXIST, "msg": f"Failed to list {work_directory}. Err: Path {work_directory} does not exist.", "data": None}
         logger.debug(f"Processing fileList request {work_directory}.")
         # List all entries excluding those starting with a dot
         #tm_start = time.time()
-        # sorted_results = await common.list_dir(dname = work_directory, krb5ccname = krb5ccname, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = xrd_host)
-        sorted_results = await common.list_dir(dname = work_directory, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = xrd_host)
+        # sorted_results = await common.list_path(dname = work_directory, krb5ccname = krb5ccname, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = xrd_host)
+        sorted_results = await common.list_path(dname = work_directory, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = xrd_host)
         #tm_elapsed  = time.time() - tm_start
         #logger.debug(f"Timer. list_path for {username} cost: {tm_elapsed:.4f} seconds.")
     except Exception as e:
@@ -269,6 +269,60 @@ async def file_download(TargetPath:str, username:str, krb5_enabled:bool = True):
 async def fileDownload(TargetPath:str = Query(..., description = "Filename to download"),
                        username: str = Depends(get_username)):
         return await file_download(TargetPath = TargetPath, username = username)
+
+#### Download multiple files
+@router.get("/download_dir", response_class=StreamingResponse)
+async def dirDownload(TargetPath:str = Query(..., description = "Dir to download"),
+                      recursive:bool = Query(False, description = "Recursively download"),
+                      showhidden:bool = Query(False, description = "Download hidden files"),
+                      username:str = Depends(get_username)):
+    if not TargetPath:
+        return {"status": InkStatus.EMPTY_PATH, "msg": f"Failed to download {TargetPath}. TargetPath is empty", "data": None}
+    TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    if "%252F" in TargetPath:
+        TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    if "%2F" in TargetPath:
+        TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    logger.info(f"Start downloading dir {TargetPath}")
+    try:
+        TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
+        quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
+        headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
+        return StreamingResponse(common.download_dir(TargetPath = TargetPath, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
+    except Exception as e:
+        logger.error(f"Failed to download dir {TargetPath}...\nErr:{str(e)}")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
+
+@router.get("/download_list", response_class = StreamingResponse)
+async def download_list(flist:List[str], TargetPath:str = Query(..., description = "Dir to download"),
+                       recursive:bool = Query(False, description = "Recursively download"),
+                       showhidden:bool = Query(False, description = "Download hidden files"),
+                       username:str = Depends(get_username)):
+    if not TargetPath:
+            return {"status": InkStatus.EMPTY_PATH, "msg": f"Failed to download {TargetPath}. TargetPath is empty", "data": None}
+    TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    if "%252F" in TargetPath:
+        TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    if "%2F" in TargetPath:
+        TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    try:
+        full_flist = []
+        for f in flist:
+            ff = await common.list_path(dname = f['path'], username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm)
+            full_flist.append(*ff)
+        flist = full_flist
+    except Exception as e:
+        logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download files for {username}. Err:{str(e)}", "data": None}
+    try:
+        TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
+        quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
+        headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
+        return StreamingResponse(common.download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
+    except Exception as e:
+        logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download list for {username}. Err:{str(e)}", "data": None}
+
 
 @router.get("/shared_file", response_class=StreamingResponse)
 async def download_shared_file(req: Request, TargetPath:str = Query(..., description = "Filename to download")):
