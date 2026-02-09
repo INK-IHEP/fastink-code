@@ -421,7 +421,7 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
         _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         for l in flist:
-            if l['type'] != PathType.FILE:
+            if l['type'] != "file":
                 logger.debug(f"{l['path']} is not a file. Skip it...")
             else:
                 logger.debug(f"Starting to archieve {l['path']}")
@@ -432,14 +432,14 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
             else:
                 cmd = f"xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
             returncode, ret, err = await async_shell(cmd = cmd, env = env, timeout = 1200)
-            if returncode != 0 or err != '':
+            if returncode != 0:
                 logger.error(f"Failed to download file {fname}...\nErr:{err}")
                 raise Exception(f"Failed to download file {fname}...Err:{err}")
             else:
                 logger.debug(f"Successfully archived {l['path']}...")
         logger.info(f"Successfully archieved all files in {zipfile}.")
     except Exception as e:
-        logger.error(f"Failed to archieve all files into {zipfile}...\nErr:{err}")
+        logger.error(f"Failed to archieve all files into {zipfile}...\nErr:{str(e)}")
         logger.error(f"Removing temporary zip file {zipfile}...")
         os.remove(zipfile)
         return False
@@ -460,7 +460,7 @@ async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str 
         status = await prepare_zip_file(zipfile, TargetPath = TargetPath, flist = flist, username = username, mgm = mgm, krb5_enabled = krb5_enabled)
         if not status:
             logger.error(f"Failed to prepare zipfile to download files... Unknown Error...")
-        raise ValueError(f"Failed to prepare zipfile to download files... Unknown Error...")
+            raise ValueError(f"Failed to prepare zipfile to download files... Unknown Error...")
     except Exception as e:
         logger.error(f"Failed to prepare zipfile to download files... Err:{str(e)}")
         raise e
