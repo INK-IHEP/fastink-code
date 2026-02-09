@@ -440,38 +440,20 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
         logger.info(f"Successfully archieved all files in {zipfile}.")
     except Exception as e:
         logger.error(f"Failed to archieve all files into {zipfile}...\nErr:{err}")
-        logger.error(f"Removing temporary zip file {zipfile}......")
+        logger.error(f"Removing temporary zip file {zipfile}...")
         os.remove(zipfile)
         return False
     return True
 
-#### Download dir
-async def download_dir(TargetPath:str, username:str = "", mgm:str = mgm_url, krb5_enabled:bool = True, recursive:bool = False, showhidden:bool = False):
-    _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
-    env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
-    try:
-        fname = unquote_expand_user(dname = TargetPath, username = username, url = False)
-        is_exist, path_type = await path_exist(fname, username, mgm)
-        if not is_exist:
-            raise FileNotFoundError(f"Xrdfs: File {fname} not found.")
-        if path_type != PathType.DIR:
-            raise TypeError(f"{fname} is not an directory.")
-
-        flist = await list_path(dname = TargetPath, username = username, long = True, recursive = recursive, showhidden = showhidden)
-
-        return await download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm, krb5_enabled = krb5_enabled)
-    except Exception as e:
-        logger.error(f"Failed to download dir {TargetPath}... Err:{str(e)}")
-        raise e
-
 #### Download multiple files
 async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str = "", mgm:str = mgm_url, krb5_enabled = True, recursive:bool = False, showhidden:bool = False):
+    
     f_sum = 0
-    for f in flist:
-        f_sum += f['size']
-    if f_sum >= max_file_size:
-        logger.error(f"Total size of file list is larger than {max_file_size}...")
-        raise ValueError(f"Total size of file list is larger than {max_file_size}...")
+    #for f in flist:
+    #    f_sum += f['size']
+    #if f_sum >= max_file_size:
+    #    logger.error(f"Total size of file list is larger than {max_file_size}...")
+    #    raise ValueError(f"Total size of file list is larger than {max_file_size}...")
 
     zipfile = f"{username}-archive.zip"
     try:
@@ -493,8 +475,8 @@ async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str 
         logger.error(f"Failed to stream zipfile to client... Err:{str(e)}")
         raise e
     finally:
-        cmd = f"rm -f {zipfile}".split()
-        _, _, _ = await async_exec(cmd = cmd, env = {}, timeout = 1200, decode = True)
+        logger.error(f"Removing temporary zip file {zipfile}...")
+        os.remove(zipfile)
         logger.debug(f"Temp zipfile {zipfile} deleted.")
 
 # @async_timer
