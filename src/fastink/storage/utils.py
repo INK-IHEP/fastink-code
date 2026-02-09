@@ -141,9 +141,9 @@ async def async_exec(cmd, env = {}, timeout = 60, decode = False, src_data = Non
 
 #### Async shell
 async def async_shell(cmd, env = {}, timeout = 60):
+    process = await asyncio.create_subprocess_shell(cmd, env=env)
     try:
-        process = await asyncio.create_subprocess_shell(*cmd, env=env)
-        ret, err = await asyncio.wait_for(process.communicate(input=src_data), timeout=timeout)
+        ret, err = await asyncio.wait_for(process.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
         logger.error(f"Command {cmd} timeout after {timeout}s..")
         process.kill()
