@@ -213,7 +213,7 @@ async def create_file(TargetPath:str, username: str = Depends(get_username), mod
         is_exist, path_type = await common.path_exist(name = TargetPath, username = username, mgm = xrd_host)
         if is_exist:
             logger.error("TargetPath {TargetPath} exists... Failed to created it...")
-            return {"status": InkStatus.PATH_EXIST, "msg": {f"Failed to create {TaragetPath}. Path exists..."}, "data": None}
+            return {"status": InkStatus.PATH_EXIST, "msg": {f"Failed to create {TargetPath}. Path exists..."}, "data": None}
         await common.upload_file(src_data = '', dst = TargetPath, username = username, mgm = xrd_host)
         is_exist, path_type = await common.path_exist(TargetPath, username = username, mgm = xrd_host)
         if is_exist and path_type == PathType.FILE:
@@ -294,7 +294,7 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
     logger.info(f"Start downloading dir {TargetPath}")
     try:
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
-        is_exist, path_type = await common.path_exist(TargetPath, username, mgm)
+        is_exist, path_type = await common.path_exist(TargetPath, username, mgm_url)
         if not is_exist:
             raise FileNotFoundError(f"Xrdfs: File {TargetPath} not found.")
         if path_type != PathType.DIR:
@@ -322,7 +322,7 @@ async def listDownload(flist:List[str], TargetPath:str = Query(..., description 
     try:
         full_flist = []
         for f in flist:
-            ff = await common.list_path(dname = f['path'], username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm)
+            ff = await common.list_path(dname = f['path'], username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url)
             full_flist.append(*ff)
         flist = full_flist
     except Exception as e:
