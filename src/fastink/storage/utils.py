@@ -139,6 +139,18 @@ async def async_exec(cmd, env = {}, timeout = 60, decode = False, src_data = Non
     
     return process.returncode, ret, err
 
+#### Async shell
+async def async_shell(cmd, env = {}, timeout = 60):
+    try:
+        process = await asyncio.create_subprocess_shell(*cmd, env=env)
+        ret, err = await asyncio.wait_for(process.communicate(input=src_data), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.error(f"Command {cmd} timeout after {timeout}s..")
+        process.kill()
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}")
+        process.kill()
+    return process.returncode, ret, err
 
 async def gen_empty_zip(name:str) -> bool:
     try:
