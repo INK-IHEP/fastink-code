@@ -1,13 +1,19 @@
+PyJWT
 async_timeout
+concurrent-log-handler
 cryptography
 datetime
 elasticsearch==8.18.0
 fastapi
+fastapi_utils
+filelock
 htcondor
 httpx
 influxdb
+jwt
 paramiko
 pexpect
+pycryptodome
 pymysql
 pytest
 python-dateutil
@@ -21,5 +27,3 @@ sqlalchemy
 ujson
 uvicorn
 websockets
-filelock
-jwt
