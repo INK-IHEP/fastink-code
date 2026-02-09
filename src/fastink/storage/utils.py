@@ -2,9 +2,10 @@
 
 import logging, math, asyncio, os, time, urllib.parse
 from fastink.common.config import get_config
+from fastink.routers.status import InkStatus
 from enum import Enum
 from functools import wraps
-
+from zipfile import ZipFile
 from fastapi import Request
 
 logger=logging.getLogger(__name__)
@@ -138,6 +139,15 @@ async def async_exec(cmd, env = {}, timeout = 60, decode = False, src_data = Non
     
     return process.returncode, ret, err
 
+
+async def gen_empty_zip(name:str) -> bool:
+    try:
+        with ZipFile(name, 'w') as file:
+            pass
+        return True
+    except Exception as e:
+        logger.error(f"Failed to generate empty zipfile {name}. Err:{str(e)}")
+        return False
 
 async def extract_param(request: Request, params):
     try:

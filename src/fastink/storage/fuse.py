@@ -84,7 +84,7 @@ async def chmod(fname:str, username:str = "", mode:str = "755", mgm:str = mgm_ur
         return True
 
 #@async_timer
-async def list_dir(
+async def list_path(
     dname: str,
     username: str = "",
     long: bool = True,
@@ -197,29 +197,6 @@ async def list_dir(
         raise ValueError(f"Xrdfs: Failed to list directory {dname}'s content:")
     return sorted_contents
 
-async def xrd_delete_file0(name: str, mgm: str = mgm_url) -> bool:
-    is_exist, path_type = await path_exist(name, mgm)
-
-    if not is_exist:
-        logger.error(f"PATH {name} doesn't exist.")
-        return False
-
-    cmd = "rmdir" if path_type == PathType.DIR else "rm"
-    try:
-        if '"' in name:
-            cmd = f"xrdfs {mgm} {cmd} '''{name}'''"
-        else:
-            cmd = f'xrdfs {mgm} {cmd} """{name}"""'
-        returncode, ret, err = await async_exec(cmd = cmd, env = {}, timeout = 60, decode = True)
-        if returncode == 0 and ret == 0:
-            msg = f"{name} is deleted."
-        else:
-            msg = f"Failed to delete {name}."
-    except Exception as e:
-        logger.error(f"Failed to deleted {name}.")
-        logger.error(f"Err:\n{sys.exc_info()[0]}\n.Msg:\n{sys.exc_info()[1]}")
-        raise e
-
 #@async_timer
 async def delete_path(
     name: str,
@@ -258,7 +235,7 @@ async def delete_path(
         return status
 
     if path_type == PathType.DIR:
-        raw_files = await list_dir(name, long=True, recursive=True, mgm=mgm)
+        raw_files = await list_path(name, long=True, recursive=True, mgm=mgm)
         for f in raw_files:
             if f["type"] == "directory":
                 dirs.append(f["path"])
@@ -529,7 +506,7 @@ async def cat_file(
         raise e
 
 async def checksum(
-    fname: str, cksname: str = "adler32", mgm: str = mgm_url
+    fname: str, cksname: str = "adler32", username:str = "", mgm: str = mgm_url
 ) -> str:
     try:
         if cksname != "adler32" or cksname != "crc32c":
@@ -569,7 +546,7 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
         cmd = ["sudo", "-E", "-u", username, "mv"]
         cmd.append(f"""{src_name}""") if "'" in src_name else cmd.append(f'''{src_name}''')
         cmd.append(f"""{dst_name}""") if "'" in dst_name else cmd.append(f'''{dst_name}''')
-        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
+        returncode, ret, err = await async_exec(cmd = cmd, env = {}, timeout = 600, decode = True)
         logger.debug(f"Xrdfs. Rename {src_name} to {dst_name}. \nret:{ret}\nret:{err}")
 
         if returncode == 0 and err == "":
@@ -608,10 +585,10 @@ async def init_ink_space(username: str, krb5ccname:str, user_group:str, ink_dir:
             cmd = ["sudo", "-E", "-u", username, "readlink", "-f", quote(user_tag)]
             returncode, ret, err = await async_exec(cmd = cmd, env = {}, timeout = 10, decode = True, src_data = None)
             if ret != ink_tag:
+                user_tag_old = f"{user_tag}.old"
                 if user_tag[0:4] == "/afs":
                     cmd = f"su -s /bin/bash {quote(username)} -c 'export KRB5CCNAME={quote(krb5ccname)} && aklog && rm -rf {quote(user_tag_old)} && mv {quote(user_tag)} {quote(user_tag_old)}'".split()
                 else:
-                    user_tag_old = f"{user_tag}.old"
                     cmd = f"su -s /bin/bash {quote(username)} -c 'export KRB5CCNAME={quote(krb5ccname)} && rm -rf {quote(user_tag_old)} && mv {quote(user_tag)} {quote(user_tag_old)}'".split()
                 returncode, ret, err = await async_exec(cmd, env = {}, timeout = 10, decode = True, src_data = None)
                 if returncode != 0 or err != "":
