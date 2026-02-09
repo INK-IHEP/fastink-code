@@ -13,6 +13,7 @@ from fastink.common.logger import logger
 from fastink.routers.headers import get_username
 from fastink.routers.status import *
 import jwt
+from pydantic import BaseModel
 
 params = common.storage_init()
 mgm_url, krb5_enabled = params['mgm_url'], params['krb5_enabled']
@@ -20,6 +21,10 @@ mgm_url, krb5_enabled = params['mgm_url'], params['krb5_enabled']
 xrd_host = mgm_url
 
 router = APIRouter()
+
+class FileList(BaseModel):
+    flist: List[str]
+
 @router.get("/get_home", response_class=UJSONResponse)
 async def user_home(username: str = Depends(get_username),
                     abspath:bool = Header(default=True,description="Return absolute path")):
@@ -273,7 +278,7 @@ async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str 
     try:
         quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
         headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
-        return StreamingResponse(download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled), media_type="application/octet-stream", headers=headers)
+        return StreamingResponse(common.download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled), media_type="application/octet-stream", headers=headers)
     except Exception as e:
         logger.error(f"Failed to download list for {username}. Err:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
@@ -306,7 +311,7 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
 
 @router.get("/download_list", response_class = StreamingResponse)
-async def listDownload(flist:List[str], TargetPath:str = Query(..., description = "Dir to download"),
+async def listDownload(flist:FileList, TargetPath:str = Query(..., description = "Dir to download"),
                        recursive:bool = Query(False, description = "Recursively download"),
                        showhidden:bool = Query(False, description = "Download hidden files"),
                        username:str = Depends(get_username)):
