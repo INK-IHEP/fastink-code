@@ -244,9 +244,6 @@ async def file_download(TargetPath:str, username:str, krb5_enabled:bool = True):
     if "%2F" in TargetPath:
         TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
     try:
-        # if krb5_enabled:
-        #    _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
-  
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
         if not TargetPath:
             return {"status": InkStatus.EMPTY_PATH, "msg": f"Failed to download {TargetPath}. TargetPath is empty", "data": None}
@@ -271,6 +268,16 @@ async def fileDownload(TargetPath:str = Query(..., description = "Filename to do
                        username: str = Depends(get_username)):
         return await file_download(TargetPath = TargetPath, username = username)
 
+
+async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str = "", mgm:str = mgm_url, krb5_enabled = True):
+    try:
+        quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
+        headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
+        return StreamingResponse(download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled), media_type="application/octet-stream", headers=headers)
+    except Exception as e:
+        logger.error(f"Failed to download list for {username}. Err:{str(e)}")
+        return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
+
 #### Download multiple files
 @router.get("/download_dir", response_class=StreamingResponse)
 async def dirDownload(TargetPath:str = Query(..., description = "Dir to download"),
@@ -287,15 +294,19 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
     logger.info(f"Start downloading dir {TargetPath}")
     try:
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
-        quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
-        headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
-        return StreamingResponse(common.download_dir(TargetPath = TargetPath, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
+        is_exist, path_type = await common.path_exist(fname, username, mgm)
+        if not is_exist:
+            raise FileNotFoundError(f"Xrdfs: File {fname} not found.")
+        if path_type != PathType.DIR:
+            raise TypeError(f"{fname} is not an directory.")
+        flist = await common.list_path(dname = TargetPath, username = username, long = True, recursive = recursive, showhidden = showhidden)
+        return await download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled)
     except Exception as e:
         logger.error(f"Failed to download dir {TargetPath}...\nErr:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
 
 @router.get("/download_list", response_class = StreamingResponse)
-async def download_list(flist:List[str], TargetPath:str = Query(..., description = "Dir to download"),
+async def listDownload(flist:List[str], TargetPath:str = Query(..., description = "Dir to download"),
                        recursive:bool = Query(False, description = "Recursively download"),
                        showhidden:bool = Query(False, description = "Download hidden files"),
                        username:str = Depends(get_username)):
@@ -306,6 +317,8 @@ async def download_list(flist:List[str], TargetPath:str = Query(..., description
         TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
     if "%2F" in TargetPath:
         TargetPath = urllib.parse.unquote(TargetPath, encoding='utf-8')
+    
+    #### Get full file list
     try:
         full_flist = []
         for f in flist:
@@ -317,9 +330,7 @@ async def download_list(flist:List[str], TargetPath:str = Query(..., description
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download files for {username}. Err:{str(e)}", "data": None}
     try:
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
-        quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
-        headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
-        return StreamingResponse(common.download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
+        return await download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled)
     except Exception as e:
         logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download list for {username}. Err:{str(e)}", "data": None}
