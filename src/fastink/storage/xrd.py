@@ -2,7 +2,7 @@
 
 import subprocess, os, sys, re, asyncio
 from typing import List, Dict, Any
-from fastink.storage.utils import storage_init, PathType, mode_map, nice_size, async_exec, path_stat, unquote_expand_user, async_timer, sync_timer, gen_empty_zip
+from fastink.storage.utils import storage_init, PathType, mode_map, nice_size, async_exec, async_shell, path_stat, unquote_expand_user, async_timer, sync_timer, gen_empty_zip
 from fastink.storage.fuse import get_file_stream, init_ink_space
 from fastink.common.logger import logger
 from fastink.common.utils import get_krb5cc
@@ -427,11 +427,11 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
                 logger.debug(f"Starting to archieve {l['path']}")
             fname = os.path.relpath(l['path'], TargetPath)
             if l['path'][0:4] == "/afs":
-                cmd = ['sudo', '-E', '-u', username, 'xrdcp', '-f', '--retry', '3', '-', "|", "zip", '-u', zipfile, '-', '&&', 'echo', '-e', f"'@ -\n@={fname}\n", '|', 'zipnote', '-w', zipfile]
+                cmd = f"sudo -E -u {username} xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
                 subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
             else:
-                cmd = ['xrdcp', '-f', '--retry', '3', '-', "|", "zip", '-u', zipfile, '-', '&&', 'echo', '-e', f"'@ -\n@={fname}\n", '|', 'zipnote', '-w', zipfile]
-            returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 1200, decode = True)
+                cmd = f"xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
+            returncode, ret, err = await async_shell(cmd = cmd, env = env, timeout = 1200)
             if returncode != 0 or err != '':
                 logger.error(f"Failed to download file {fname}...\nErr:{err}")
                 raise Exception(f"Failed to download file {fname}...Err:{err}")
