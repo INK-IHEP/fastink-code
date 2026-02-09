@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 
 import subprocess, os, sys, re, asyncio
-from fastink.storage.utils import storage_init, PathType, mode_map, nice_size, async_exec, path_stat, unquote_expand_user, async_timer, sync_timer
+from typing import List, Dict, Any
+from fastink.storage.utils import storage_init, PathType, mode_map, nice_size, async_exec, path_stat, unquote_expand_user, async_timer, sync_timer, gen_empty_zip
 from fastink.storage.fuse import get_file_stream, init_ink_space
 from fastink.common.logger import logger
 from fastink.common.utils import get_krb5cc
 
 params = storage_init()
 mgm_url, max_file_size, krb5_enabled = params['mgm_url'], params['max_file_size'], params['krb5_enabled']
+nsize = 1024 * 1024 * 20
 
 def xrd_env(krb5ccname:str, krb5_enabled:bool = True):
     if not krb5_enabled or krb5ccname == "" or krb5ccname is None:
@@ -96,7 +98,7 @@ async def chmod(fname:str, username:str, mode:str, mgm:str = mgm_url) -> bool:
         return True
 
 # @async_timer
-async def list_dir(
+async def list_path(
     dname: str,
     username: str = "",
     long: bool = True,
@@ -138,7 +140,7 @@ async def list_dir(
 
             if l[4] == " ":
                 ll = re.split(r"\s+", l, maxsplit=4)
-                logger.debug(f"Link: '{l}' : '{ll}' : '{ll[4:]}'")
+                # logger.debug(f"Link: '{l}' : '{ll}' : '{ll[4:]}'")
                 fname = os.path.basename(ll[4])
                 if fname[0] == "." and not showhidden:
                     continue
@@ -160,15 +162,15 @@ async def list_dir(
                         full_path = os.path.join(dname, ll[-1])
                         if os.path.isdir(full_path):
                             ll[0] = "drwxrwxrwx"  # f'd{ll[0][1:]}'
-                            logger.debug(f"Link. {full_path} is a directory")
+                            # logger.debug(f"Link. {full_path} is a directory")
                         else:
                             # ll[0] == '-' + ll[0][1:]
                             ll[0] = "-rwxrwxrwx"  # f'd{ll[0][1:]}'
-                            logger.debug(f"Link. {full_path} is a file")
+                            # logger.debug(f"Link. {full_path} is a file")
 
                     fsize = nice_size(int(ll[3]))
                     if ll[0][0] == "d":
-                        logger.debug(f"Directory: '{l}' : '{ll}' : '{ll[6:]}'")
+                        # logger.debug(f"Directory: '{l}' : '{ll}' : '{ll[6:]}'")
                         contents.append(
                             {
                                 "type": "directory",
@@ -181,7 +183,7 @@ async def list_dir(
                             }
                         )
                     else:
-                        logger.debug(f"File: '{l}' : '{ll}' : '{ll[6:]}'")
+                        # logger.debug(f"File: '{l}' : '{ll}' : '{ll[6:]}'")
                         contents.append(
                             {
                                 "type": "file",
@@ -210,28 +212,6 @@ async def list_dir(
         logger.error(f"Err:{sys.exc_info()[0]}\n. Msg:{sys.exc_info()[1]}")
         raise ValueError(f"Xrdfs: Failed to list directory {dname}'s content:")
     return sorted_contents # if len(sorted_contents) <=3000 else sorted_contents[0:3000]+[{"type":"...", "permision":"...", "user":"...", "group":"...","size":"...","time":"...","path":"..."}]
-
-async def xrd_delete_file0(name: str, str, mgm: str = mgm_url) -> bool:
-    env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
-    is_exist, path_type = await path_exist(name, mgm)
-
-    if not is_exist:
-        logger.error(f"PATH {name} doesn't exist.")
-        return False
-
-    # cmd = "rmdir" if is_dir else "rm"
-    cmd = "rmdir" if path_type == PathType.DIR else "rm"
-    try:
-        cmd = f"xrdfs {mgm} {cmd} '''{name}'''" if '"' in name else f'xrdfs {mgm} {cmd} """{name}"""'
-        returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
-        if returncode == 0 and ret == 0:
-            msg = f"{name} is deleted."
-        else:
-            msg = f"Failed to delete {name}."
-    except Exception as e:
-        logger.error(f"Failed to deleted {name}.")
-        logger.error(f"Err:\n{sys.exc_info()[0]}\n.Msg:\n{sys.exc_info()[1]}")
-        raise e
 
 # @async_timer
 async def delete_path(
@@ -266,7 +246,7 @@ async def delete_path(
         return status
 
     if path_type == PathType.DIR:
-        raw_files = await list_dir(name, long=True, recursive=True, mgm=mgm)
+        raw_files = await list_path(name, long=True, recursive=True, mgm=mgm)
         for f in raw_files:
             if f["type"] == "directory":
                 dirs.append(f["path"])
@@ -432,6 +412,91 @@ async def get_file(
         )
         raise e
 
+
+#### Prepare zip file
+async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]], username:str = '', mgm:str = mgm_url, krb5_enabled = True) -> bool:
+    logger.info(f"Starting prepare temporary zipfile {zipfile}.")
+    try:
+        await gen_empty_zip(zipfile)
+        _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
+        env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
+        for l in flist:
+            if l['type'] != PathType.FILE:
+                logger.debug(f"{l['path']} is not a file. Skip it...")
+            else:
+                logger.debug(f"Starting to archieve {l['path']}")
+            fname = os.path.relpath(l['path'], TargetPath)
+            if l['path'][0:4] == "/afs":
+                cmd = ['sudo', '-E', '-u', username, 'xrdcp', '-f', '--retry', '3', '-', "|", "zip", '-u', zipfile, '-', '&&', 'echo', '-e', f"'@ -\n@={fname}\n", '|', 'zipnote', '-w', zipfile]
+                subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
+            else:
+                cmd = ['xrdcp', '-f', '--retry', '3', '-', "|", "zip", '-u', zipfile, '-', '&&', 'echo', '-e', f"'@ -\n@={fname}\n", '|', 'zipnote', '-w', zipfile]
+            returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 1200, decode = True)
+            if returncode != 0 or err != '':
+                logger.error(f"Failed to download file {fname}...\nErr:{err}")
+                raise Exception(f"Failed to download file {fname}...Err:{err}")
+            else:
+                logger.debug(f"Successfully archived {l['path']}...")
+        logger.info(f"Successfully archieved all files in {zipfile}.")
+    except Exception as e:
+        logger.error(f"Failed to archieve all files into {zipfile}...\nErr:{err}")
+        logger.error(f"Removing temporary zip file {zipfile}......")
+        os.remove(zipfile)
+        return False
+    return True
+
+#### Download dir
+async def download_dir(TargetPath:str, username:str = "", mgm:str = mgm_url, krb5_enabled:bool = True, recursive:bool = False, showhidden:bool = False):
+    _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
+    env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
+    try:
+        fname = unquote_expand_user(dname = TargetPath, username = username, url = False)
+        is_exist, path_type = await path_exist(fname, username, mgm)
+        if not is_exist:
+            raise FileNotFoundError(f"Xrdfs: File {fname} not found.")
+        if path_type != PathType.DIR:
+            raise TypeError(f"{fname} is not an directory.")
+
+        flist = await list_path(dname = TargetPath, username = username, long = True, recursive = recursive, showhidden = showhidden)
+
+        return await download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm, krb5_enabled = krb5_enabled)
+    except Exception as e:
+        logger.error(f"Failed to download dir {TargetPath}... Err:{str(e)}")
+        raise e
+
+#### Download multiple files
+async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str = "", mgm:str = mgm_url, krb5_enabled = True, recursive:bool = False, showhidden:bool = False):
+    f_sum = 0
+    for f in flist:
+        f_sum += f['size']
+    if f_sum >= max_file_size:
+        logger.error(f"Total size of file list is larger than {max_file_size}...")
+        raise ValueError(f"Total size of file list is larger than {max_file_size}...")
+
+    zipfile = f"{username}-archive.zip"
+    try:
+        status = await prepare_zip_file(zipfile, TargetPath = TargetPath, flist = flist, username = username, mgm = mgm, krb5_enabled = krb5_enabled)
+        if not status:
+            logger.error(f"Failed to prepare zipfile to download files... Unknown Error...")
+        raise ValueError(f"Failed to prepare zipfile to download files... Unknown Error...")
+    except Exception as e:
+        logger.error(f"Failed to prepare zipfile to download files... Err:{str(e)}")
+        raise e
+
+    #### Stream zipfile to client
+    try:
+        logger.info(f"Now streaming zipfile to client...")
+        with open(zipfile, 'rb') as infile:
+            while chunk := infile.read(nsize):
+                yield chunk
+    except Exception as e:
+        logger.error(f"Failed to stream zipfile to client... Err:{str(e)}")
+        raise e
+    finally:
+        cmd = f"rm -f {zipfile}".split()
+        _, _, _ = await async_exec(cmd = cmd, env = {}, timeout = 1200, decode = True)
+        logger.debug(f"Temp zipfile {zipfile} deleted.")
+
 # @async_timer
 async def cat_file(
     fname: str,
@@ -473,7 +538,7 @@ async def cat_file(
 
 # @async_timer
 async def checksum(
-    fname: str, cksname: str = "adler32", mgm: str = mgm_url
+    fname: str, cksname: str = "adler32", username:str = "", mgm: str = mgm_url
 ) -> str:
     _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
     env = xrd_env(krb5ccname)

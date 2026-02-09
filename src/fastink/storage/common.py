@@ -23,11 +23,13 @@ else:
 
 #### Export method
 mkdir = fs_mod.mkdir
-list_dir = fs_mod.list_dir
+list_path = fs_mod.list_path
 upload_file = fs_mod.upload_file
 cat_file = fs_mod.cat_file
 get_file = fs_mod.get_file
 get_file_stream = fs_mod.get_file_stream
+download_dir = fs_mod.download_dir
+download_list = fs_mod.download_list
 delete_path = fs_mod.delete_path
 path_exist = fs_mod.path_exist
 chmod = fs_mod.chmod
