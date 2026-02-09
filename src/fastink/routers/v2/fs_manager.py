@@ -294,11 +294,11 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
     logger.info(f"Start downloading dir {TargetPath}")
     try:
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
-        is_exist, path_type = await common.path_exist(fname, username, mgm)
+        is_exist, path_type = await common.path_exist(TargetPath, username, mgm)
         if not is_exist:
-            raise FileNotFoundError(f"Xrdfs: File {fname} not found.")
+            raise FileNotFoundError(f"Xrdfs: File {TargetPath} not found.")
         if path_type != PathType.DIR:
-            raise TypeError(f"{fname} is not an directory.")
+            raise TypeError(f"{TargetPath} is not an directory.")
         flist = await common.list_path(dname = TargetPath, username = username, long = True, recursive = recursive, showhidden = showhidden)
         return await download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled)
     except Exception as e:
