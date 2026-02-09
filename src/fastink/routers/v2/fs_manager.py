@@ -327,7 +327,7 @@ async def listDownload(flist:FileList, TargetPath:str = Query(..., description =
     try:
         full_flist = []
         for f in flist:
-            ff = await common.list_path(dname = f['path'], username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url)
+            ff = await common.list_path(dname = f"{TargetPath}/{f}", username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url)
             full_flist.append(*ff)
         flist = full_flist
     except Exception as e:
