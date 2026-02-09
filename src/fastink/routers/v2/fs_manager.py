@@ -254,7 +254,7 @@ async def file_download(TargetPath:str, username:str, krb5_enabled:bool = True):
         quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
         headers = {"Content-Disposition": f'attachment; filename="{quoted_name}"'}
         # return StreamingResponse(common.get_file_stream(fname = TargetPath, krb5ccname = '', username = username, mgm = xrd_host, krb5_enabled = krb5_enabled), media_type="application/octet-stream", headers=headers)
-        return await StreamingResponse(common.get_file_stream(fname = TargetPath, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled), media_type="application/octet-stream", headers=headers)
+        return StreamingResponse(common.get_file_stream(fname = TargetPath, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled), media_type="application/octet-stream", headers=headers)
     except ValueError as e:
         logger.error(f'User token is expired or invalid')
         return {"status": InkStatus.TOKEN_INVALID, "msg": f"Failed to download {TargetPath}. User token is expired or invalid.", "data": None}
@@ -289,7 +289,7 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
         quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
         headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
-        return await StreamingResponse(common.download_dir(TargetPath = TargetPath, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
+        return StreamingResponse(common.download_dir(TargetPath = TargetPath, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
     except Exception as e:
         logger.error(f"Failed to download dir {TargetPath}...\nErr:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
@@ -319,7 +319,7 @@ async def download_list(flist:List[str], TargetPath:str = Query(..., description
         TargetPath = unquote_expand_user(dname = TargetPath, username = username, url = True)
         quoted_name=urllib.parse.quote(os.path.basename(TargetPath),'utf-8')
         headers = {"Content-Disposition": f'attachment; filename="{quoted_name}.zip"'}
-        return await StreamingResponse(common.download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
+        return StreamingResponse(common.download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = xrd_host, krb5_enabled = krb5_enabled, showhidden = showhidden), media_type="application/octet-stream", headers=headers)
     except Exception as e:
         logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download list for {username}. Err:{str(e)}", "data": None}
