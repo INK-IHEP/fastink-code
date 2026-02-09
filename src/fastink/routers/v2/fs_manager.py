@@ -311,7 +311,7 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download dir {TargetPath}. Err:{str(e)}", "data": None}
 
 @router.get("/download_list", response_class = StreamingResponse)
-async def listDownload(flist:FileList, TargetPath:str = Query(..., description = "Dir to download"),
+async def listDownload(filelist:FileList, TargetPath:str = Query(..., description = "Dir to download"),
                        recursive:bool = Query(False, description = "Recursively download"),
                        showhidden:bool = Query(False, description = "Download hidden files"),
                        username:str = Depends(get_username)):
@@ -325,11 +325,10 @@ async def listDownload(flist:FileList, TargetPath:str = Query(..., description =
     
     #### Get full file list
     try:
-        full_flist = []
-        for f in flist:
+        flist = []
+        for f in filelist.flist:
             ff = await common.list_path(dname = f"{TargetPath}/{f}", username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url)
-            full_flist.append(*ff)
-        flist = full_flist
+            flist.append(*ff)
     except Exception as e:
         logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download files for {username}. Err:{str(e)}", "data": None}
