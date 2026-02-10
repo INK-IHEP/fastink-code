@@ -105,6 +105,7 @@ async def list_path(
     recursive: bool = False,
     showhidden: bool = False,
     mgm: str = mgm_url,
+    raw: bool = False
 ):
     _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
     env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
@@ -168,7 +169,7 @@ async def list_path(
                             ll[0] = "-rwxrwxrwx"  # f'd{ll[0][1:]}'
                             # logger.debug(f"Link. {full_path} is a file")
 
-                    fsize = nice_size(int(ll[3]))
+                    fsize = nice_size(int(ll[3]), raw)
                     if ll[0][0] == "d":
                         # logger.debug(f"Directory: '{l}' : '{ll}' : '{ll[6:]}'")
                         contents.append(
@@ -449,11 +450,11 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
 async def download_list(TargetPath:str, flist:List[Dict[str,Any]], username:str = "", mgm:str = mgm_url, krb5_enabled = True, recursive:bool = False, showhidden:bool = False):
     
     f_sum = 0
-    #for f in flist:
-    #    f_sum += f['size']
-    #if f_sum >= max_file_size:
-    #    logger.error(f"Total size of file list is larger than {max_file_size}...")
-    #    raise ValueError(f"Total size of file list is larger than {max_file_size}...")
+    for f in flist:
+       f_sum += f['size']
+    if f_sum >= max_file_size:
+       logger.error(f"Total size of file list is larger than {max_file_size}...")
+       raise ValueError(f"Total size of file list is larger than {max_file_size}...")
 
     zipfile = f"{username}-archive.zip"
     try:

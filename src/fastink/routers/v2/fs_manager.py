@@ -304,7 +304,7 @@ async def dirDownload(TargetPath:str = Query(..., description = "Dir to download
             raise FileNotFoundError(f"Xrdfs: File {TargetPath} not found.")
         if path_type != PathType.DIR:
             raise TypeError(f"{TargetPath} is not an directory.")
-        flist = await common.list_path(dname = TargetPath, username = username, long = True, recursive = recursive, showhidden = showhidden)
+        flist = await common.list_path(dname = TargetPath, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url, raw = True)
         return await download_list(TargetPath = TargetPath, flist = flist, username = username, mgm = mgm_url, krb5_enabled = krb5_enabled)
     except Exception as e:
         logger.error(f"Failed to download dir {TargetPath}...\nErr:{str(e)}")
@@ -327,7 +327,7 @@ async def listDownload(filelist:FileList, TargetPath:str = Query(..., descriptio
     try:
         flist = []
         for f in filelist.flist:
-            ff = await common.list_path(dname = f"{TargetPath}/{f}", username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url)
+            ff = await common.list_path(dname = f"{TargetPath}/{f}", username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url, raw = True)
             flist.append(*ff)
     except Exception as e:
         logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")

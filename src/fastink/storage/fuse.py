@@ -91,6 +91,7 @@ async def list_path(
     recursive: bool = False,
     showhidden: bool = False,
     mgm: str = mgm_url,
+    raw: bool = False
 ):
     option = ""
     contents = []
@@ -152,7 +153,7 @@ async def list_path(
                             ll[0] = "-rwxrwxrwx"  # f'd{ll[0][1:]}'
                             logger.debug(f"Link. {full_path} is a file")
 
-                    fsize = nice_size(int(ll[3]))
+                    fsize = nice_size(int(ll[3]), raw)
                     if ll[0][0] == "d":
                         logger.debug(f"Directory: '{l}' : '{ll}' : '{ll[6:]}'")
                         contents.append(
