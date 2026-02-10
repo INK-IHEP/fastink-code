@@ -10,6 +10,8 @@ from fastink.common.utils import get_uname_from_uid
 from fastink.storage import common
 from fastink.storage.utils import PathType, extract_param, unquote_expand_user
 from fastink.common.logger import logger
+from fastink.common.exception import TokenExpiredException
+
 from fastink.routers.headers import get_username
 from fastink.routers.status import *
 import jwt
@@ -98,6 +100,7 @@ async def fileList(workdir:str = Query(default=None, description = "Directory to
         sorted_results = await common.list_path(dname = work_directory, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = xrd_host)
         #tm_elapsed  = time.time() - tm_start
         #logger.debug(f"Timer. list_path for {username} cost: {tm_elapsed:.4f} seconds.")
+    excpet 
     except Exception as e:
         logger.error(f"Failed to list {workdir}.\nErr:{str(e)}.")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to list {workdir}. Err:{str(e)}", "data": None}

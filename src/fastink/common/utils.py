@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from functools import wraps
 
 from fastink.common.logger import logger
+from fastink.common.exception import TokenExpiredException
 
 
 def get_uid_from_name(username: str):
@@ -89,7 +90,7 @@ def get_krb5cc(uid: int = None, name: str = None, krb5: bool = True):
         else:
             logger.error(f"Retrieved token for {name} is expired or invalid. Remove it.")
             os.remove(krb5ccname)
-            raise ValueError(f"Retrieved token for {name} is expired or invalid.")
+            raise TokenExpiredException(f"Retrieved token for {name} is expired or invalid.")
     except Exception as e:
         logger.error(f"Failed to fetch token for {name} and save to file {krb5ccname}. Err:{str(e)}")
         raise e

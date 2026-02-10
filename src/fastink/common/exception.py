@@ -29,3 +29,14 @@ class BaseAPIException(HTTPException):
     def __init__(self, detail: str = None, status_code: int = None):
         self.detail = detail or self.detail
         self.status_code = status_code or self.status_code
+
+
+class TokenExpiredException(Exception):
+    """Token Expired
+
+    Attributes:
+        message -- explanation of the error
+    """
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
