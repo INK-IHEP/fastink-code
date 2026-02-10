@@ -11,9 +11,17 @@ from src.computing.tools.db.db_tools import *
 from src.computing.cluster.cluster import SLURM_JOB, SubmitMode
 from src.computing.adapter.strategy import scheduler
 from src.computing.adapter.baseadapter import SchedulerBase
-from src.computing.tools.common.utils import sub_command, create_iptables, delete_iptables, jobid_sort_key
+from src.computing.tools.common.utils import (
+    sub_command, 
+    create_iptables, 
+    delete_iptables, 
+    jobid_sort_key, 
+    init_job_dir, 
+    PathChecker, 
+    parse_sbatch_out_err
+)
 from src.computing.hpc.v2.hpc_check_job import get_job_output 
-from src.computing.common import get_endtime_info, PathChecker, parse_sbatch_out_err
+from src.computing.common import get_endtime_info
 
 from time import time
 import json
@@ -22,6 +30,7 @@ from uuid import uuid4
 
 import logging
 logger = logging.getLogger("ink.hpcadapter")
+
 @scheduler("slurm")
 class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
@@ -62,30 +71,32 @@ class HPC_Scheduler(SchedulerBase):
         if jobtype not in iptables_jobtype:
             pathchk = PathChecker()
             
-            if pathchk.is_dir(output_file):
-                raise ValueError(f"Output file cannot be a directory, current value is {output_file}.")
-            elif pathchk.is_abs(output_file):
-                out_path = output_file
-            elif pathchk.is_filename_only(output_file) :
-                out_path = str(Path(jobdir) / output_file)
-                    
-            if pathchk.is_dir(error_file):
-                raise ValueError(f"Error file cannot be a directory, current value is {error_file}.")
-            elif pathchk.is_abs(error_file):
-                err_path = error_file
-            elif pathchk.is_filename_only(error_file) :
-                err_path = str(Path(jobdir) / error_file)
+            if output_file:
+                if pathchk.is_directory(output_file):
+                    raise ValueError(f"Output file cannot be a directory, current value is {output_file}.")
+                elif pathchk.is_absolute_path(output_file):
+                    out_path = output_file
+                elif pathchk.is_filename_only(output_file) :
+                    out_path = str(Path(jobdir) / output_file)
+            
+            if error_file:    
+                if pathchk.is_directory(error_file):
+                    raise ValueError(f"Error file cannot be a directory, current value is {error_file}.")
+                elif pathchk.is_absolute_path(error_file):
+                    err_path = error_file
+                elif pathchk.is_filename_only(error_file) :
+                    err_path = str(Path(jobdir) / error_file)
         
             if job_script_abs_path:
                 if not pathchk.is_existed(job_script_abs_path):
                     raise ValueError(f"Job script path not existed, current value is {job_input_abs_path}.")
-                if not pathchk.is_abs(job_script_abs_path):
+                if not pathchk.is_absolute_path(job_script_abs_path):
                     raise ValueError(f"Job script must be an absolute path, current value is {job_script_abs_path}.")
             
             if job_input_abs_path:
                 if not pathchk.is_existed(job_input_abs_path):
                     raise ValueError(f"Job input file not existed, current value is {job_input_abs_path}.")
-                if not pathchk.is_abs(job_input_abs_path):
+                if not pathchk.is_absolute_path(job_input_abs_path):
                     raise ValueError(f"Job input file must be an absolute path, current value is {job_input_abs_path}")
                 if not pathchk.is_file(job_input_abs_path):
                     raise ValueError(f"Job input must be a file, current value is {job_input_abs_path}")
@@ -149,7 +160,7 @@ class HPC_Scheduler(SchedulerBase):
                 with open(job_script_abs_path, "rb") as file:
                     script_content = file.read()
                 submit_abs_job_script = f"{jobdir}/{script_file_name}"
-                await common.upload_file(src_data=script_content, dst=submit_abs_job_script, username=self.USERNAME, mem=self.XROOTD_PATH, mode="700")
+                await common.upload_file(src_data=script_content, dst=submit_abs_job_script, username=self.USERNAME, mgm=self.XROOTD_PATH, mode="700")
             else:
                 raise ValueError("Job content or job script cannot both be empty.")
         
@@ -163,10 +174,7 @@ class HPC_Scheduler(SchedulerBase):
                     
     async def submit_job_sync(self, hpc_job_params: SLURM_JOB) -> dict:
         try:
-            time_stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-            token_filename, krb5_decoded_bytes = self._generate_token_file()
-            logger.info(f"Generate User {self.USERNAME} the token file finished.")
-            job_dir = await self._init_job_dir(hpc_job_params.job_type, time_stamp, krb5_decoded_bytes)
+            job_dir = await init_job_dir(self.USERNAME, hpc_job_params.job_type)
             logger.info(f"Init User {self.USERNAME} jobdir {job_dir} finished.")
 
             submit_cmd, out_path, err_path = await self._gen_slurm_submit_cmd(cpu=hpc_job_params.cpu, 
@@ -189,7 +197,7 @@ class HPC_Scheduler(SchedulerBase):
             logger.info(f"Generate the slurm submit command for  User({self.USERNAME}) finished, cmd: {submit_cmd}")
 
             # Submit the slurm job.
-            stdout = await sub_command(submit_cmd, 10, "submit job failed.", "submit job timeout.")
+            stdout = await sub_command(submit_cmd, 30, "submit job failed.", "submit job timeout.")
             logger.info(f"The slurm submit info: {stdout}")
 
             job_id_line = stdout.decode().strip()
@@ -199,17 +207,17 @@ class HPC_Scheduler(SchedulerBase):
             insert_job_info(self.UID, job_id, out_path, err_path, hpc_job_params.job_type, job_dir, self.CLUSTER_TYPE)
             logger.info(f"Submit job({job_id}) for user({self.USERNAME}) to queue.")
 
-            return job_id
+            return {
+                "cluster": self.CLUSTER_TYPE,
+                "job_id": job_id,
+                "job_status": "SUBMITTED"
+            }
         
         except Exception as e:
             logger.error(f"Some Wrong in Submit job, the details: {e}")
             raise e
-        
-        finally:
-            if token_filename and os.path.exists(token_filename):
-                os.remove(token_filename)
 
-    async def submit_job_async(self, job_data: SLURM_JOB) -> None:
+    async def submit_job_async(self, job_data: SLURM_JOB) -> dict:
         """
         Asynchronously submit a Slurm job:
         - Push job parameters into Redis queue
@@ -330,7 +338,7 @@ class HPC_Scheduler(SchedulerBase):
 
         return False
     
-    async def submit_job_from_queue(self, job: dict) -> str:
+    async def submit_job_from_queue(self, job: dict) -> dict:
         """
         Submit a Slurm job from redis queue payload.
         Called ONLY by async worker.
@@ -347,12 +355,7 @@ class HPC_Scheduler(SchedulerBase):
             # --------------------------------------------------
             # 1. Prepare job runtime
             # --------------------------------------------------
-            time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            token_filename, krb5_decoded_bytes = self._generate_token_file()
-
-            job_dir = await self._init_job_dir(
-                job_type, time_stamp, krb5_decoded_bytes
-            )
+            job_dir = await init_job_dir(username,job_type)
 
             # --------------------------------------------------
             # 2. Generate sbatch command
@@ -382,9 +385,9 @@ class HPC_Scheduler(SchedulerBase):
             # --------------------------------------------------
             stdout = await sub_command(
                 submit_cmd,
-                timeout=10,
-                err_msg="submit slurm job failed",
-                timeout_msg="submit slurm job timeout",
+                10,
+                "submit slurm job failed",
+                "submit slurm job timeout",
             )
 
             job_id_line = stdout.decode().strip()
@@ -474,15 +477,15 @@ class HPC_Scheduler(SchedulerBase):
             )
 
             return {
-                "cluster": "slurm",
+                "cluster": cluster,
                 "submit_uuid": submit_uuid,
                 "job_status": "SUBMITTED",
                 "job_id" : job_id
             }
-
-        finally:
-            if token_filename and os.path.exists(token_filename):
-                os.remove(token_filename)
+            
+        except Exception as e:
+            logger.error(f"Failed to submit jobs from queue, the details: {e}")
+            raise e    
 
     async def query_job(self, req_job_type: Optional[str] = None):
         """
@@ -523,7 +526,7 @@ class HPC_Scheduler(SchedulerBase):
 
             fields = line.split("|")
 
-            job_id = int(fields[0])
+            job_id = job_id = fields[0].strip()
             partition = fields[1]
             slurm_state = fields[2]
             node_list = fields[5]
@@ -632,8 +635,12 @@ class HPC_Scheduler(SchedulerBase):
             uuid_val = await r.get(
                 f"job_id_to_submit_uuid:{self.CLUSTER_TYPE}:{job_id}"
             )
-            if uuid_val:
+            if uuid_val is None:
+                submit_uuid = ""
+            elif isinstance(uuid_val, bytes):
                 submit_uuid = uuid_val.decode()
+            else:
+                submit_uuid = uuid_val
 
             job_list.append(
                 {
@@ -800,9 +807,9 @@ class HPC_Scheduler(SchedulerBase):
             try:
                 await sub_command(
                     f"scancel {resolved_job_id}",
-                    timeout=5,
-                    err_msg=f"scancel job {resolved_job_id} failed",
-                    timeout_msg=f"scancel job {resolved_job_id} timeout",
+                    5,
+                    f"scancel job {resolved_job_id} failed",
+                    f"scancel job {resolved_job_id} timeout",
                 )
             except Exception as e:
                 # Job may already be finished or cancelled

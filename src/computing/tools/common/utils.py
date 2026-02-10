@@ -1,6 +1,7 @@
 import asyncio, json
 import importlib, grp
 import pwd, os, base64
+import shlex
 from shlex import quote
 from typing import Optional
 from datetime import datetime
@@ -81,6 +82,17 @@ def ts_to_str(ts: Optional[int]) -> str:
         return ""
     return datetime.fromtimestamp(ts, ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
+def jobid_sort_key(x: dict) -> int:
+    jid = str(x.get("jobId") or "").strip()
+    if not jid:
+        return 10**18
+    try:
+        return int(jid)
+    except ValueError:
+        try:
+            return int(jid.split(".")[0])
+        except Exception:
+            return 0
 
 def build_requirements(request_wn=None, request_arch=None) -> str:
     conds = []
@@ -491,3 +503,85 @@ async def sub_command(command, timeoutsec, errinfo, tminfo):
 
     return stdout
 
+class PathChecker:
+    
+    @staticmethod
+    def is_absolute_path(path: str) -> bool:
+        return Path(path).is_absolute()
+    
+    @staticmethod
+    def is_relative_path(path: str) -> bool:
+        return not Path(path).is_absolute()
+    
+    @staticmethod
+    def is_file(path: str) -> Optional[bool]:
+        p = Path(path)
+        return p.is_file() if p.exists() else None
+    
+    @staticmethod
+    def is_directory(path: str) -> Optional[bool]:
+        p = Path(path)
+        return p.is_dir() if p.exists() else None
+    
+    @staticmethod
+    def is_filename_only(path: str) -> Optional[bool]:
+        p = PurePath(path)
+    
+        if str(p.parent) != '.':
+            return False
+        
+        if any(sep in path for sep in ('/', '\\')):
+            return False
+        
+        if len(path.parts) > 1:
+            return False
+        
+        if path.anchor:
+            return False
+        
+        return True
+    
+    @staticmethod
+    def is_existed(path: str) -> Optional[bool]:
+        p = Path(path)
+        return p.exists()
+    
+def parse_sbatch_out_err(cmd: str, job_id: str | int) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Parse --output and --error paths from an sbatch command
+    and replace %j with the given job ID.
+
+    :param cmd: sbatch command string
+    :param job_id: Slurm job ID
+    :return: (output_path, error_path)
+    """
+    output_path = None
+    error_path = None
+
+    tokens = shlex.split(cmd)
+    job_id = str(job_id)
+
+    it = iter(enumerate(tokens))
+    for i, token in it:
+        # --output=/path
+        if token.startswith("--output="):
+            output_path = token.split("=", 1)[1]
+
+        # --output /path
+        elif token == "--output" and i + 1 < len(tokens):
+            output_path = tokens[i + 1]
+
+        # --error=/path
+        elif token.startswith("--error="):
+            error_path = token.split("=", 1)[1]
+
+        # --error /path
+        elif token == "--error" and i + 1 < len(tokens):
+            error_path = tokens[i + 1]
+
+    if output_path:
+        output_path = output_path.replace("%j", job_id)
+    if error_path:
+        error_path = error_path.replace("%j", job_id)
+
+    return output_path, error_path

@@ -8,7 +8,7 @@ class SubmitMode(str, Enum):
 class Base_JOB(BaseModel):
     job_script: Optional[str] = Field(None, description="Job Script Content")
     job_parameters: Optional[str] = Field(None, description="User job parameters")
-    cpu: Optional[int] = Field(1, gt=0, description="CPU requirement")
+    cpu: Optional[int] = Field(1, gt=0, description="CPU requirement, cpu-per-task for Slurm")
     mem: Optional[int] = Field(..., gt=0, description="Memory requirement (MB)")
     gpu_num: Optional[int] = Field(0, ge=0, description="GPU requirement")
     job_name: str = Field(f"", description="Job name")
@@ -20,8 +20,8 @@ class Base_JOB(BaseModel):
 class SLURM_JOB(Base_JOB):
     time: Optional[str] = Field(None, description="作业运行时间上限 (格式: HH:MM:SS)")  # Optional
     partition: str = Field(..., description="作业分区")  # Mandatory
-    nodes: Optional[str] = Field(None, description="申请的节点数")  # Optional
-    ntasks: Optional[str] = Field(None, description="使用的CPU核数")  # Optional
+    nodes: Optional[int] = Field(1, gt=0, description="申请的节点数")  # Optional
+    ntasks: Optional[int] = Field(1, gt=0, description="使用的CPU核数")  # Optional
     account: str = Field(..., description="组名称")  # Mandatory
     qos: str = Field(..., description="服务质量 (QoS)")  # Mandatory
     gpu_name: Optional[str] = Field(None, description="GPU or DCU")  # Optional

@@ -321,21 +321,21 @@ async def create_common_job(
         adapter = get_scheduler(jobclass.cluster_id, username)
         result = await adapter.submit_job(jobclass)
 
-        if jobclass.submit_mode == SubmitMode.sync:
+        if jobclass.submit_mode == SubmitMode.SYNC:
             return {
                 "status": InkStatus.SUCCESS,
                 "msg": "Submit job synchronously succeeded.",
-                "data": result   # contains job_id
+                "data": result      # contains job_id
             }
         else:
             return {
                 "status": InkStatus.SUCCESS,
                 "msg": "Submit job asynchronously accepted.",
-                "data": {}       # async has no job_id yet
+                "data": result      # async has no job_id yet, but submit_uuid
             }
 
     except Exception as e:
-        logger.exception()
+        logger.exception(f"Failed to create jobs, user: {username}, cluster: {jobclass.cluster_id}, details: {e}.")
         return {
             "status": InkStatus.SERVER_INTERNAL_ERROR,
             "msg": f"Create common job failed: {e}",
@@ -343,7 +343,7 @@ async def create_common_job(
         }
 
 
-@router.get("/query_jobs")
+@router.post("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
     cluster_id: str = Query(None, description="Cluster ID"),
@@ -363,7 +363,7 @@ async def query_common_job(
                 else:
                     cluster_ids = list(cluster_list)
             except Exception as e:
-                logger.error(f"Get user jobs failed (load cluster_list), username: {username}, details: {e}.")
+                logger.exception(f"Get user jobs failed (load cluster_list), username: {username}, details: {e}.")
                 return {
                     "status": InkStatus.SERVER_INTERNAL_ERROR,
                     "msg": f"Get user {username} jobs failed: {e}.",
@@ -377,7 +377,7 @@ async def query_common_job(
                     if jobs:
                         joblist.extend(jobs)
                 except Exception as e:
-                    logger.error(f"Get user jobs failed for cluster {cid}, username: {username}, details: {e}.")
+                    logger.exception(f"Get user jobs failed for cluster {cid}, username: {username}, details: {e}.")
         else:
             adapter = get_scheduler(cluster_id, username)
             joblist = await adapter.query_job(job_type) or []
@@ -395,7 +395,7 @@ async def query_common_job(
         }
 
     except Exception as e:
-        logger.error(f"Get user jobs failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
+        logger.exception(f"Get user jobs failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
         return {
             "status": InkStatus.SERVER_INTERNAL_ERROR,
             "msg": f"Get user {username} jobs failed: {e}.",
@@ -405,12 +405,18 @@ async def query_common_job(
 @router.post("/delete_job")
 async def delete_common_job(
     username: str = Depends(get_username),
-    job_id: str = Body(..., description="Job ID",embed=True),
+    submit_uuid: str | None = Body(None, description="use submit_uuid first because of async submission", embed=True),
+    job_id: str | None = Body(None, description="job id once submitted", embed=True),
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
+
 ):
     try:
         adapter = get_scheduler(cluster_id, username)
-        await adapter.cancel_job(job_id)
+        await adapter.cancel_job(
+            submit_uuid=submit_uuid,
+            job_id=job_id
+        )
+
         return {
             "status": InkStatus.SUCCESS,
             "msg": f"Delete job {job_id} successfully.",

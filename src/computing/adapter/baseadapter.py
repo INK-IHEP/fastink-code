@@ -28,7 +28,7 @@ class SchedulerBase(ABC):
     # =========================
     # Unified submit entrypoint (new)
     # =========================
-    async def submit_job(self, job_data: Base_JOB) -> Optional[str]:
+    async def submit_job(self, job_data: Base_JOB) -> dict:
         """
         Unified job submission entrypoint.
 
@@ -41,9 +41,8 @@ class SchedulerBase(ABC):
             return await self.submit_job_sync(job_data)
 
         elif submit_mode is SubmitMode.ASYNC:
-            await self.submit_job_async(job_data)
-            return None
-
+            return await self.submit_job_async(job_data)
+            
         else:
             raise ValueError(f"Unsupported submit_mode: {submit_mode}")
 
@@ -51,7 +50,7 @@ class SchedulerBase(ABC):
     # Synchronous submission (must be implemented)
     # =========================
     @abstractmethod
-    async def submit_job_sync(self, job_data: Base_JOB) -> str:
+    async def submit_job_sync(self, job_data: Base_JOB) -> dict:
         """
         Submit job synchronously.
 
@@ -64,7 +63,7 @@ class SchedulerBase(ABC):
     # Asynchronous submission (must be implemented)
     # =========================
     @abstractmethod
-    async def submit_job_async(self, job_data: Base_JOB) -> None:
+    async def submit_job_async(self, job_data: Base_JOB) -> dict:
         """
         Submit job asynchronously.
 
@@ -77,7 +76,7 @@ class SchedulerBase(ABC):
     # Worker interface (must be implemented)
     # =========================
     @abstractmethod
-    async def submit_job_from_queue(self, job_dict: dict) -> str:
+    async def submit_job_from_queue(self, job_dict: dict) -> dict:
         """
         Called by crond / worker.
 
@@ -96,8 +95,24 @@ class SchedulerBase(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def cancel_job(self, job_id: str) -> bool:
-        """Cancel job"""
+    async def cancel_job(
+        self,
+        *,
+        submit_uuid: Optional[str] = None,
+        job_id: Optional[str] = None,
+    ) -> dict:
+        """
+        Cancel a job.
+
+        Supports:
+        - Async jobs identified by submit_uuid
+        - Sync jobs identified by job_id
+        Returns a dict containing:
+            - cluster
+            - submit_uuid
+            - job_id
+            - job_status
+        """
         raise NotImplementedError
 
 

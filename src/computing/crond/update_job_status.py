@@ -19,7 +19,7 @@ def is_cluster_enabled(cluster: str) -> bool:
     """
     Check whether submit worker for the given cluster is enabled via YAML config.
     """
-    enabled_clusters = get_config("crond", "submit_workers", default=[])
+    enabled_clusters = get_config("crond", "submit_workers")
 
     if not isinstance(enabled_clusters, (list, tuple)):
         logger.error("crond.submit_workers must be a list")
@@ -92,9 +92,9 @@ def get_condor_history_command(job_id: str) -> str:
 
 
 LOCK_PATH1 = Path("src") / "computing" / "crond" / "lock1"
-@cluster_enabled("htcondor")
-@router.on_event("startup")
-@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+#@cluster_enabled("htcondor")
+#@router.on_event("startup")
+#@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
 async def update_completed_jobs():
     lock = FileLock(str(LOCK_PATH1), timeout=0.1)  
     cluster_jobs: dict[str, list[dict]] = {}
@@ -219,9 +219,9 @@ def gen_history_list_command() -> str:
 
 
 LOCK_PATH2 = Path("src") / "computing" / "crond" / "lock2"
-@cluster_enabled("htcondor")
-@router.on_event("startup")
-@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
+#@cluster_enabled("htcondor")
+#@router.on_event("startup")
+#@repeat_every(seconds=3600, wait_first=False, raise_exceptions=True, logger=logger)
 async def resert_start_end_time():
     lock = FileLock(str(LOCK_PATH2), timeout=0.1)  
     try:
@@ -293,9 +293,9 @@ async def resert_start_end_time():
 
 
 LOCK_PATH3 = Path("src") / "computing" / "crond" / "lock3"
-@cluster_enabled("htcondor")
-@router.on_event("startup")
-@repeat_every(seconds=5, wait_first=False, raise_exceptions=True, logger=logger)
+#@cluster_enabled("htcondor")
+#@router.on_event("startup")
+#@repeat_every(seconds=5, wait_first=False, raise_exceptions=True, logger=logger)
 async def submit_job_from_redis():
     lock = FileLock(str(LOCK_PATH3), timeout=0.1)  
     try:
@@ -378,7 +378,7 @@ async def submit_from_queue(cluster: str):
     This function is cluster-agnostic and shared by all workers.
     """
     
-    lock_path = Path("src") / "computing" / "crond" / "submit_{cluster}.lock"
+    lock_path = Path("src") / "computing" / "crond" / f"submit_{cluster}.lock"
     lock = FileLock(str(lock_path), timeout=0.1)
 
     try:
@@ -404,7 +404,7 @@ async def submit_from_queue(cluster: str):
 
                 except Exception as e:
                     logger.error(
-                        f"[{cluster}] Failed to submit job: {raw_job}",
+                        f"[{cluster}] Failed to submit job: ({raw_job}) with error({e})",
                         exc_info=True
                     )
                     # Optional: push to dead-letter queue
