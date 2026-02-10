@@ -1,4 +1,4 @@
-PyJWT
+PyJWT==2.11.0
 async_timeout
 concurrent-log-handler
 cryptography
@@ -10,7 +10,6 @@ filelock
 htcondor
 httpx
 influxdb
-jwt
 paramiko
 pexpect
 pycryptodome
