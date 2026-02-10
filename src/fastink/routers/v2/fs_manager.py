@@ -100,7 +100,9 @@ async def fileList(workdir:str = Query(default=None, description = "Directory to
         sorted_results = await common.list_path(dname = work_directory, username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = xrd_host)
         #tm_elapsed  = time.time() - tm_start
         #logger.debug(f"Timer. list_path for {username} cost: {tm_elapsed:.4f} seconds.")
-    excpet 
+    except TokenExpiredException as e:
+        logger.error(f"User {username}'s token expired...")
+        return {"status": InkStatus.TOKEN_EXPIRED, "msg": f"Failed to list {workdir}. User {username}'s token expired.", "data": None}
     except Exception as e:
         logger.error(f"Failed to list {workdir}.\nErr:{str(e)}.")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to list {workdir}. Err:{str(e)}", "data": None}
