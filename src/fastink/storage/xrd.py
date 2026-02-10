@@ -6,6 +6,7 @@ from fastink.storage.utils import storage_init, PathType, mode_map, nice_size, a
 from fastink.storage.fuse import get_file_stream, init_ink_space
 from fastink.common.logger import logger
 from fastink.common.utils import get_krb5cc
+from fastink.common.exception import TokenExpiredException
 
 params = storage_init()
 mgm_url, max_file_size, krb5_enabled = params['mgm_url'], params['max_file_size'], params['krb5_enabled']
@@ -36,10 +37,9 @@ async def path_exist(
         raise PermissionError(f"Permission denied when access {name}")
     except TimeoutError as e:
         logger.error(f"Timeout when check if {name} exists...")
-        return False, PathType.UNKNOWN
-    except Exception as e:
-        logger.error(f"Err:{sys.exc_info()[0]}\nMsg:{sys.exc_info()[1]}")
-        return False, PathType.UNKNOWN
+        raise e
+    except TokenExpiredException or Exception as e:
+        raise e
 
 # @async_timer
 #### Create directory
@@ -223,11 +223,16 @@ async def delete_path(
 ) -> bool:
     _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
     env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
-    is_exist, path_type = await path_exist(name, username, mgm)
-
-    if not is_exist:
-        logger.error(f"PATH {name} doesn't exist.")
-        return False
+    try:
+        is_exist, path_type = await path_exist(name, username, mgm)
+        if not is_exist:
+            logger.error(f"PATH {name} doesn't exist.")
+            return False
+    except ValueError as e:
+        logger.error(f"Token for {username} expired...")
+        raise e
+    except Exception as e:
+        raise e
 
     files = []
     dirs = []

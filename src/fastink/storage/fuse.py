@@ -3,6 +3,7 @@
 import subprocess, os, sys, re, asyncio, uuid
 from fastink.storage.utils import storage_init, PathType, nice_size, mode_map, async_exec, path_stat, unquote_expand_user, async_timer
 from fastink.common.logger import logger
+from fastink.common.exception import TokenExpiredException
 from shlex import quote
 
 params = storage_init()
@@ -28,9 +29,8 @@ async def path_exist(
     except TimeoutError as e:
         logger.error(f"Timeout when check if {name} exists...")
         return False, PathType.UNKNOWN
-    except Exception as e:
-        logger.error(f"Err:{sys.exc_info()[0]}\nMsg:{sys.exc_info()[1]}")
-        return False, PathType.UNKNOWN
+    except TokenExpiredException or Exception as e:
+        raise e
 
 #### Create directory
 async def mkdir(
@@ -211,11 +211,14 @@ async def delete_path(
         raise ValueError("Username cannot be empty")
 
     name = unquote_expand_user(dname = name, username = username, url = False)
-    is_exist, path_type = await path_exist(name, username, mgm)
+    try:
+        is_exist, path_type = await path_exist(name, username, mgm)
 
-    if not is_exist:
-        logger.error(f"PATH {name} doesn't exist.")
-        return False
+        if not is_exist:
+            logger.error(f"PATH {name} doesn't exist.")
+            return False
+    except Exception as e:
+        raise e
 
     files = []
     dirs = []
