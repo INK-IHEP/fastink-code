@@ -93,7 +93,10 @@ def path_stat(name, returncode, stdout, stderr):
     return is_exist, path_type
 
 #### Return human-readable filesize
-def nice_size(size_bytes:int):
+def nice_size(size_bytes:int, raw:bool = False):
+    if raw:
+        return size_bytes
+
     """Format the file size in a human-readable format up to TB."""
     if size_bytes == 0:
         return "0B"
