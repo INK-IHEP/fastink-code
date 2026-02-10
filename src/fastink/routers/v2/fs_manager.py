@@ -333,7 +333,7 @@ async def listDownload(flist:str = Query(..., description = "Download file list"
         fflist = []
         for f in flist.split(","):
             ff = await common.list_path(dname = f"{TargetPath}/{f}", username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url, raw = True)
-            fflist.append(*ff)
+            fflist.extend(ff)
     except Exception as e:
         logger.error(f"Failed to download files for {username}...\nErr:{str(e)}")
         return {"status": InkStatus.FS_UNKNOWN_ERROR, "msg": f"Failed to download files for {username}. Err:{str(e)}", "data": None}
