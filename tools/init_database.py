@@ -35,6 +35,7 @@ def init_db():
         "compile",
         "lhaasogpu",
         "juno_daq",
+        "job_lens"
     ]
     for perm in perm_list:
         try:
