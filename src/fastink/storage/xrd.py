@@ -433,10 +433,14 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
                 logger.debug(f"Starting to archieve {l['path']}")
             fname = os.path.relpath(l['path'], TargetPath)
             if l['path'][0:4] == "/afs":
+                # cmd.append(f'''{dst}''') if '"' in dst else cmd.append(f"""{dst}""")
                 cmd = f"sudo -E -u {username} xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
                 subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
             else:
-                cmd = f"xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
+                if '"' in fname:
+                    cmd = f"xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@='''{fname}'''\n' | zipnote -w {zipfile}"
+                else:
+                    cmd = f'xrdcp -f --retry 3 {mgm}/{l["path"]} - | zip -u {zipfile} - && echo -e \'@ -\n@="""{fname}"""\n\' | zipnote -w {zipfile}'
             returncode, ret, err = await async_shell(cmd = cmd, env = env, timeout = 1200)
             if returncode != 0:
                 logger.error(f"Failed to download file {fname}...\nErr:{err}")
