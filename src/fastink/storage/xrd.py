@@ -438,9 +438,9 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
                 subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
             else:
                 if '"' in fname:
-                    cmd = f"xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@='''{fname}'''\n' | zipnote -w {zipfile}"
+                    cmd = f"xrdcp -f --retry 3 '''{mgm}/{l['path']}''' - | zip -u {zipfile} - && echo -e '@ -\n@='''{fname}'''\n' | zipnote -w {zipfile}"
                 else:
-                    cmd = f'xrdcp -f --retry 3 {mgm}/{l["path"]} - | zip -u {zipfile} - && echo -e \'@ -\n@="""{fname}"""\n\' | zipnote -w {zipfile}'
+                    cmd = f'xrdcp -f --retry 3 """{mgm}/{l["path"]}""" - | zip -u {zipfile} - && echo -e \'@ -\n@="""{fname}"""\n\' | zipnote -w {zipfile}'
             returncode, ret, err = await async_shell(cmd = cmd, env = env, timeout = 1200)
             if returncode != 0:
                 logger.error(f"Failed to download file {fname}...\nErr:{err}")
