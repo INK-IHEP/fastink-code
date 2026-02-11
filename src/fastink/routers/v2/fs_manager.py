@@ -331,7 +331,8 @@ async def listDownload(flist:str = Query(..., description = "Download file list"
     #### Get full file list
     try:
         fflist = []
-        for f in flist.split(","):
+        for f_raw in flist.split(","):
+            f = urllib.parse.unquote(f_raw, encoding = 'utf-8')
             ff = await common.list_path(dname = f"{TargetPath}/{f}", username = username, long = True, recursive = recursive, showhidden = showhidden, mgm = mgm_url, raw = True)
             fflist.extend(ff)
     except Exception as e:
