@@ -427,20 +427,27 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
         _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         for l in flist:
-            if l['type'] != "file":
-                logger.debug(f"{l['path']} is not a file. Skip it...")
-            else:
-                logger.debug(f"Starting to archieve {l['path']}")
             fname = os.path.relpath(l['path'], TargetPath)
-            if l['path'][0:4] == "/afs":
-                # cmd.append(f'''{dst}''') if '"' in dst else cmd.append(f"""{dst}""")
-                cmd = f"sudo -E -u {username} xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
-                subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
-            else:
+            if l['type'] == "directory":
+                logger.debug(f"{l['path']} is a dir....")
                 if '"' in fname:
-                    cmd = f"xrdcp -f --retry 3 '''{mgm}/{l['path']}''' - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
+                    cmd = f"cd /tmp && mkdir -p '''/tmp/{fname}''' && zip -r {zipfile} '''{fname}''' && rm -rf '''/tmp/{fname}'''"
                 else:
-                    cmd = f'xrdcp -f --retry 3 """{mgm}/{l["path"]}""" - | zip -u {zipfile} - && echo -e \'@ -\n@={fname}\n\' | zipnote -w {zipfile}'
+                    cmd = f'cd /tmp && mkdir -p """/tmp/{fname}""" && zip -r {zipfile} """{fname}""" && rm -rf """/tmp/{fname}"""'
+            elif l['type'] == 'file':
+                logger.debug(f"Starting to archieve {l['path']}")
+                if l['path'][0:4] == "/afs":
+                # cmd.append(f'''{dst}''') if '"' in dst else cmd.append(f"""{dst}""")
+                    cmd = f"sudo -E -u {username} xrdcp -f --retry 3 {mgm}/{l['path']} - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
+                    subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
+                else:
+                    if '"' in fname:
+                        cmd = f"xrdcp -f --retry 3 '''{mgm}/{l['path']}''' - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
+                    else:
+                        cmd = f'xrdcp -f --retry 3 """{mgm}/{l["path"]}""" - | zip -u {zipfile} - && echo -e \'@ -\n@={fname}\n\' | zipnote -w {zipfile}'
+            else:
+                logger.error(f"Unknown Path Type....")
+                raise ValueError(f"Unknown Path Type {l['type']}...")
             returncode, ret, err = await async_shell(cmd = cmd, env = env, timeout = 1200)
             if returncode != 0:
                 logger.error(f"Failed to download file {fname}...\nErr:{err}")
