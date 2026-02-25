@@ -29,7 +29,7 @@ trigger_prod:
       pipeline_variables: true
   variables:
     TARGET_JOB: "deploy-prod-job"
-    CI_COMMIT_TAG: $CI_COMMIT_TAG
+    RELEASE_TAG: $CI_COMMIT_TAG
 
 # -------------------------------
 # 仅当存在 Release（非普通 tag）时，同步 release 源码到 GitHub
