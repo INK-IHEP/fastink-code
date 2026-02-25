@@ -22,13 +22,25 @@ def add_permission(permission: str) -> bool:
 
 
 def delete_permission(permission: str) -> bool:
+    """Delete a permission and all associated user_permission records.
+
+    This function first deletes all user_permission records that reference
+    this permission, then deletes the permission itself to avoid foreign
+    key constraint violations.
+
+    Returns:
+        bool: True if deletion was successful, False otherwise
+    """
     try:
         permission_id = common.get_permission(permission=permission)["id"]
     except NoResultFound:
         return False
     try:
+        # First delete all user_permission records that reference this permission
+        common.delete_all_user_permissions_by_permission(permission_id=permission_id)
+        # Then delete the permission itself
         common.delete_permission(permission_id=permission_id)
-    except IntegrityError:
+    except (IntegrityError, DatabaseError):
         return False
     return True
 

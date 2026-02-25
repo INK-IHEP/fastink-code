@@ -158,6 +158,13 @@ def get_permission_name(permission_id: str, *, session: Session) -> Optional[str
         raise NoResultFound("Permission not found")
 
 
+@read_session
+def get_all_permissions(*, session: Session) -> list[dict[str, Any]]:
+    stmt = select(models.Permissions)
+    result = session.execute(stmt).scalars().all()
+    return [i.to_dict() for i in result]
+
+
 @transactional_session
 def update_permission(
     permission_id: str, permission: Optional[str] = None, *, session: Session
@@ -513,6 +520,25 @@ def delete_user_permission(
         return True
     except DatabaseError:
         raise DatabaseError("Failed to delete user permission")
+
+
+@transactional_session
+def delete_all_user_permissions_by_permission(
+    permission_id: str, *, session: Session
+) -> int:
+    """Delete all user_permission records associated with a permission.
+
+    Returns the number of records deleted.
+    """
+    try:
+        stmt = delete(models.UserPermissions).where(
+            models.UserPermissions.permission_id == permission_id
+        )
+        result = session.execute(stmt)
+        session.flush()
+        return result.rowcount
+    except DatabaseError:
+        raise DatabaseError("Failed to delete user permissions by permission")
 
 
 @transactional_session

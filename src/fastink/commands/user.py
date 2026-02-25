@@ -4,11 +4,11 @@ import json
 from fastink.auth import krb5
 from fastink.auth import permission
 from fastink.auth import user
-from fastink.commands.basecommand import CommandBase, OperationDict
+from fastink.commands.basecommand import CommandBase, TopLevelCommand, OperationDict
 from fastink.common.utils import convert_to_str
 
 
-class User(CommandBase):
+class User(TopLevelCommand):
 
     def module_help(self) -> str:
         return "Users managerment"

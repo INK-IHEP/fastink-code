@@ -68,15 +68,12 @@ class CommandBase(ABC):
             for name, op in operations.items():
                 help_str += f"{indent}  {name}: {op.get('docs', 'No description')}\n"
 
-        # Recursively add subcommands
+        # Add subcommands (only show name and description, no recursion)
         if subcommands := self.implemented_subcommands():
-            help_str += f"\n{indent}Subcommands:\n"
+            help_str += f"\n{indent}Available subcommands (use 'ink {self.PARSER_NAME} <subcommand> --help' for details):\n"
             for name, cmd_cls in subcommands.items():
                 subcmd = cmd_cls(self.args)
-                help_str += (
-                    f"{indent}  {name}: {subcmd.module_help()}\n"
-                    f"{subcmd._help(level + 2)}"  # Recursive call
-                )
+                help_str += f"{indent}  {name}: {subcmd.module_help()}\n"
 
         # Add usage examples at base level
         if level == 0:
@@ -105,8 +102,8 @@ class CommandBase(ABC):
         # Create subparsers container for nested commands
         subparsers = command_parser.add_subparsers(
             dest=f"{self.PARSER_NAME}_subcommand",
-            title=f"Subcommands under {self.PARSER_NAME}",
             metavar="SUBCOMMAND",
+            help=argparse.SUPPRESS,
         )
 
         # Register subcommands recursively
@@ -154,6 +151,11 @@ class CommandBase(ABC):
         self._execute(target_subcommand, next_verb)
 
 
+class TopLevelCommand(CommandBase):
+    """Base class for top-level commands that should appear in 'ink --help'."""
+    pass
+
+
 class Commands:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
@@ -161,26 +163,32 @@ class Commands:
     @staticmethod
     def _all_commands() -> dict[str, type[CommandBase]]:
         command_map = {
-            child.__name__.lower(): child for child in CommandBase.__subclasses__()
+            child.__name__.lower(): child
+            for child in TopLevelCommand.__subclasses__()
         }
         return command_map
 
     @staticmethod
     def _add_parsers() -> argparse.ArgumentParser:
         all_commands = Commands._all_commands()
-        groups = ""
-        for command_name, command in all_commands.items():
-            help = command(None).module_help().split("\n")[0]
-            groups += f"    {command_name.ljust(20)}{help}\n"
         description = "INK CLI"
         parser = argparse.ArgumentParser(
             description=description,
             formatter_class=argparse.RawDescriptionHelpFormatter,
+            add_help=False,
         )
 
-        subparsers = parser.add_subparsers(dest="command", help=argparse.SUPPRESS)
+        subparsers = parser.add_subparsers(
+            dest="command",
+            title="Available subcommands (use 'ink <subcommand> --help' for details)",
+            metavar="COMMAND",
+        )
         for command in all_commands.values():
             command(None).parser(subparsers)
+
+        # Create options group and add help at the end
+        options_group = parser.add_argument_group("options")
+        options_group.add_argument("-h", "--help", action="help", help="show this help message and exit")
 
         return parser
 
