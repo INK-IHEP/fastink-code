@@ -33,4 +33,4 @@ class HTC_JOB(Base_JOB):
     arch: str = Field("", description="woker node arch")  # 可选
     schedd: Optional[str] = Field("", description="Schedd Host") # 可选
     cm: Optional[str] = Field("", description="CM Host") # 可选
-    cluster_id: Literal["htcondor"] = "htcondor"
+    cluster_id: Literal["htcondor", "htcondor-sync"] = "htcondor"
