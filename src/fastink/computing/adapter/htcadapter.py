@@ -120,7 +120,6 @@ class HTC_Scheduler(SchedulerBase):
     async def query_job(self, req_job_type: Optional[str] = None):
         
         r = redis_connect()
-
         IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
         job_ids = await r.smembers(IDX_KEY)
         job_keys = [f"cluster_jobs:{self.USERNAME}:{jid.decode() if isinstance(jid,(bytes,bytearray)) else jid}" for jid in job_ids]

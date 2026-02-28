@@ -249,12 +249,14 @@ async def create_common_job(
 ):
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
-        await adapter.submit_job(jobclass)
+        jobid = await adapter.submit_job(jobclass)
         
         return {
             "status": InkStatus.SUCCESS,
             "msg": f"Create job successfully.",
-            "data": {}
+            "data": {
+                "jobid": jobid
+            }
         }   
     
     except Exception as e:
