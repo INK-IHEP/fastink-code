@@ -19,7 +19,7 @@ class HTC_SYNC_Scheduler(SchedulerBase):
         super().__init__(uid)
         self.SCHEDD_HOST = get_config("computing", "schedd_host")
         self.CM_HOST = get_config("computing", "cm_host")
-        self.CLUSTER_TYPE = "htcondor"
+        self.CLUSTER_TYPE = "htcondor-sync"
     
 
     def _generate_condor_query_command(self, job_type: str) -> str:

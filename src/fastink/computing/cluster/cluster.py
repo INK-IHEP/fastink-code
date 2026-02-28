@@ -10,7 +10,7 @@ class Base_JOB(BaseModel):
     gpu_num: Optional[int] = Field(0, ge=0, description="GPU requirement")
     job_name: str = Field("", description="Job name")
     job_type: str = Field("", description="Job type")
-    cluster_id: Literal["slurm", "htcondor"] 
+    cluster_id: Literal["slurm", "htcondor", "htcondor-sync"] 
 
 
 class SLURM_JOB(Base_JOB):
