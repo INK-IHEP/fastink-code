@@ -9,7 +9,7 @@ async def get_user_assoc(uid):
 
         # get association info with sacctmgr command
         command_sacctmgr = f"sacctmgr show assoc where user={username} format=Account,QOS,Partition -P"
-        result_sacctmgr = await sub_command(command_sacctmgr, timeoutsec=2, errinfo="sacctmgr err", tminfo="sacctmgr timeout")
+        result_sacctmgr = await sub_command(command_sacctmgr, timeoutsec=30, errinfo="sacctmgr err", tminfo="sacctmgr timeout")
 
         # parse result
         output_lines = result_sacctmgr.decode().strip().split("\n")

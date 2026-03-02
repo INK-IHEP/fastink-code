@@ -33,7 +33,7 @@ async def get_total_resources():
 
     # scontrol is used to get node information
     command = "scontrol show node"
-    result = await sub_command(command, timeoutsec=2, errinfo="scontrol err", tminfo="scontrol timeout")
+    result = await sub_command(command, timeoutsec=30, errinfo="scontrol err", tminfo="scontrol timeout")
     
     # parse node information
     nodes = result.decode().split("\n\n")  # delimiter(a blank line) between each node
@@ -79,7 +79,7 @@ async def get_total_resources_by_cfg_tres():
 
     # scontrol is used to get node information
     command = "scontrol show node"
-    result = await sub_command(command, timeoutsec=2, errinfo="scontrol err", tminfo="scontrol timeout")
+    result = await sub_command(command, timeoutsec=30, errinfo="scontrol err", tminfo="scontrol timeout")
 
     # parse node information
     nodes = result.split("\n\n")  # delimiter(a blank line) between each node

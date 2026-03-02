@@ -1,9 +1,12 @@
 from pprint import pprint
 from typing import Optional, Any
 from datetime import datetime
+from pprint import pprint
+from typing import Optional, Any
+from datetime import datetime
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.expression import update, select, delete
+from sqlalchemy.sql.expression import update, select, delete, delete
 
 from fastink.database.sqla import models
 from fastink.database.sqla.session import read_session, transactional_session

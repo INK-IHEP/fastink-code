@@ -1,9 +1,10 @@
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, or_
 from fastink.database.sqla import models
 from fastink.database.sqla.session import read_session, transactional_session
 from fastink.common.logger import logger
+from datetime import datetime, timedelta
 
 @transactional_session
 def insert_job_info(
@@ -114,12 +115,20 @@ def get_job_connect_info(
 ):
     return get_job_info_field(uid, jobid, clusterid, 'connect_sign')
 
+def get_starttime_info(uid, jobid, clusterid):
+    return get_job_info_field(
+        uid,
+        jobid,
+        clusterid,
+        'job_start_time'
+    )[0]
+
 def get_endtime_info(
     uid,
     jobid,
     clusterid,
 ):
-    return get_job_info_field(uid, jobid, clusterid, 'job_end_time')
+    return get_job_info_field(uid, jobid, clusterid, 'job_end_time')[0]
 
 
 def get_job_iptables_status(uid, jobid, clusterid):
@@ -218,8 +227,6 @@ def needto_change_status_jobs(*, session:Session):
     return job_list
 
 
-from sqlalchemy import or_
-
 @read_session
 def get_jobs_with_null_times(
     *,
@@ -258,3 +265,43 @@ def delete_jobinfo_by_jobids(jobids, *, session: Session):
     except Exception:
         logger.exception(f"delete_jobinfo_by_jobids: failed, jobids_count={len(jobids)}")
         raise
+    
+@read_session
+def get_active_cluster_jobs(
+    clusterid: str,
+    *,
+    session,
+):
+    """
+    Return active or recently finished jobs for reconciliation.
+    """
+
+    recent_threshold = datetime.utcnow() - timedelta(days=1)
+
+    stmt = (
+        select(
+            models.JobInfo.jobid,
+            models.JobInfo.uid,
+            models.JobInfo.username,
+            models.JobInfo.status,
+        )
+        .where(models.JobInfo.clusterid == clusterid)
+        .where(
+            or_(
+                models.JobInfo.status.notin_(("COMPLETED", "FAILED")),
+                models.JobInfo.end_time >= recent_threshold,
+            )
+        )
+    )
+
+    results = session.execute(stmt).all()
+
+    return [
+        {
+            "jobid": row.jobid,
+            "uid": row.uid,
+            "username": row.username,
+            "status": row.status,
+        }
+        for row in results
+    ]

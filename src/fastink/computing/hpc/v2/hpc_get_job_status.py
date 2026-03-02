@@ -17,7 +17,7 @@ async def get_job_status(jobId, uid, cluster_id):
     try:
         user_name = change_uid_to_username(uid)
         sacct_command = f"sudo -u {user_name} sacct -j {jobId} --format=JobID,state -P"
-        result = await sub_command(sacct_command, timeoutsec=2, errinfo="sacct err", tminfo="sacct timeout")
+        result = await sub_command(sacct_command, timeoutsec=30, errinfo="sacct err", tminfo="sacct timeout")
 
         output_lines = result.strip().split('\n')
         if len(output_lines) < 2:

@@ -14,6 +14,12 @@ from fastink.computing.tools.db.db_tools import insert_job_info
 from fastink.computing.site import hai, ihep
 from fastink.computing.site.strategy import get_site, get_submitter
 
+from fastink.computing.tools.perflog.timing import log_step
+import logging
+logger = logging.getLogger("ink.create_jobs")
+
+import uuid
+from fastink.computing.tools.perflog.timing import submit_id_var
 
 # exec "sbatch --test-only" and get estimated start time
 def get_test_only_start_time(command_output):
@@ -73,7 +79,7 @@ class JobCreateRequestWithPath(BaseModel):
     gpu_type: Optional[str] = Field(None, description="GPU/DCU/NPU type")  # optional
     output_file: Optional[str] = Field(None, description="output_file name")  # optional
     error_file: Optional[str] = Field(None, description="error_file name")  # optional
-    ntasks_per_node: int = Field(1, description="error_file")  # optional
+    ntasks_per_node: int = Field(1, description="number of cpu cores on each node")  # optional
     job_name: str = Field("", description="job name")  # optional
     env: Optional[str] = Field(None, description="Environment variables")  # optional
 
@@ -114,7 +120,7 @@ async def create_job(
 
         with open(absolute_script_path, 'w') as f:
             f.write(request.job_script)
-        _ = await sub_command(f"chmod +x {absolute_script_path}", timeoutsec=5, errinfo="chmod err", tminfo="chmod timeout")
+        _ = await sub_command(f"chmod +x {absolute_script_path}", timeoutsec=30, errinfo="chmod err", tminfo="chmod timeout")
 
     #job_path, token_filename = await build_job_env(uid, job_type, absolute_script_path, script_file)
     site = get_config("computing", "site")
@@ -210,7 +216,7 @@ async def create_job(
             if job_id:
                 admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
                 try:
-                    asyncio.run(sub_command(admincomment_command, timeoutsec=5, errinfo="add admincomment err", tminfo="add admincomment timeout"))
+                    asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
                 except Exception as e:
                     tm.sleep(1)
                     add_admincomment()
@@ -237,6 +243,10 @@ async def create_job_with_path(
     cluster_id,
     job_type="common"
 ):
+    # for performace traing
+    submit_id = uuid.uuid4().hex[:12]
+    submit_id_var.set(submit_id)
+    logger.info("start job submission submit_id=%s", submit_id)
 
     sbatch_command = []
     
@@ -249,7 +259,10 @@ async def create_job_with_path(
 
     site = get_config("computing", "site")
     build_job_env = get_site(site)
-    job_path, token_filename = await build_job_env(uid, job_type, job_script_abs_path, script_file)
+    
+    # ---------- step 1: build job env ----------
+    with log_step("build_job_env", logger=logger, phase="build_job_env"):
+        job_path, token_filename = await build_job_env(uid, job_type, job_script_abs_path, script_file)
 
     parameters = f" --comment={job_type} "
 
@@ -305,24 +318,36 @@ async def create_job_with_path(
 
     try:
         submitter = get_submitter(site, cluster_id)
-        job_id, job_type, job_path = await submitter(sbatch_command, job_type, job_path, uid)
+        # ---------- step 2: sbatch submit ----------
+        with log_step("sbatch_submit", logger=logger, phase="sbatch_submit"):
+            job_id, job_type, job_path = await submitter(sbatch_command, job_type, job_path, uid)
         
         if not job_id:
             raise ValueError("Failed to get job ID from SLURM response")
 
-        # Insert job info into DB
-        insert_job_info(uid, job_id, output_file, error_file, job_type, job_path, cluster_id)
 
-        # Question : dead loop?
+        # Insert job info into DB
+        # ---------- step 3: insert DB ----------
+        with log_step("insert_job_info", logger=logger, phase="insert_job_info"):
+            insert_job_info(uid, job_id, output_file, error_file, job_type, job_path, cluster_id)
+
+        # ---------- step 4: async admincomment (fire & forget) ----------
         def add_admincomment():
             if job_id:
+                start = time.monotonic()
                 # add admincomment as root
                 admincomment_command = f"sacctmgr -i modify job set admincomment={job_type} where jobid={job_id}"
                 try:
-                    asyncio.run(sub_command(admincomment_command, timeoutsec=5, errinfo="add admincomment err", tminfo="add admincomment timeout"))
+                    asyncio.run(sub_command(admincomment_command, timeoutsec=30, errinfo="add admincomment err", tminfo="add admincomment timeout"))
                 except Exception as e:
+                    logger.exception("add_admincomment failed job_id=%s", job_id)
                     tm.sleep(1)
                     add_admincomment()
+                finally:
+                    logger.info(
+                        "phase=thread_add_comment step=add_admincomment cost=%.3fs job_id=%s",
+                        time.monotonic() - start, job_id
+                    )
 
         # fork a thread to run the add_admincomment function
         threading.Thread(target=add_admincomment).start()

@@ -11,7 +11,7 @@ from fastink.inkdb.inkredis import *
 from fastink.routers.status import InkStatus
 from fastink.common.logger import logger
 from fastink.computing.adapter.strategy import get_scheduler
-from fastink.computing.cluster.cluster import HTC_JOB, SLURM_JOB
+from fastink.computing.cluster.cluster import HTC_JOB, SLURM_JOB, SubmitMode
 from fastink.computing.tools.common.utils import change_username_to_uid, connect_jupyter_job, connect_rootbrowse_job, connect_sshd, connect_vnc_job, connect_vscode_job
 
 router = APIRouter()
@@ -243,7 +243,7 @@ async def query_system_jobs():
 
 
 @router.post("/create_job")
-async def create_common_job(
+async def create_normal_job(
     username: str = Depends(get_username),
     jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id"),
 ):
@@ -265,8 +265,38 @@ async def create_common_job(
             "data": {}
         }
 
+@router.post("/create_common_job")
+async def create_common_job(
+    username: str = Depends(get_username),
+    jobclass: Union[SLURM_JOB, HTC_JOB] = Body(..., discriminator="cluster_id")
+):
+    try:
+        adapter = get_scheduler(jobclass.cluster_id, username)
+        result = await adapter.submit_job(jobclass)
 
-@router.get("/query_jobs")
+        if jobclass.submit_mode == SubmitMode.SYNC:
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": "Submit job synchronously succeeded.",
+                "data": result      # contains job_id
+            }
+        else:
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": "Submit job asynchronously accepted.",
+                "data": result      # async has no job_id yet, but submit_uuid
+            }
+
+    except Exception as e:
+        logger.exception(f"Failed to create jobs, user: {username}, cluster: {jobclass.cluster_id}, details: {e}.")
+        return {
+            "status": InkStatus.SERVER_INTERNAL_ERROR,
+            "msg": f"Create common job failed: {e}",
+            "data": {},
+        }
+
+
+@router.post("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
     cluster_id: str = Query(None, description="Cluster ID"),
@@ -286,7 +316,7 @@ async def query_common_job(
                 else:
                     cluster_ids = list(cluster_list)
             except Exception as e:
-                logger.error(f"Get user jobs failed (load cluster_list), username: {username}, details: {e}.")
+                logger.exception(f"Get user jobs failed (load cluster_list), username: {username}, details: {e}.")
                 return {
                     "status": InkStatus.SERVER_INTERNAL_ERROR,
                     "msg": f"Get user {username} jobs failed: {e}.",
@@ -300,7 +330,7 @@ async def query_common_job(
                     if jobs:
                         joblist.extend(jobs)
                 except Exception as e:
-                    logger.error(f"Get user jobs failed for cluster {cid}, username: {username}, details: {e}.")
+                    logger.exception(f"Get user jobs failed for cluster {cid}, username: {username}, details: {e}.")
         else:
             adapter = get_scheduler(cluster_id, username)
             joblist = await adapter.query_job(job_type) or []
@@ -318,7 +348,7 @@ async def query_common_job(
         }
 
     except Exception as e:
-        logger.error(f"Get user jobs failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
+        logger.exception(f"Get user jobs failed, username: {username}, cluster_id: {cluster_id}, details: {e}.")
         return {
             "status": InkStatus.SERVER_INTERNAL_ERROR,
             "msg": f"Get user {username} jobs failed: {e}.",
@@ -328,8 +358,10 @@ async def query_common_job(
 @router.post("/delete_job")
 async def delete_common_job(
     username: str = Depends(get_username),
-    job_id: str = Body(..., description="Job ID",embed=True),
+    submit_uuid: str | None = Body(None, description="use submit_uuid first because of async submission", embed=True),
+    job_id: str | None = Body(None, description="job id once submitted", embed=True),
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
+
 ):
     try:
         if not job_id:
@@ -340,7 +372,11 @@ async def delete_common_job(
             }
 
         adapter = get_scheduler(cluster_id, username)
-        await adapter.cancel_job(job_id)
+        await adapter.cancel_job(
+            submit_uuid=submit_uuid,
+            job_id=job_id
+        )
+
         return {
             "status": InkStatus.SUCCESS,
             "msg": f"Delete job {job_id} successfully.",

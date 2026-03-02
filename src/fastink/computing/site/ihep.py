@@ -51,7 +51,7 @@ async def _generate_home_link(user_home_dir, ink_dir, user_group, username, toke
         homelink = Path(f"{user_home_dir}/.ink")
         mvname = Path(f"{user_home_dir}/.inkold")
         xrootd_path = get_config("computing", "xrootd_path")
-        is_exist, _ = await common.path_exist(name=str(homelink), krb5ccname=token_filename, username=username, mgm=xrootd_path)
+        is_exist, _ = await common.path_exist(name=str(homelink), username=username, mgm=xrootd_path)
         
         if is_exist:
             readlink_command = (
@@ -110,8 +110,6 @@ async def _generate_home_link(user_home_dir, ink_dir, user_group, username, toke
                 ln_command = (
                     f"su -s /bin/bash {quote(username)} -c " 
                     f'"' 
-                    f"export KRB5CCNAME={quote(token_filename)} && "  
-                    f"aklog && "  
                     f"rm -rf {quote(str(mvname))} && "  
                     f"mv {quote(str(homelink))} {quote(str(mvname))} && "  
                     f"ln -s {quote(ink_dir)}/{quote(user_group)}/{quote(username)}/.ink {quote(user_home_dir)}/.ink"
@@ -121,8 +119,6 @@ async def _generate_home_link(user_home_dir, ink_dir, user_group, username, toke
             ln_command = (
                 f"su -s /bin/bash {quote(username)} -c "
                 f'"'
-                f"export KRB5CCNAME={quote(token_filename)} && "
-                f"aklog && "
                 f"ln -s {quote(ink_dir)}/{quote(user_group)}/{quote(username)}/.ink {quote(user_home_dir)}/.ink"
                 f'"'
             )
@@ -157,22 +153,21 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
             file.write(krb5_decoded_bytes)
 
     os.environ['KRB5CCNAME'] = token_filename
-    _ = await sub_command(("aklog"), 5, "init aklog failed.", "init aklog timout.")
     
-    is_exist, _ = await common.path_exist(name=job_dir, krb5ccname=token_filename, username=username, mgm=xrootd_path)
+    is_exist, _ = await common.path_exist(name=job_dir, username=username, mgm=xrootd_path)
     if not is_exist: 
-        await common.mkdir(dname=job_dir, krb5ccname=token_filename, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
+        await common.mkdir(dname=job_dir, username=username, mode="700", exist_ok=False, mgm=xrootd_path)
     
     #user_home_dir = os.path.expanduser(f'~{username}')
     #await _generate_home_link(user_home_dir, ink_dir, user_group, username, token_filename)
     #job_dir = f"{user_home_dir}/.ink/Jobs/{jobtype}-{time_stamp}"    
 
-    await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
+    await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{job_dir}/krb5cc_{uid}", username=username, mgm=xrootd_path)
 
     with open(rawjobPath, "rb") as file:
         jobfile_content = file.read()
-    await common.upload_file(src_data=jobfile_content, dst=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, username=username, mgm=xrootd_path)
-    await common.chmod(fname=f"{job_dir}/{jobfilename}", krb5ccname=token_filename, mode="700", username=username, mgm=xrootd_path)
+    await common.upload_file(src_data=jobfile_content, dst=f"{job_dir}/{jobfilename}", username=username, mgm=xrootd_path)
+    await common.chmod(fname=f"{job_dir}/{jobfilename}", mode="700", username=username, mgm=xrootd_path)
     
     return job_dir, token_filename
 
@@ -191,7 +186,6 @@ async def submit_htc_job(submit_file, job_type, job_path, uid):
             f"su -s /bin/bash {quote(user_name)} -c "
             f'"'
             f"cd {quote(job_path)} && " 
-            f"export KRB5CCNAME={quote(f'{job_path}/krb5cc_{uid}')} && " 
             f"condor_submit -name {quote(schedd_host)} -pool {quote(cm_host)} {quote(submit_file)}"
             f'"'
         )
@@ -201,8 +195,6 @@ async def submit_htc_job(submit_file, job_type, job_path, uid):
                 f"su - {quote(user_name)} -c "
                 f'"'
                 f"cd {quote(job_path)} && "
-                f"export KRB5CCNAME={quote(f'{job_path}/krb5cc_{uid}')} && "
-                f"/usr/bin/aklog && "
                 f"export INKPATH=$PATH && "
                 f"export INKLDPATH=$LD_LIBRARY_PATH && "
                 f"export PATH=/usr/bin:$PATH && "
@@ -215,8 +207,6 @@ async def submit_htc_job(submit_file, job_type, job_path, uid):
                 f"su - {quote(user_name)} -c "
                 f'"'
                 f"cd {quote(job_path)} && "
-                f"setenv KRB5CCNAME {quote(f'{job_path}/krb5cc_{uid}')} && "
-                f"/usr/bin/aklog && "
                 f"setenv INKPATH $PATH && "
                 f"setenv INKLDPATH $LD_LIBRARY_PATH && "
                 f"setenv PATH /usr/bin:$PATH && "
@@ -244,26 +234,13 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
     user_info = pwd.getpwuid(uid)
     user_shell = user_info.pw_shell
     
-    if user_shell in ["/bin/bash", "/bin/sh", "/bin/zsh"]:
-        command = (
-            f"su - {quote(user_name)} -c "
-            f'"'
-            f"cd {quote(job_path)} && "
-            f"export KRB5CCNAME={quote(f'{job_path}/krb5cc_{uid}')} && "
-            f"/usr/bin/aklog && "
-            f'sbatch {" ".join(sbatch_command)}'
-            f'"'
-        ) 
-    else:
-        command = (
-            f"su - {quote(user_name)} -c "
-            f'"'
-            f"cd {quote(job_path)} && "
-            f"setenv KRB5CCNAME {quote(f'{job_path}/krb5cc_{uid}')} && "
-            f"/usr/bin/aklog && "
-            f'sbatch {" ".join(sbatch_command)}'
-            f'"'
-        )
+    command = (
+        f"su - {quote(user_name)} -c "
+        f'"'
+        f"cd {quote(job_path)} && "
+        f'sbatch {" ".join(sbatch_command)}'
+        f'"'
+    ) 
 
     logger.info(f"Submit job command: {command}")
     stdout = await sub_command(command, 5, "submit job failed.", "submit job timeout.")
@@ -274,4 +251,3 @@ async def submit_hpc_job(sbatch_command, job_type, job_path, uid):
     logger.info(f"Submit job finished, the job_id: {job_id}, job_type: {job_type}, job_path: {job_path}")
 
     return job_id, str(job_type), job_path
-
