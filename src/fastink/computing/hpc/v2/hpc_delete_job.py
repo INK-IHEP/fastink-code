@@ -7,7 +7,7 @@ async def delete_job(jobid, uid):
     user_name = change_uid_to_username(uid)
     try:
         scancel_command = f"sudo -u {user_name} scancel {jobid}"
-        _ = await sub_command(scancel_command, timeoutsec=5, errinfo="scancel err",tminfo="scancel timeout")
+        _ = await sub_command(scancel_command, timeoutsec=30, errinfo="scancel err",tminfo="scancel timeout")
         
         job_type, _, job_iptables_status, job_iptables_clean = get_job_info(uid, jobid, "slurm")
         
