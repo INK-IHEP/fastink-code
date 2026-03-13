@@ -53,10 +53,10 @@ async def update_completed_jobs():
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         need_change_status_jobs = needto_change_status_jobs()
         query_command = query_cluster_jobs()
-        logger.debug(f"HTC-CROND-LOG: The queue command: {query_command}")
+        logger.debug(f"HTC-CROND-QUEUE-LOG: The queue command: {query_command}")
         stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         lines = stdout.decode().strip().split('\n')
-        logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
+        logger.debug(f"HTC-CROND-QUEUE-LOG: Queue jobs {lines}")
         to_delete = []
         
         if lines != ['']:
@@ -113,6 +113,7 @@ async def update_completed_jobs():
                 
 
         if need_change_status_jobs:
+            logger.debug(f"HTC-CROND-QUEUE-LOG: Need change status jobs: {need_change_status_jobs}")
             pipe = r.pipeline(transaction=False)
             for key in need_change_status_jobs:
                 query_history_command = get_condor_history_command(key)
@@ -151,11 +152,11 @@ async def update_completed_jobs():
             await pipe.execute()
             
             if to_delete:
-                logger.debug(f"Need to delete jobs: {to_delete}")
+                logger.debug(f"HTC-CROND-QUEUE-LOG: Need to delete jobs: {to_delete}")
                 delete_jobinfo_by_jobids(to_delete)
                         
     except Exception as e:
-        logger.exception(f"HTC-LOG: update_completed_jobs: failed, the details: {e}")
+        logger.exception(f"HTC-CROND-QUEUE-LOG: update_completed_jobs failed, the details: {e}")
 
 
 
@@ -254,7 +255,7 @@ async def submit_job_from_redis():
                 raw_job = await r.rpop("submitting_jobs")
                 if not raw_job:
                     break
-                logger.debug(f"HTC-LOG: Pop the raw info: {raw_job}")
+                logger.debug(f"HTC-ASYNC-LOG: Pop the raw info: {raw_job}")
 
                 job = json.loads(raw_job)
                 job_owner = job.get("username")
@@ -269,21 +270,21 @@ async def submit_job_from_redis():
 
                 uid = change_username_to_uid(job_owner)
                 job_dir = await init_job_dir(job_owner, job_type)
-                logger.debug(f"HTC-LOG: Init user dir {job_dir} successfully.")
+                logger.debug(f"HTC-ASYNC-LOG: Init user dir {job_dir} successfully.")
 
                 submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
                 submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
-                logger.debug(f"HTC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
+                logger.debug(f"HTC-ASYNC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
 
                 stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
                 job_id_line = stdout.decode().strip()
                 job_id = job_id_line.split()[-1].rstrip('.')
                 output = f"{job_dir}/{job_id}.out"
                 errpath = f"{job_dir}/{job_id}.err"
-                logger.debug(f"HTC-LOG: Submit User {job_owner} job {job_type} {job_id} to cluster.")
+                logger.debug(f"HTC-ASYNC-LOG: Submit User {job_owner} job {job_type} {job_id} to cluster.")
 
                 insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
-                logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
+                logger.debug(f"HTC-ASYNC-LOG: Submit {job_owner} job {job_id} to queue.")
                 
                 job_record = {
                     "ClusterId": "HTCondor",
@@ -311,11 +312,11 @@ async def submit_job_from_redis():
             except Exception as e:
                 if raw_job:
                     await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
-                logger.error(f"HTC-LOG: Submit job failed, {e}")
+                logger.error(f"HTC-ASYNC-LOG: Submit job failed, {e}")
                 continue
 
     except Exception as e:
-        logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
+        logger.error(f"HTC-ASYNC-LOG: Some Wrong in Submit job, the details: {e}")
         raise e
     
 
