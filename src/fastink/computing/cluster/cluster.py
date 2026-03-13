@@ -1,5 +1,10 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
+from enum import Enum
+
+class SubmitMode(str, Enum):
+    ASYNC = "async"
+    SYNC = "sync"
 
 
 class Base_JOB(BaseModel):
@@ -11,7 +16,7 @@ class Base_JOB(BaseModel):
     job_name: str = Field("", description="Job name")
     job_type: str = Field("", description="Job type")
     cluster_id: Literal["slurm", "htcondor", "htcondor-sync"] 
-
+    submit_mode: SubmitMode = SubmitMode.ASYNC
 
 class SLURM_JOB(Base_JOB):
     time: Optional[str] = Field(None, description="作业运行时间上限 (格式: HH:MM:SS)")  # 可选

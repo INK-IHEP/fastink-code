@@ -10,7 +10,7 @@ from fastink.computing.cluster.cluster import HTC_JOB
 from fastink.computing.adapter.strategy import scheduler
 from fastink.computing.adapter.baseadapter import SchedulerBase
 from fastink.inkdb.inkredis import redis_connect
-from fastink.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, jobid_sort_key
+from fastink.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, jobid_sort_key, generate_condor_submit, generate_submit_command, init_job_dir
 
 @scheduler("htcondor")
 class HTC_Scheduler(SchedulerBase):
@@ -63,7 +63,7 @@ class HTC_Scheduler(SchedulerBase):
                 logger.info(f"Update job {key} status to COMPLETED.")
     
 
-    async def submit_job(self, htc_job_params: HTC_JOB):
+    async def submit_job_async(self, htc_job_params: HTC_JOB):
         try:
             r = redis_connect()
             IDX_KEY = f"cluster_jobs:{self.USERNAME}:job_ids"
@@ -77,18 +77,18 @@ class HTC_Scheduler(SchedulerBase):
 
             for job in jobs:
                 if job.get("jobType") == htc_job_params.job_type:
-                    logger.debug(f"HTC-LOG: Submit job {htc_job_params.job_type} exsit in cluster_jobs: {job}")
+                    logger.debug(f"HTC-ASYNC-LOG: Submit job {htc_job_params.job_type} exsit in cluster_jobs: {job}")
                     return
             
             raw = await r.lrange(f"{self.USERNAME}_submitting_jobs", 0, -1)
-            logger.debug(f"HTC-LOG: Get {self.USERNAME}_submitting_jobs keys value: {raw}")
+            logger.debug(f"HTC-ASYNC-LOG: Get {self.USERNAME}_submitting_jobs keys value: {raw}")
 
             for job in raw:
                 if isinstance(job, (bytes, bytearray)):
                     job = job.decode("utf-8")
                 job_param = json.loads(job)
                 if job_param.get("jobType") == htc_job_params.job_type:
-                    logger.debug(f"HTC-LOG: Submit job {htc_job_params.job_type} exsit in {self.USERNAME}_submitting_jobs: {job}")
+                    logger.debug(f"HTC-ASYNC-LOG: Submit job {htc_job_params.job_type} exsit in {self.USERNAME}_submitting_jobs: {job}")
                     return  
             
             submit_param = {
@@ -109,12 +109,38 @@ class HTC_Scheduler(SchedulerBase):
                 p.rpush(f"{self.USERNAME}_submitting_jobs", json.dumps(submit_param, ensure_ascii=False))   
                 await p.execute()
             
-            logger.debug(f"HTC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
+            logger.debug(f"HTC-ASYNC-LOG: {self.USERNAME} job {htc_job_params.job_type} add to redis queue.")
 
         except Exception as e:
-            logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
+            logger.error(f"HTC-ASYNC-LOG: Some Wrong in Submit job, the details: {e}")
             raise e
     
+
+    async def submit_job_sync(self, htc_job_params: HTC_JOB) -> str:
+        try:
+            job_dir = await init_job_dir(self.USERNAME, htc_job_params.job_type)
+            logger.info(f"HTC-SYNC-LOG: Init User {self.USERNAME} jobdir {job_dir} finished.")
+            submit_file = await generate_condor_submit(self.USERNAME, htc_job_params.cpu, htc_job_params.mem, htc_job_params.job_type, job_dir, htc_job_params.os, htc_job_params.wn, htc_job_params.arch, htc_job_params.job_parameters)
+            logger.info(f"HTC-SYNC-LOG: Generate User {self.USERNAME} the condor submit file finished.")
+
+            submit_command = generate_submit_command(self.USERNAME, job_dir, htc_job_params.job_type, submit_file)
+            logger.info(f"HTC-SYNC-LOG: Generate User {self.USERNAME} submit command {submit_command} finished.")
+            stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
+            job_id_line = stdout.decode().strip()
+            job_id = job_id_line.split()[-1].rstrip('.')
+            output = f"{job_dir}/{job_id}.out"
+            errpath = f"{job_dir}/{job_id}.err"
+
+            logger.info(f"HTC-SYNC-LOG: Submit User {self.USERNAME} job {job_id} to cluster.")
+            insert_job_info(self.UID, job_id, output, errpath, htc_job_params.job_type, job_dir, htc_job_params.cluster_id)
+            logger.info(f"HTC-SYNC-LOG: Submit {self.USERNAME} job {job_id} to queue.")
+
+            return int(job_id)
+        
+        except Exception as e:
+            logger.error(f"HTC-SYNC-LOG: Some Wrong in Submit job, the details: {e}")
+            raise e
+
 
         
     async def query_job(self, req_job_type: Optional[str] = None):
