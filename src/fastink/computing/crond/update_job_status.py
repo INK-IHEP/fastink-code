@@ -140,7 +140,7 @@ async def update_completed_jobs():
                     update_job_status(job_uid, key, 'COMPLETED', "htcondor")
                     update_start_time(job_uid, key, job_start_time, "htcondor")
                     update_end_time(job_uid, key, job_end_time, "htcondor")
-                    logger.debug(f"Update job {key} status to COMPLETED.")
+                    logger.debug(f"HTC-CROND-QUEUE-LOG: Update job {key} status to COMPLETED.")
                     
                     JOB_KEY = f"cluster_jobs:{job_user}:{key}"
                     IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
