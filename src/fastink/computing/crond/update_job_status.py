@@ -114,7 +114,6 @@ async def update_completed_jobs():
 
         if need_change_status_jobs:
             logger.debug(f"HTC-CROND-QUEUE-LOG: Need change status jobs: {need_change_status_jobs}")
-            pipe = r.pipeline(transaction=False)
             for key in need_change_status_jobs:
                 query_history_command = get_condor_history_command(key)
                 stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
@@ -144,13 +143,11 @@ async def update_completed_jobs():
                     
                     JOB_KEY = f"cluster_jobs:{job_user}:{key}"
                     IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
-                    pipe.delete(JOB_KEY)
-                    pipe.srem(IDX_KEY, str(key))
+                    await r.delete(JOB_KEY)
+                    await r.srem(IDX_KEY, str(key))
                 else:
                     to_delete.append(key)
                     
-            await pipe.execute()
-            
             if to_delete:
                 logger.debug(f"HTC-CROND-QUEUE-LOG: Need to delete jobs: {to_delete}")
                 delete_jobinfo_by_jobids(to_delete)
