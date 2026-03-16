@@ -10,7 +10,6 @@ from fastink.computing.adapter.strategy import scheduler
 from fastink.computing.adapter.baseadapter import SchedulerBase
 from fastink.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, generate_condor_submit, generate_submit_command, init_job_dir
 
-@scheduler("htcondor-sync")
 class HTC_SYNC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
         super().__init__(uid)

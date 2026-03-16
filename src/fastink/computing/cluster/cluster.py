@@ -15,7 +15,7 @@ class Base_JOB(BaseModel):
     gpu_num: Optional[int] = Field(0, ge=0, description="GPU requirement")
     job_name: str = Field("", description="Job name")
     job_type: str = Field("", description="Job type")
-    cluster_id: Literal["slurm", "htcondor", "htcondor-sync"] 
+    cluster_id: Literal["slurm", "htcondor"] 
     submit_mode: SubmitMode = SubmitMode.ASYNC
 
 class SLURM_JOB(Base_JOB):
@@ -38,4 +38,4 @@ class HTC_JOB(Base_JOB):
     arch: str = Field("", description="woker node arch")  # 可选
     schedd: Optional[str] = Field("", description="Schedd Host") # 可选
     cm: Optional[str] = Field("", description="CM Host") # 可选
-    cluster_id: Literal["htcondor", "htcondor-sync"] = "htcondor"
+    cluster_id: Literal["htcondor"] = "htcondor"
