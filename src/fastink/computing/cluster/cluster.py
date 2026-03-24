@@ -9,14 +9,14 @@ class SubmitMode(str, Enum):
 
 class Base_JOB(BaseModel):
     job_script: Optional[str] = Field("", description="Job Script Content")
-    script_path: Optional[str] = Field("", description="Job Script abs Path")
+    script_path: Optional[str] = Field(None, description="Job Script abs Path")
     job_dir: Optional[str] = Field("", description="Job Exec Dir")
     job_parameters: Optional[str] = Field("", description="User job parameters")
     cpu: Optional[int] = Field(1, gt=0, description="CPU requirement")
     mem: Optional[int] = Field(..., gt=0, description="Memory requirement (MB)")
     gpu_num: Optional[int] = Field(0, ge=0, description="GPU requirement")
     job_name: str = Field("", description="Job name")
-    job_type: str = Field("", description="Job type")
+    job_type: str = Field("batch", description="Job type")
     cluster_id: Literal["slurm", "htcondor"] 
     submit_mode: SubmitMode = SubmitMode.ASYNC
 

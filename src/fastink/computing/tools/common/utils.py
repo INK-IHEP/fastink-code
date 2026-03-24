@@ -507,7 +507,7 @@ def get_parent_dir(path_str: str) -> str:
     return "" if parent == "." else parent
 
 
-async def init_sync_job_dir(username: str, job_type: str = "batch", job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
+async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
     
     XROOTD_PATH = get_config("computing", "xrootd_path")
     uid = change_username_to_uid(username)
