@@ -35,7 +35,7 @@ def get_condor_history_command(job_id: str) -> str:
         'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))',
         'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%H:%M:%S"))',
         'formatTime(QDate,"%Y-%m-%d %H:%M:%S")',
-        "HepJob_JobType",
+        'ifThenElse(isUndefined(HepJob_JobType),"batch", HepJob_JobType)',
         "Owner"
     ]
     attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
@@ -44,7 +44,6 @@ def get_condor_history_command(job_id: str) -> str:
     logger.info(f"The history command: {command}")
 
     return command
-
 
 
 async def update_completed_jobs():
