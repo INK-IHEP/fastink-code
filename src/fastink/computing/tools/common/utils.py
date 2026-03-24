@@ -527,7 +527,7 @@ async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str]
         final_job_dir = script_dir if script_dir else build_default_job_dir()
     elif job_dir:
         final_job_dir = job_dir
-    else:
+    else: 
         final_job_dir = build_default_job_dir()
 
     logger.debug(f"User job_dir: {final_job_dir}")
@@ -535,7 +535,6 @@ async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str]
     is_exist, _ = await common.path_exist(name=final_job_dir, username=username, mgm=XROOTD_PATH)
     if not is_exist:
         await common.mkdir(dname=final_job_dir, username=username, mode="700", exist_ok=False, mgm=XROOTD_PATH)
-
     logger.debug(f"Completed the jobdir({final_job_dir}) init for User({username})")
 
     if get_config("common", "krb5_enabled"):
@@ -659,6 +658,17 @@ async def generate_condor_sync_submit(
     return submitfile_name
 
 
+async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, timeout: int = 30):
+
+    ccache_path = f"{job_dir}/krb5cc_{uid}"
+    check_command = f"export KRB5CCNAME={ccache_path} && klist"
+    try:
+        stdout = await sub_command(check_command, timeout, "KRB5 Ticket Check Failed", "Klist check timeout")        
+        ticket_info = stdout.decode(errors="ignore").strip()
+        logger.info(f"--- Kerberos Ticket Info for {username} ---\n{ticket_info}\n--------------------------------------")
+    except Exception as e:
+        logger.error(f"HTC-ASYNC-LOG: Kerberos ticket is INVALID for {username}. Error: {e}")
+
 
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     process = await asyncio.create_subprocess_shell(
@@ -669,16 +679,13 @@ async def sub_command(command, timeoutsec, errinfo, tminfo):
     )
 
     try:
-        # 关键：用 communicate()，它会一边读 stdout/stderr 一边等待进程结束，避免管道塞满死锁
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
 
     except asyncio.TimeoutError as e:
-        # 超时：先 kill，再把管道读空，确保进程彻底回收
         process.kill()
         stdout, stderr = await process.communicate()
         raise Exception(f"{tminfo} {e}. stderr={stderr.decode(errors='ignore')[:500]}")
 
-    # 正常结束后再检查 returncode
     if process.returncode != 0:
         error_msg = stderr.decode(errors="ignore").strip()
         raise Exception(f"{errinfo} {error_msg}")

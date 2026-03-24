@@ -4,7 +4,7 @@ from fastink.common.logger import logger
 from fastink.common.config import get_config
 from fastink.inkdb.inkredis import redis_connect
 from fastink.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids, insert_job_info, needto_change_status_jobs
-from fastink.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value
+from fastink.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value, check_user_kerberos_ticket
 
 
 def query_cluster_jobs():
@@ -270,10 +270,12 @@ async def submit_job_from_redis():
                 logger.debug(f"HTC-ASYNC-LOG: Init user dir {job_dir} successfully.")
 
                 submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
+                check_user_kerberos_ticket(job_owner, uid, job_dir)
+
                 submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
                 logger.debug(f"HTC-ASYNC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
-
                 stdout = await sub_command(submit_command, 40, "submit job failed.", "submit job timeout.")
+
                 job_id_line = stdout.decode().strip()
                 job_id = job_id_line.split()[-1].rstrip('.')
                 output = f"{job_dir}/{job_id}.out"
