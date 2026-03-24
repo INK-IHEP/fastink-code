@@ -30,7 +30,7 @@ def get_user_exp_group(group_name:str):
 
 def get_extra_job_config(username: str, groupname: str, job_type: str, request_os: Optional[str] = None):
     
-    walltime = get_config("jobtype", job_type).get("htc").get("walltime")
+    walltime = get_config("jobtype", job_type, fallback={}).get("htc", {}).get("walltime", "default")
     EXP_NAME = get_user_exp_group(groupname)[0]
 
     extra_job_config={

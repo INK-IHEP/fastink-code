@@ -10,7 +10,7 @@ from fastink.computing.cluster.cluster import HTC_JOB
 from fastink.computing.adapter.strategy import scheduler
 from fastink.computing.adapter.baseadapter import SchedulerBase
 from fastink.inkdb.inkredis import redis_connect
-from fastink.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, jobid_sort_key, generate_condor_submit, generate_submit_command, init_job_dir
+from fastink.computing.tools.common.utils import sub_command, get_job_output, create_iptables, delete_iptables, jobid_sort_key, generate_condor_sync_submit, generate_submit_command, init_sync_job_dir
 
 @scheduler("htcondor")
 class HTC_Scheduler(SchedulerBase):
@@ -118,9 +118,9 @@ class HTC_Scheduler(SchedulerBase):
 
     async def submit_job_sync(self, htc_job_params: HTC_JOB) -> str:
         try:
-            job_dir = await init_job_dir(self.USERNAME, htc_job_params.job_type)
+            job_dir = await init_sync_job_dir(self.USERNAME, htc_job_params.job_type, htc_job_params.job_dir, htc_job_params.script_path)
             logger.info(f"HTC-SYNC-LOG: Init User {self.USERNAME} jobdir {job_dir} finished.")
-            submit_file = await generate_condor_submit(self.USERNAME, htc_job_params.cpu, htc_job_params.mem, htc_job_params.job_type, job_dir, htc_job_params.os, htc_job_params.wn, htc_job_params.arch, htc_job_params.job_parameters)
+            submit_file = await generate_condor_sync_submit(self.USERNAME, htc_job_params.cpu, htc_job_params.mem, job_dir, htc_job_params.job_type,  htc_job_params.job_script, htc_job_params.script_path, htc_job_params.os, htc_job_params.wn, htc_job_params.arch, htc_job_params.job_parameters)
             logger.info(f"HTC-SYNC-LOG: Generate User {self.USERNAME} the condor submit file finished.")
 
             submit_command = generate_submit_command(self.USERNAME, job_dir, htc_job_params.job_type, submit_file)
