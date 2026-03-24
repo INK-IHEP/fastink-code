@@ -269,7 +269,7 @@ async def submit_job_from_redis():
                 logger.debug(f"HTC-ASYNC-LOG: Init user dir {job_dir} successfully.")
 
                 submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
-                check_user_kerberos_ticket(job_owner, uid, job_dir)
+                await check_user_kerberos_ticket(job_owner, uid, job_dir)
 
                 submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
                 logger.debug(f"HTC-ASYNC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
