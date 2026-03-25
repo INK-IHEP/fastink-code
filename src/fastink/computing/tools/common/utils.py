@@ -661,7 +661,7 @@ async def generate_condor_sync_submit(
 async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, timeout: int = 30):
 
     ccache_path = f"{job_dir}/krb5cc_{uid}"
-    check_command = f"export KRB5CCNAME={ccache_path} && klist"
+    check_command = f"su - {username} -c 'export KRB5CCNAME={ccache_path} && klist'"
     try:
         stdout = await sub_command(check_command, timeout, "KRB5 Ticket Check Failed", "Klist check timeout")        
         ticket_info = stdout.decode(errors="ignore").strip()
