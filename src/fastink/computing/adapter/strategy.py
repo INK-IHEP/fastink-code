@@ -14,7 +14,6 @@ def scheduler(clusterid: str):
 def _ensure_loaded():
     import fastink.computing.adapter.htcadapter
     import fastink.computing.adapter.hpcadapter
-    import fastink.computing.adapter.htcsyncadapter
 
 def get_scheduler(clusterid: str, username: str):
 

@@ -4,7 +4,7 @@ from fastink.common.logger import logger
 from fastink.common.config import get_config
 from fastink.inkdb.inkredis import redis_connect
 from fastink.computing.tools.db.db_tools import update_end_time, update_job_status, update_start_time, get_jobs_with_null_times, delete_jobinfo_by_jobids, insert_job_info, needto_change_status_jobs
-from fastink.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value
+from fastink.computing.tools.common.utils import safe_get, safe_int, ts_to_str, sub_command, delete_iptables, change_username_to_uid, init_job_dir, generate_condor_submit, generate_submit_command, clean_query_value, check_user_kerberos_ticket
 
 
 def query_cluster_jobs():
@@ -35,7 +35,7 @@ def get_condor_history_command(job_id: str) -> str:
         'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))',
         'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%H:%M:%S"))',
         'formatTime(QDate,"%Y-%m-%d %H:%M:%S")',
-        "HepJob_JobType",
+        'ifThenElse(isUndefined(HepJob_JobType) || HepJob_JobType == "", "batch", HepJob_JobType)',
         "Owner"
     ]
     attrs_quoted = " ".join(quote(a) for a in ATTRS)   # 关键：给每个字段加 shell 引号
@@ -46,17 +46,16 @@ def get_condor_history_command(job_id: str) -> str:
     return command
 
 
-
 async def update_completed_jobs():
     try:
         r = redis_connect()
         iptables_jobtype = get_config("computing", "iptables_jobtype")
         need_change_status_jobs = needto_change_status_jobs()
         query_command = query_cluster_jobs()
-        logger.debug(f"HTC-CROND-LOG: The queue command: {query_command}")
+        logger.debug(f"HTC-CROND-QUEUE-LOG: The queue command: {query_command}")
         stdout = await sub_command(query_command, 10, "Query user jobs failed.", "Query user jobs timeout.")
         lines = stdout.decode().strip().split('\n')
-        logger.debug(f"HTC-CRON-LOG: Queue jobs {lines}")
+        logger.debug(f"HTC-CROND-QUEUE-LOG: Queue jobs {lines}")
         to_delete = []
         
         if lines != ['']:
@@ -113,7 +112,7 @@ async def update_completed_jobs():
                 
 
         if need_change_status_jobs:
-            pipe = r.pipeline(transaction=False)
+            logger.debug(f"HTC-CROND-QUEUE-LOG: Need change status jobs: {need_change_status_jobs}")
             for key in need_change_status_jobs:
                 query_history_command = get_condor_history_command(key)
                 stdout = await sub_command(query_history_command, 30, "Exec condorhistory func failed.", "Exec condorhistory func timeout.")
@@ -139,23 +138,21 @@ async def update_completed_jobs():
                     update_job_status(job_uid, key, 'COMPLETED', "htcondor")
                     update_start_time(job_uid, key, job_start_time, "htcondor")
                     update_end_time(job_uid, key, job_end_time, "htcondor")
-                    logger.debug(f"Update job {key} status to COMPLETED.")
+                    logger.debug(f"HTC-CROND-QUEUE-LOG: Update job {key} status to COMPLETED.")
                     
                     JOB_KEY = f"cluster_jobs:{job_user}:{key}"
                     IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
-                    pipe.delete(JOB_KEY)
-                    pipe.srem(IDX_KEY, str(key))
+                    await r.delete(JOB_KEY)
+                    await r.srem(IDX_KEY, str(key))
                 else:
                     to_delete.append(key)
                     
-            await pipe.execute()
-            
             if to_delete:
-                logger.debug(f"Need to delete jobs: {to_delete}")
+                logger.debug(f"HTC-CROND-QUEUE-LOG: Need to delete jobs: {to_delete}")
                 delete_jobinfo_by_jobids(to_delete)
                         
     except Exception as e:
-        logger.exception(f"HTC-LOG: update_completed_jobs: failed, the details: {e}")
+        logger.exception(f"HTC-CROND-QUEUE-LOG: update_completed_jobs failed, the details: {e}")
 
 
 
@@ -254,7 +251,7 @@ async def submit_job_from_redis():
                 raw_job = await r.rpop("submitting_jobs")
                 if not raw_job:
                     break
-                logger.debug(f"HTC-LOG: Pop the raw info: {raw_job}")
+                logger.debug(f"HTC-ASYNC-LOG: Pop the raw info: {raw_job}")
 
                 job = json.loads(raw_job)
                 job_owner = job.get("username")
@@ -269,21 +266,23 @@ async def submit_job_from_redis():
 
                 uid = change_username_to_uid(job_owner)
                 job_dir = await init_job_dir(job_owner, job_type)
-                logger.debug(f"HTC-LOG: Init user dir {job_dir} successfully.")
+                logger.debug(f"HTC-ASYNC-LOG: Init user dir {job_dir} successfully.")
 
                 submit_file = await generate_condor_submit(job_owner, job_cpu, job_mem, job_type, job_dir, job_os, job_wn, job_arch, job_params)
-                submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
-                logger.debug(f"HTC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
+                await check_user_kerberos_ticket(job_owner, uid, job_dir)
 
-                stdout = await sub_command(submit_command, 10, "submit job failed.", "submit job timeout.")
+                submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
+                logger.debug(f"HTC-ASYNC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
+                stdout = await sub_command(submit_command, 40, "submit job failed.", "submit job timeout.")
+
                 job_id_line = stdout.decode().strip()
                 job_id = job_id_line.split()[-1].rstrip('.')
                 output = f"{job_dir}/{job_id}.out"
                 errpath = f"{job_dir}/{job_id}.err"
-                logger.debug(f"HTC-LOG: Submit User {job_owner} job {job_type} {job_id} to cluster.")
+                logger.debug(f"HTC-ASYNC-LOG: Submit User {job_owner} job {job_type} {job_id} to cluster.")
 
                 insert_job_info(uid, job_id, output, errpath, job_type, job_dir, cluster_id)
-                logger.debug(f"HTC-LOG: Submit {job_owner} job {job_id} to queue.")
+                logger.debug(f"HTC-ASYNC-LOG: Submit {job_owner} job {job_id} to queue.")
                 
                 job_record = {
                     "ClusterId": "HTCondor",
@@ -311,11 +310,11 @@ async def submit_job_from_redis():
             except Exception as e:
                 if raw_job:
                     await r.lrem(f"{job_owner}_submitting_jobs", 1, raw_job)
-                logger.error(f"HTC-LOG: Submit job failed, {e}")
+                logger.error(f"HTC-ASYNC-LOG: Submit job failed, {e}")
                 continue
 
     except Exception as e:
-        logger.error(f"HTC-LOG: Some Wrong in Submit job, the details: {e}")
+        logger.error(f"HTC-ASYNC-LOG: Some Wrong in Submit job, the details: {e}")
         raise e
     
 

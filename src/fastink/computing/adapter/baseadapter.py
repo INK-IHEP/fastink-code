@@ -2,7 +2,7 @@ import pwd, grp
 from typing import Optional
 from abc import ABC, abstractmethod
 from fastink.common.config import get_config
-from fastink.computing.cluster.cluster import Base_JOB, SubmitMode
+from fastink.computing.cluster.cluster import Base_JOB, SubmitMode, SubmitMode
 from fastink.computing.tools.common.utils import change_uid_to_username
 
 class SchedulerBase(ABC):

@@ -1,8 +1,8 @@
 import asyncio, json
 import importlib, grp
 import pwd, os, base64
-import shlex
-from shlex import quote
+from pathlib import Path
+from shlex import quote, split
 from typing import Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -514,6 +514,174 @@ def generate_submit_command(username: str, job_dir: str, job_type: str, submitfi
     return command
 
 
+def get_parent_dir(path_str: str) -> str:
+    parent = str(Path(path_str).parent)
+    return "" if parent == "." else parent
+
+
+async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
+    
+    XROOTD_PATH = get_config("computing", "xrootd_path")
+    uid = change_username_to_uid(username)
+
+    def build_default_job_dir() -> str:
+        user_home_dir = os.path.expanduser(f"~{username}")
+        time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        if user_home_dir.startswith("/afs/"):
+            _, user_group = get_user_exp_group(uid)
+            ink_dir = get_config("computing", "ink_dir")
+            ink_dir = ink_dir.format(user_group=user_group, username=username)
+            return f"{ink_dir}/.ink/Jobs/{job_type}-{time_stamp}"
+        return f"{user_home_dir}/.ink/Jobs/{job_type}-{time_stamp}"
+
+    if script_path:
+        script_dir = get_parent_dir(script_path)
+        final_job_dir = script_dir if script_dir else build_default_job_dir()
+    elif job_dir:
+        final_job_dir = job_dir
+    else: 
+        final_job_dir = build_default_job_dir()
+
+    logger.debug(f"User job_dir: {final_job_dir}")
+
+    is_exist, _ = await common.path_exist(name=final_job_dir, username=username, mgm=XROOTD_PATH)
+    if not is_exist:
+        await common.mkdir(dname=final_job_dir, username=username, mode="700", exist_ok=False, mgm=XROOTD_PATH)
+    logger.debug(f"Completed the jobdir({final_job_dir}) init for User({username})")
+
+    if get_config("common", "krb5_enabled"):
+        token = get_krb5(username)
+        if not token:
+            raise Exception("Generate user KRB5 token failed.")
+
+        krb5_decoded_bytes = base64.b64decode(token)
+        await common.upload_file(src_data=krb5_decoded_bytes, dst=f"{final_job_dir}/krb5cc_{uid}", username=username, mgm=XROOTD_PATH, mode="600")
+        logger.debug(f"Generate user:{username} KRB5 token successfully.")
+
+    return final_job_dir
+
+
+async def generate_condor_sync_submit(
+    username: str,
+    cpu: int, 
+    mem: int, 
+    job_dir: str,
+    job_type: str,
+    job_script: Optional[str] = None,
+    script_path: Optional[str] = None,
+    request_os: Optional[str] = None, 
+    request_wn: Optional[str] = None, 
+    request_arch: Optional[str] = None, 
+    arguments: Optional[str] = None
+):
+
+    XROOTD_PATH = get_config("computing", "xrootd_path")
+    uid = change_username_to_uid(username)
+    groupname = grp.getgrgid(pwd.getpwuid(uid).pw_gid).gr_name
+
+    if script_path:
+        extra_param = True
+        workernode = request_wn
+        arch = request_arch
+        config = {
+            "universe": "vanilla",
+            "executable": script_path,
+            "arguments": arguments,
+            "output": f"{job_dir}/$(ClusterId).out",
+            "error": f"{job_dir}/$(ClusterId).err",
+            "request_cpus": cpu,
+            "request_memory": mem,
+            "getenv": "True",
+        }
+    elif job_script:
+        extra_param = True
+        workernode = request_wn
+        arch = request_arch
+        submitfile_content = job_script.encode("utf-8")
+        config = {
+            "universe": "vanilla",
+            "executable": f"{job_dir}/job.sh",
+            "arguments": arguments,
+            "output": f"{job_dir}/$(ClusterId).out",
+            "error": f"{job_dir}/$(ClusterId).err",
+            "request_cpus": cpu,
+            "request_memory": mem,
+            "getenv": "True",
+        }
+        await common.upload_file(src_data=submitfile_content, dst=f"{job_dir}/job.sh", username=username, mgm=XROOTD_PATH, mode="700")
+    else:
+        default_job_config = get_config("jobtype", job_type, fallback={}).get("htc")
+        if default_job_config:
+            extra_param = default_job_config.get("extra_param")
+            job_cpus = default_job_config.get("RequestCpus", cpu)
+            job_mem = default_job_config.get("RequestMemory", mem)
+            workernode = default_job_config.get("workernode", request_wn)
+            arch = default_job_config.get("arch", request_arch)    
+
+        executable_dir = get_config("computing", "cluster_scripts")
+        executable = f"{executable_dir}/{job_type}/shell.sh"
+
+        with open(executable, "rb") as file:
+            submitfile_content = file.read()
+        await common.upload_file(src_data=submitfile_content, dst=f"{job_dir}/shell.sh", username=username, mgm=XROOTD_PATH, mode="700")
+
+        job_script = f"{executable_dir}/{job_type}/run.sh"
+        with open(job_script, "rb") as file:
+            job_script_content = file.read()
+        await common.upload_file(src_data=job_script_content, dst=f"{job_dir}/run.sh", username=username, mgm=XROOTD_PATH, mode="700")
+
+        if job_type == "npu":
+            arguments += job_dir
+        
+        config = {
+            "universe": "vanilla",
+            "executable": "shell.sh",
+            "arguments": arguments,
+            "output": f"{job_dir}/$(ClusterId).out",
+            "error": f"{job_dir}/$(ClusterId).err",
+            "request_cpus": job_cpus,
+            "request_memory": job_mem,
+            "getenv": "True",
+        }    
+
+        for key, value in default_job_config.items():
+            if key in {"schedd_host", "cm_host", "RequestCpus", "RequestMemory", "walltime", "workernode", "extra_param"}:
+                continue
+            config[f"{key}"] = value
+
+    if extra_param:
+        job_plugin = importlib.import_module(f"fastink.computing.scripts.plugins.set_extra_config")
+        extra_job_config = job_plugin.get_extra_job_config(username, groupname, job_type, request_os)
+        for key, value in extra_job_config.items():
+            logger.info(f"key: {key}, value: {value}")
+            config[f"{key}"] = value
+
+    requirement_expr = build_requirements(workernode, arch)
+    config[f"requirements"] = requirement_expr
+
+    lines = [f"{k} = {v}" for k, v in config.items()]
+    lines.append("queue")
+    submitfile_bytes = ("\n".join(lines) + "\n").encode("utf-8")
+    submitfile_name = f"{username}_{job_type}.sub"
+
+    await common.upload_file(src_data=submitfile_bytes, dst=f"{job_dir}/{submitfile_name}", username=username, mgm=XROOTD_PATH, mode="600")
+    logger.debug(f"Completed the submit file initial and upload.")
+
+    return submitfile_name
+
+
+async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, timeout: int = 30):
+
+    ccache_path = f"{job_dir}/krb5cc_{uid}"
+    check_command = f"su - {username} -c 'export KRB5CCNAME={ccache_path} && klist'"
+    try:
+        stdout = await sub_command(check_command, timeout, "KRB5 Ticket Check Failed", "Klist check timeout")        
+        ticket_info = stdout.decode(errors="ignore").strip()
+        logger.info(f"--- Kerberos Ticket Info for {username} ---\n{ticket_info}\n--------------------------------------")
+    except Exception as e:
+        logger.error(f"HTC-ASYNC-LOG: Kerberos ticket is INVALID for {username}. Error: {e}")
+
+
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     process = await asyncio.create_subprocess_shell(
         command,
@@ -523,16 +691,13 @@ async def sub_command(command, timeoutsec, errinfo, tminfo):
     )
 
     try:
-        # 关键：用 communicate()，它会一边读 stdout/stderr 一边等待进程结束，避免管道塞满死锁
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
 
     except asyncio.TimeoutError as e:
-        # 超时：先 kill，再把管道读空，确保进程彻底回收
         process.kill()
         stdout, stderr = await process.communicate()
         raise Exception(f"{tminfo} {e}. stderr={stderr.decode(errors='ignore')[:500]}")
 
-    # 正常结束后再检查 returncode
     if process.returncode != 0:
         error_msg = stderr.decode(errors="ignore").strip()
         raise Exception(f"{errinfo} {error_msg}")
