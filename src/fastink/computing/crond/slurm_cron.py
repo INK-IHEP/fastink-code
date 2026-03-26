@@ -15,7 +15,8 @@ from fastink.computing.tools.db.db_tools import (
     get_starttime_info,
     get_endtime_info,
     update_start_time,
-    update_end_time
+    update_end_time,
+    job_exists
 )
 
 import logging
@@ -165,7 +166,7 @@ async def slurm_update_job_state(cluster: str):
         return
 
     db_jobs = get_active_cluster_jobs(cluster)
-    db_job_map = {j.job_id: j for j in db_jobs}
+    db_job_map = {j["jobid"]: j for j in db_jobs}
 
     # -----------------------------------------------------
     # Case A: Slurm has but DB missing -> insert full info
@@ -173,6 +174,9 @@ async def slurm_update_job_state(cluster: str):
     for job_id, info in slurm_jobs.items():
 
         if job_id not in db_job_map:
+
+            if job_exists(job_id, cluster):
+                continue  # Job already exists in DB
 
             uid = change_username_to_uid(info["username"])
             if not uid:
@@ -186,11 +190,11 @@ async def slurm_update_job_state(cluster: str):
 
             insert_job_info(
                 uid=uid,
-                job_id=job_id,
-                out_path=out_path,
-                err_path=err_path,
+                jobid=job_id,
+                outpath=out_path,
+                errpath=err_path,
                 job_type=info["job_type"],
-                workdir=info["workdir"],
+                job_path=info["workdir"],
                 clusterid=cluster,
             )
 
@@ -199,8 +203,8 @@ async def slurm_update_job_state(cluster: str):
     # -----------------------------------------------------
     for job in db_jobs:
 
-        job_id = job.job_id
-        db_status = job.status
+        job_id = job["jobid"]
+        db_status = job["status"]
 
         slurm_info = slurm_jobs.get(job_id)
         if not slurm_info:
@@ -213,7 +217,7 @@ async def slurm_update_job_state(cluster: str):
 
         if new_status != db_status:
 
-            update_job_status(job.uid, job_id, new_status, cluster)
+            update_job_status(job["uid"], job_id, new_status, cluster)
 
             uuid_val = await r.get(
                 f"job_id_to_submit_uuid:{cluster}:{job_id}"

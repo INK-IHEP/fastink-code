@@ -40,7 +40,8 @@ class HPC_Scheduler(SchedulerBase):
     async def _gen_slurm_submit_cmd(
         self, 
         cpu: int, 
-        mem: int, 
+        mem: int,
+        jobname: str, 
         jobtype: str, 
         jobdir: str, 
         partition: Optional[str],
@@ -110,7 +111,7 @@ class HPC_Scheduler(SchedulerBase):
             f"--ntasks={ntasks}",
             f"--cpus-per-task={cpu}",
             f"--mem={mem}M",
-            f"--job-name={jobtype}",
+            f"--job-name={jobname}",
             f"--wckey={jobtype}",
             f"--chdir={str(jobdir)}",
         ]
@@ -178,7 +179,8 @@ class HPC_Scheduler(SchedulerBase):
             logger.info(f"Init User {self.USERNAME} jobdir {job_dir} finished.")
 
             submit_cmd, out_path, err_path = await self._gen_slurm_submit_cmd(cpu=hpc_job_params.cpu, 
-                                                           mem=hpc_job_params.mem, 
+                                                           mem=hpc_job_params.mem,
+                                                           jobname=hpc_job_params.job_name, 
                                                            jobtype=hpc_job_params.job_type,
                                                            jobdir=job_dir,
                                                            partition=hpc_job_params.partition,

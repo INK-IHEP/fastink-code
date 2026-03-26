@@ -282,14 +282,13 @@ def get_active_cluster_jobs(
         select(
             models.JobInfo.jobid,
             models.JobInfo.uid,
-            models.JobInfo.username,
-            models.JobInfo.status,
+            models.JobInfo.job_status,
         )
         .where(models.JobInfo.clusterid == clusterid)
         .where(
             or_(
-                models.JobInfo.status.notin_(("COMPLETED", "FAILED")),
-                models.JobInfo.end_time >= recent_threshold,
+                models.JobInfo.job_status.notin_(("COMPLETED", "FAILED")),
+                models.JobInfo.job_end_time >= recent_threshold,
             )
         )
     )
@@ -300,8 +299,19 @@ def get_active_cluster_jobs(
         {
             "jobid": row.jobid,
             "uid": row.uid,
-            "username": row.username,
-            "status": row.status,
+            "status": row.job_status,
         }
         for row in results
     ]
+
+@read_session
+def job_exists(jobid: str, clusterid: str, *, session: Session) -> bool:
+    """
+    Check if a job exists in the database.
+    """
+    stmt = select(models.JobInfo).where(
+        models.JobInfo.jobid == jobid,
+        models.JobInfo.clusterid == clusterid
+    )
+    result = session.execute(stmt).first()
+    return result is not None

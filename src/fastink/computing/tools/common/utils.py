@@ -761,7 +761,7 @@ def parse_sbatch_out_err(cmd: str, job_id: str | int) -> tuple[str | None, str |
     output_path = None
     error_path = None
 
-    tokens = shlex.split(cmd)
+    tokens = split(cmd)
     job_id = str(job_id)
 
     it = iter(enumerate(tokens))
