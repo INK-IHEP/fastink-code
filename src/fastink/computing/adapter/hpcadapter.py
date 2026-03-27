@@ -295,6 +295,7 @@ class HPC_Scheduler(SchedulerBase):
             # Retry policy
             "retry_count": 0,
             "max_retries": int(get_config("crond", "async_submit_retries", fallback=3)),
+            "retry_delay_seconds": int(get_config("crond", "retry_delay_seconds", fallback=10)),
         }
 
         # --------------------------------------------------

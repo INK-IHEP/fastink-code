@@ -1,5 +1,6 @@
 from fastink.common.config import get_config
 import json
+import asyncio
 from fastink.inkdb.inkredis import redis_connect
 from fastink.computing.adapter.strategy import get_scheduler
 from functools import wraps
@@ -163,10 +164,12 @@ async def _process_single_job(r, cluster: str, raw_job: str, job_number: int):
 
                 if retry_count <= max_retries:
                     job["retry_count"] = retry_count
+                    retry_delay = float(job.get("retry_delay_seconds", 10))
                     await r.lpush(f"submitting_jobs:{cluster}", json.dumps(job, ensure_ascii=False))
                     logger.warning(
-                        f"[{cluster}] Retry {retry_count}/{max_retries} for job {job.get('submit_uuid')}"
+                        f"[{cluster}] Retry {retry_count}/{max_retries} for job {job.get('submit_uuid')}, delay {retry_delay}s"
                     )
+                    await asyncio.sleep(retry_delay)
                 else:
                     await r.lpush(f"failed_jobs:{cluster}", json.dumps(job, ensure_ascii=False))
                     await r.lrem(f"{cluster}_submitting_jobs:{job.get('username')}", 0, json.dumps(job, ensure_ascii=False))
