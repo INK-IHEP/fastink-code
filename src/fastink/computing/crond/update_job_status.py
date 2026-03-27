@@ -273,7 +273,7 @@ async def submit_job_from_redis():
 
                 submit_command = generate_submit_command(job_owner, job_dir, job_type, submit_file)
                 logger.debug(f"HTC-ASYNC-LOG: Generate User {job_owner} submit command {submit_command} finished.")
-                stdout = await sub_command(submit_command, 40, "submit job failed.", "submit job timeout.")
+                stdout = await sub_command(submit_command, 120, "submit job failed.", "submit job timeout.")
 
                 job_id_line = stdout.decode().strip()
                 job_id = job_id_line.split()[-1].rstrip('.')
