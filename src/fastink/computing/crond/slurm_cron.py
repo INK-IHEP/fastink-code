@@ -59,48 +59,129 @@ def cluster_enabled(cluster: str):
 
     return decorator
 
+@cluster_enabled("slurm")
 async def submit_slurm_jobs():
     """
     Periodic worker for submitting Slurm async jobs.
     """
+    logger.info("Starting Slurm job submission worker(submit_from_queue)...")
     await submit_from_queue("slurm")
 
 
 async def submit_from_queue(cluster: str):
     """
     Submit jobs from redis queue for the given cluster.
+    Processes both global queue and per-user queues.
+    
+    Note: If duplicate check is enabled for certain job types,
+    jobs may only be stored in per-user queues, not in the global queue.
     """
     try:
         r = redis_connect()
-        queue_key = f"submitting_jobs:{cluster}"
+        logger.debug(f"[{cluster}] Connected to Redis")
+        global_queue_key = f"submitting_jobs:{cluster}"
+        logger.debug(f"[{cluster}] Global queue key: {global_queue_key}")
 
+        # 检查全局队列中的作业数量
+        try:
+            global_queue_length = await r.llen(global_queue_key)
+            logger.debug(f"[{cluster}] Global queue '{global_queue_key}' length: {global_queue_length}")
+        except Exception as e:
+            logger.warning(f"[{cluster}] Failed to check global queue length: {e}")
+            global_queue_length = 0
+
+        job_count = 0
+        
+        logger.debug(f"[{cluster}] Processing global queue...")
         while True:
-            raw_job = await r.rpop(queue_key)
-            if not raw_job:
-                break
-
             try:
-                job = json.loads(raw_job)
-                logger.info(f"[{cluster}] Pop async job: {job}")
-
-                scheduler = get_scheduler(cluster, job["username"])
-                job_id = await scheduler.submit_job_from_queue(job)
-
-                logger.info(
-                    f"[{cluster}] Job submitted successfully, job_id={job_id}"
-                )
+                raw_job = await r.rpop(global_queue_key)
+                if not raw_job:
+                    if job_count == 0 and global_queue_length > 0:
+                        logger.debug(f"[{cluster}] No more jobs in global queue (initial length was {global_queue_length})")
+                    break
+                
+                job_count += 1
+                await _process_single_job(r, cluster, raw_job, job_count)
 
             except Exception as e:
                 logger.error(
-                    f"[{cluster}] Failed to submit job: ({raw_job}) with error({e})",
+                    f"[{cluster}] Error processing global queue: {e}",
                     exc_info=True
                 )
-                # Optional: push to dead-letter queue
-                await r.lpush(f"failed_jobs:{cluster}", raw_job)
+                break
+
+        logger.debug(f"[{cluster}] Processed {job_count} jobs from global queue")
 
     except TimeoutError:
         # Another worker instance is running
         logger.debug(f"[{cluster}] worker job submission is timeout.")
+    
+    except Exception as e:
+        logger.error(
+            f"[{cluster}] Failed to connect to Redis or initialize queue: {e}",
+            exc_info=True
+        )
+
+
+async def _process_single_job(r, cluster: str, raw_job: str, job_number: int):
+    """
+    Process a single job from the queue.
+    """
+    try:
+        logger.debug(f"[{cluster}] Processing job #{job_number}, raw data: {raw_job}")
+
+        try:
+            job = json.loads(raw_job)
+            logger.info(f"[{cluster}] Pop async job #{job_number}: {job}")
+
+            scheduler = get_scheduler(cluster, job["username"])
+            job_id = await scheduler.submit_job_from_queue(job)
+
+            logger.info(
+                f"[{cluster}] Job #{job_number} submitted successfully, job_id={job_id}"
+            )
+
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"[{cluster}] Failed to parse job #{job_number} JSON: ({raw_job}) with error({e})",
+                exc_info=True
+            )
+            # Push unparseable job to dead-letter queue
+            await r.lpush(f"failed_jobs:{cluster}", raw_job)
+
+        except Exception as e:
+            logger.error(
+                f"[{cluster}] Failed to submit job #{job_number}: ({raw_job}) with error({e})",
+                exc_info=True
+            )
+
+            # Retry policy: allow finite retries then fail
+            if isinstance(job, dict):
+                retry_count = int(job.get("retry_count", 0)) + 1
+                max_retries = int(job.get("max_retries", 3))
+
+                if retry_count <= max_retries:
+                    job["retry_count"] = retry_count
+                    await r.lpush(f"submitting_jobs:{cluster}", json.dumps(job, ensure_ascii=False))
+                    logger.warning(
+                        f"[{cluster}] Retry {retry_count}/{max_retries} for job {job.get('submit_uuid')}"
+                    )
+                else:
+                    await r.lpush(f"failed_jobs:{cluster}", json.dumps(job, ensure_ascii=False))
+                    await r.lrem(f"{cluster}_submitting_jobs:{job.get('username')}", 0, json.dumps(job, ensure_ascii=False))
+                    logger.error(
+                        f"[{cluster}] Dropped job after {max_retries} retries: {job.get('submit_uuid')}"
+                    )
+            else:
+                # Non-parsable job, push to failed queue
+                await r.lpush(f"failed_jobs:{cluster}", raw_job)
+
+    except Exception as e:
+        logger.error(
+            f"[{cluster}] Unexpected error processing job #{job_number}: {e}",
+            exc_info=True
+        )
         
         
 def _map_slurm_status_to_internal(db_status: str, slurm_state: str) -> str:

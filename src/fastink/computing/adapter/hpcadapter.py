@@ -247,7 +247,13 @@ class HPC_Scheduler(SchedulerBase):
                     logger.debug(
                         f"SLURM-ASYNC: job {job_data.job_type} already in submitting queue"
                     )
-                    return
+                    return {
+                        "cluster": cluster,
+                        "submit_uuid": submit_uuid,
+                        "job_status": "DUPLICATE",
+                        "job_id": None,
+                        "error": f"job_type '{job_data.job_type}' already in submitting queue"
+                    }
 
         # --------------------------------------------------
         # 2. Build Redis job payload
@@ -286,6 +292,9 @@ class HPC_Scheduler(SchedulerBase):
 
             # Status marker
             "job_status": "SUBMITTING",
+            # Retry policy
+            "retry_count": 0,
+            "max_retries": int(get_config("crond", "async_submit_retries", fallback=3)),
         }
 
         # --------------------------------------------------
@@ -365,6 +374,7 @@ class HPC_Scheduler(SchedulerBase):
             submit_cmd, out_path, err_path = await self._gen_slurm_submit_cmd(
                 cpu=job.get("cpu"),
                 mem=job.get("mem"),
+                jobname=job.get("job_name"),
                 jobtype=job_type,
                 jobdir=job_dir,
                 partition=job.get("partition"),

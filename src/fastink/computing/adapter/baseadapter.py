@@ -21,7 +21,7 @@ class SchedulerBase(ABC):
             return False
 
         # async mode
-        interactive_job_types = get_config("computing", "iptables_jobtype")
+        interactive_job_types = get_config("computing", "iptables_jobtype") + get_config("computing", "noenv_jobtype")   
         return job_data.job_type in interactive_job_types
     
     
