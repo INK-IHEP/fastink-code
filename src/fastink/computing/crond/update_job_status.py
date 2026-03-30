@@ -159,7 +159,7 @@ async def update_completed_jobs():
 
 def gen_history_list_command() -> str:
     SCHEDD_HOST = get_config("computing", "schedd_host")
-    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} --allusers"
+    BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)}"
     ATTRS = [
         'formatTime(EnteredCurrentStatus,"%Y-%m-%d %H:%M:%S")',
         'ifThenElse(isUndefined(JobStartDate),"NULL",formatTime(JobStartDate,"%Y-%m-%d"))',
