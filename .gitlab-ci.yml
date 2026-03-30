@@ -71,6 +71,7 @@ trigger_dev:
       pipeline_variables: true
   variables:
     TARGET_JOB: "deploy-dev-job"
+    FASTINK_CODE_REF: "${CI_COMMIT_SHA}"
     FASTINK_SERVER_IMAGE: "fastink-server:dev-local"
     FASTINK_CRON_IMAGE: "fastink-redis-cron:dev-local"
     FASTINK_ROOTBROWSE_IMAGE: "fastink-rootbrowse:dev-local"
@@ -91,6 +92,7 @@ trigger_prod:
       pipeline_variables: true
   variables:
     TARGET_JOB: "deploy-prod-job"
+    FASTINK_CODE_REF: "${CI_COMMIT_TAG}"
     FASTINK_SERVER_IMAGE: "dockerhub.ihep.ac.cn/ink/fastink-server:${CI_COMMIT_TAG}"
     FASTINK_CRON_IMAGE: "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${CI_COMMIT_TAG}"
     FASTINK_ROOTBROWSE_IMAGE: "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${CI_COMMIT_TAG}"
