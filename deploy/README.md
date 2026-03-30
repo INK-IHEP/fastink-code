@@ -1,68 +1,72 @@
 # FastINK Deploy
 
-`ink-code/deploy/` 是 FastINK 的共享部署层，负责三件事：
+`ink-code/deploy/` is the shared deployment layer for FastINK.
 
-- 定义可发布的官方镜像
-- 提供共享的渲染内核和宿主机预检逻辑
-- 提供开源用户可直接使用的交互式部署入口
+It serves two kinds of users:
 
-它既服务开源用户，也服务 `fastink-dev` 这类站点 overlay。
+- open-source users who want to install FastINK directly
+- site overlay repositories such as `../fastink-dev/`
 
-## 目录结构
+This directory is responsible for three things:
+
+- defining the official image build inputs
+- providing the shared render core and host-side checks
+- providing both interactive and non-interactive deployment entrypoints
+
+## Directory Layout
 
 - `images/`
-  官方镜像定义。当前包括 `server`、`cron`、`rootbrowse`。
+  Official image definitions. Current images include `server`, `cron`, and `rootbrowse`.
 - `lib/`
-  共享部署内核，包括默认值、路径规划、宿主机预检、模板渲染。
+  Shared deployment core, including defaults, path planning, host checks, and rendering.
 - `templates/`
-  分层模板。
-  - `base/`：公共模板
-  - `profiles/`：`minimal`、`full` profile overlay
-  - `extras/`：可选能力 overlay，例如 `nginx`、`xrootd`
+  Layered templates.
+  - `base/`: common templates
+  - `profiles/`: `minimal` and `full` profile overlays
+  - `extras/`: optional capabilities such as `nginx` and `xrootd`
 - `install.py`
-  交互式 CLI，面向开源用户。
+  Interactive CLI for open-source users.
 - `render_profile.py`
-  非交互渲染入口，面向 CI 和 site overlay。
+  Non-interactive render entrypoint for CI and site overlays.
 - `check_host.py`
-  宿主机预检入口。
+  Host precheck entrypoint.
 
-## 开源用户部署流程
+## Open-Source Deployment Flow
 
-在 `ink-code/` 根目录执行：
+Run from the `ink-code/` root directory:
 
 ```bash
 python deploy/install.py
 ```
 
-或者：
+or:
 
 ```bash
 ./deploy/bin/fastink-deploy
 ```
 
-实际流程是：
+The flow is:
 
-1. 执行宿主机预检。
-   - 检查 `docker`
-   - 检查 `docker compose`
-   - 检查 `/cvmfs`
-   - 预热 FastINK 会访问到的 `/cvmfs` 路径
-2. 选择 profile。
-   - `minimal`：FastINK 核心功能栈
-   - `full`：在核心功能栈基础上，默认打开更多可选能力
-3. 选择镜像来源。
-   - 默认是 `pull`，直接拉官方镜像
-   - 也可以显式选 `build`，在本地根据 `deploy/images/` 构建
-4. 交互式填写运行参数。
-   - 端口、目录、数据库口令、Redis 口令、可选服务开关等
-5. 生成持久化部署目录 `.deploy/`。
-6. 渲染模板并写入 `.deploy/`。
-7. 执行 `docker build` 或 `docker pull`。
-8. 执行 `docker compose up -d` 并轮询健康检查。
+1. Run host prechecks.
+   - check `docker`
+   - check `docker compose`
+   - check `/cvmfs`
+   - warm the `/cvmfs` paths that FastINK actually needs
+2. Choose a profile.
+   - `minimal`: the FastINK core deployment
+   - `full`: `minimal` plus more optional infrastructure enabled by default
+3. Choose an image source.
+   - default is `pull`, which uses the official images
+   - `build` is still available if the user wants to build locally from `deploy/images/`
+4. Fill the interactive runtime parameters.
+5. Generate the persistent `.deploy/` directory.
+6. Render `config.yml`, `docker-compose.yml`, `.env`, keys, and runtime directories.
+7. Run `docker build` or `docker pull`.
+8. Run `docker compose up -d` and wait for the health check.
 
-## Profile 与容器层级
+## Profiles And Service Layers
 
-当前 profile 语义是：
+The current profile meaning is:
 
 - `minimal`
   - `fastink-db`
@@ -71,22 +75,22 @@ python deploy/install.py
   - `fastink-redis-cron`
   - `fastink-rootbrowse`
 - `full`
-  - 继承完整 `minimal`
-  - 再根据开关启用额外基础设施能力
+  - inherits the complete `minimal` stack
+  - then enables more optional infrastructure by default
 
-当前可选 extra：
+Current optional extras:
 
 - `enable_nginx`
-  - 增加 `fastink-nginx`
-  - 由 nginx 提供 HTTPS 入口，再反代到 `fastink-server`
+  - adds `fastink-nginx`
+  - provides an HTTPS entrypoint in front of `fastink-server`
 - `enable_xrootd`
-  - 增加 `fastink-xrootd`
+  - adds `fastink-xrootd`
 
-## `.deploy/` 里会生成什么
+## What `.deploy/` Contains
 
-`.deploy/` 是开源用户的持久部署资产，建议随部署一起保存。换机器时，可以直接带走这份目录继续部署。
+`.deploy/` is the persistent deployment asset for open-source users. It should usually be kept together with the deployment so that it can be copied to another machine later.
 
-典型内容包括：
+Typical contents include:
 
 - `config.yml`
 - `docker-compose.yml`
@@ -97,94 +101,95 @@ python deploy/install.py
 - `plugins/`
 - `preload/`
 - `xrootd/`
+- `nginx/`
 
-这些文件中，真正建议手工维护的主要是：
+The files that users should normally maintain directly are mainly:
 
 - `answers.json`
 - `plugins/`
 - `preload/`
-- `xrootd/` 下用户自己补充的运行时材料
+- runtime materials under `xrootd/` and `nginx/`
 
-生成产物例如 `config.yml`、`docker-compose.yml`，更适合通过重新执行 `install.py` 或复用 `answers.json` 来更新，而不是手工长期维护。
+Generated outputs such as `config.yml` and `docker-compose.yml` are better regenerated than edited long-term by hand.
 
-## 需要用户处理的运行时材料
+## Runtime Materials The User Must Handle
 
-### 1. SSH client key
+### 1. SSH Client Key
 
-deploy 会自动生成：
+Deploy automatically generates:
 
 - `.deploy/keys/ssh-client/id_rsa`
 - `.deploy/keys/ssh-client/id_rsa.pub`
 
-这对 key 的用途是：
+This key pair is used by `fastink-server` when accessing:
 
-- `fastink-server` 访问 `rootbrowse`
-- `fastink-server` 访问 condor、slurm、login 节点
+- `rootbrowse`
+- condor nodes
+- Slurm nodes
+- login nodes
 
-`rootbrowse` 的 host key 由容器自己生成，不需要用户准备。
+`rootbrowse` host keys are generated by the container itself.
 
-用户需要把 `.deploy/keys/ssh-client/id_rsa.pub` 部署到远端运行账号的 `authorized_keys`。
+Users must deploy `.deploy/keys/ssh-client/id_rsa.pub` to the appropriate remote account `authorized_keys`.
 
-### 1.1 nginx TLS certificate
+### 2. nginx TLS Certificate
 
-如果启用 `nginx`，deploy 会在 `.deploy/nginx/` 下维护：
+If `nginx` is enabled, deploy maintains these files under `.deploy/nginx/`:
 
 - `default.conf`
 - `cert.pem`
 - `key.pem`
 
-规则是：
+Rules:
 
-- 如果用户在 installer 中提供已有证书和私钥，deploy 会把它们复制到 `.deploy/nginx/`
-- 如果用户没有提供证书，deploy 会自动生成一对自签发证书，保证 nginx 至少可以提供 HTTPS 加密服务
+- if the user provides an existing certificate and key, deploy copies them into `.deploy/nginx/`
+- otherwise deploy generates a self-signed certificate so nginx can still provide HTTPS encryption
 
-当前通用 nginx extra 直接对外暴露的是 HTTPS 端口，并反代到容器内的 `fastink-server:8000`。
+### 3. xrootd Keytabs
 
-### 2. xrootd keytab
+If `xrootd` is enabled, deploy prepares:
 
-如果启用 `xrootd`，deploy 会在 `.deploy/xrootd/` 下准备：
+- `.deploy/xrootd/sss.keytab`
+- `.deploy/xrootd/krb5.keytab`
 
-- `sss.keytab`
-- `krb5.keytab`
-
-规则是：
+Rules:
 
 - `sss.keytab`
-  - 如果宿主机上有 `xrdsssadmin`，installer 会自动生成
-  - 否则会保留占位文件，并提示用户执行：
+  - if `xrdsssadmin` exists on the host, installer can generate it automatically
+  - otherwise the installer keeps the path and tells the user to run:
     `xrdsssadmin -c .deploy/xrootd/sss.keytab -u xrootd`
 - `krb5.keytab`
-  - 只会保留占位路径
-  - 需要 krb5 管理员提供并放到 `.deploy/xrootd/krb5.keytab`
+  - is never auto-generated
+  - must be provided by a Kerberos administrator
 
-### 3. Slurm 宿主机环境
+### 4. Slurm Host Environment
 
-如果 FastINK 需要访问 Slurm，当前要求是宿主机先准备好 Slurm client 环境。至少包括：
+If FastINK needs Slurm access, the host must already provide a working Slurm client environment, including at least:
 
 - `sbatch`
 - `sacct`
 - `scontrol`
 - `scancel`
-- 可挂载的 `munge` socket
-- 正常工作的 `slurm.conf`
+- a usable `munge` socket
+- a valid `slurm.conf`
 
-容器镜像负责提供容器内客户端命令，但宿主机自己的 Slurm 配置和认证仍然要提前准备好。
+The official images provide the container-side client packages. Host-side Slurm configuration and authentication are still the user's responsibility.
 
-## 官方镜像与 yum 源
+## Official Images And yum Repositories
 
-开源用户默认应直接拉官方镜像。
+Open-source users should normally use the official images.
 
-官方镜像在 `deploy/images/` 中定义，并在发布流程中构建。当前镜像构建会使用 IHEP 管理的 yum 源，其中 `slurm` 依赖来自 IHEP mirror。
+The official image build inputs are defined under `deploy/images/`. Current image builds use IHEP-managed yum repositories where needed, including the IHEP mirror for `slurm`.
 
-如果你要自己 build 镜像，或者要在镜像里安装额外 RPM，请检查并按自己的环境修改：
+If a user wants to rebuild images locally or install extra RPMs, they should review and adapt:
 
 - `deploy/images/repos/`
 
-## 非交互渲染流程
+## Non-Interactive Render Flow
 
-`render_profile.py` 是给 CI 和 site overlay 用的，不是给普通用户直接维护 `.deploy/` 的主入口。
+`render_profile.py` is the non-interactive entrypoint used by CI and site overlays. It is not the main long-term interface for open-source users.
 
-典型调用方式：
+Typical usage:
 
 ```bash
 python deploy/render_profile.py \
@@ -194,32 +199,32 @@ python deploy/render_profile.py \
   --config-overlay /path/to/site-config.yml
 ```
 
-它的职责是：
+Its responsibilities are:
 
-1. 读取一份 answers 文件
-2. 应用 `--set` 覆盖
-3. 规划运行时目录
-4. 渲染基础模板、profile overlay、extra overlay
-5. 输出最终 `config.yml`、`docker-compose.yml`、`.env`
+1. read an answers file
+2. apply `--set` overrides
+3. plan runtime directories
+4. render base templates, profile overlays, and extras
+5. output final `config.yml`, `docker-compose.yml`, and `.env`
 
-`fastink-dev` 就是通过这条链路消费 `deploy` 的。
+`fastink-dev` consumes `deploy` through this path.
 
-## 需要改东西时去哪里改
+## Where To Change Things
 
-按改动性质分：
+By change type:
 
-- 改公共服务拓扑、公共 compose 结构：`templates/base/`
-- 改 `minimal/full` 语义：`templates/profiles/`
-- 改 `nginx/xrootd` 这类可选能力：`templates/extras/`
-- 改默认值、默认镜像来源、profile 默认开关：`lib/defaults.py`
-- 改运行目录结构：`lib/paths.py`
-- 改宿主机预检和 `/cvmfs` 预热：`lib/host_runtime.py`
-- 改模板渲染和 merge 行为：`lib/render.py`
-- 改官方镜像内容：`images/`
-- 改交互式安装体验：`install.py`
-- 改 CI / 站点渲染入口：`render_profile.py`
+- public service topology and common compose structure: `templates/base/`
+- `minimal` / `full` semantics: `templates/profiles/`
+- optional capabilities such as `nginx` or `xrootd`: `templates/extras/`
+- default values and profile defaults: `lib/defaults.py`
+- runtime directory planning: `lib/paths.py`
+- host prechecks and `/cvmfs` warmup: `lib/host_runtime.py`
+- render and merge behavior: `lib/render.py`
+- official image contents: `images/`
+- interactive install UX: `install.py`
+- CI / site render entrypoint: `render_profile.py`
 
-原则只有一条：
+The rule is simple:
 
-- 通用部署语义留在 `ink-code/deploy`
-- 站点差异不要回流到这里，而是放到站点 overlay 仓库中
+- generic deployment semantics stay in `ink-code/deploy`
+- site-specific differences should stay in overlay repositories such as `fastink-dev`
