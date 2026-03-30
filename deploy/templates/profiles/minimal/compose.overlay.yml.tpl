@@ -27,7 +27,7 @@ services:
     volumes:
       - ${config_path}:/ink/config.yml:ro
       - ${etc_init_dir}:/etc-init
-      - ${plugins_dir}:/plugins:ro
+      - ${plugins_dir}:/plugins
       - ${preload_cron_dir}:/opt/preload/cron:ro
 
   fastink-rootbrowse:

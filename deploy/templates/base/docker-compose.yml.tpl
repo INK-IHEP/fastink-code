@@ -45,7 +45,7 @@ services:
       - ${config_path}:/ink/config.yml:ro
       - ${etc_init_dir}:/etc-init
       - ${tmp_dir}:/tmp/ink
-      - ${plugins_dir}:/plugins:ro
+      - ${plugins_dir}:/plugins
       - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${preload_server_dir}:/opt/preload/server:ro
 ${server_port_block}
