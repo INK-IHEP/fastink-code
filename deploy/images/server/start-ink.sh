@@ -105,6 +105,9 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
     exit 1
 fi
 
+mkdir -p /tmp/ink
+chmod 1777 /tmp/ink
+
 run_preload_scripts "$PRELOAD_SCRIPTS" "$PRELOAD_SCRIPT_DIRS"
 
 if [[ "${INSTALL_EDITABLE:-false}" == "true" ]]; then
