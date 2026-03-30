@@ -61,6 +61,7 @@ computing:
 
 crond:
   submit_workers: []
+  async_submit_retries: 3
 
 jobtype: {}
 
