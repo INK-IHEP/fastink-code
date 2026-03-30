@@ -17,6 +17,16 @@ from fastink.auth.common import (
 )
 
 
+def _pexpect_output(value) -> str:
+    if value is None:
+        return "<none>"
+    if value in (pexpect.EOF, pexpect.TIMEOUT):
+        return getattr(value, "__name__", str(value))
+    if isinstance(value, bytes):
+        return value.decode(errors="ignore")
+    return str(value)
+
+
 def _generate_tgt(username: str, password: str, ccachefile: str) -> bool:
     logger.debug(
         f"Generating TGT for {username}, with hashed password {hashlib.sha256(password.encode('utf-8')).hexdigest()}"
@@ -37,14 +47,8 @@ def _generate_tgt(username: str, password: str, ccachefile: str) -> bool:
                     timeout=5,
                 )
             except Exception as e:
-                output = (
-                    child.before.decode(errors="ignore")
-                    if child.before
-                    else "<no output>"
-                )
-                after = (
-                    child.after.decode(errors="ignore") if child.after else "<no after>"
-                )
+                output = _pexpect_output(child.before)
+                after = _pexpect_output(child.after)
                 log = f"kerberos5 pexpect exception: {e}\nchild.before: {output}\nchild.after: {after}"
                 logger.error(log)
                 raise ValueError(log)

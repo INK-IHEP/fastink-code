@@ -1,0 +1,6 @@
+[afs]
+name=afs
+baseurl=http://202.122.33.67/yum/afs/9.4
+enabled=1
+gpgcheck=0
+priority=20

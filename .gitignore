@@ -5,6 +5,7 @@
 .venv/
 .vscode/
 ink.egg-info/
+.__ink.lock
 
 app.log
 build

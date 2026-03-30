@@ -21,6 +21,10 @@ elif fs_backend == 's3':
 else:
     raise ValueError(f'fs_backend {fs_backend} is unknown!')
 
+
+def _unsupported_backend(*args, **kwargs):
+    raise NotImplementedError(f"{fs_backend} backend does not implement this operation")
+
 #### Export method
 mkdir = fs_mod.mkdir
 list_path = fs_mod.list_path
@@ -28,7 +32,7 @@ upload_file = fs_mod.upload_file
 cat_file = fs_mod.cat_file
 get_file = fs_mod.get_file
 get_file_stream = fs_mod.get_file_stream
-download_list = fs_mod.download_list
+download_list = getattr(fs_mod, "download_list", _unsupported_backend)
 delete_path = fs_mod.delete_path
 path_exist = fs_mod.path_exist
 chmod = fs_mod.chmod

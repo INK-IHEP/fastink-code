@@ -1,0 +1,27 @@
+[alma-appstream]
+name=AlmaLinux $releasever - AppStream
+baseurl=http://202.122.33.67/yum/almalinux/9.4/AppStream/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=20
+
+[alma-baseos]
+name=AlmaLinux $releasever - BaseOS
+baseurl=http://202.122.33.67/yum/almalinux/9.4/BaseOS/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=20
+
+[alma-crb]
+name=AlmaLinux $releasever - CRB
+baseurl=http://202.122.33.67/yum/almalinux/9.4/CRB/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=20
+
+[alma-extras]
+name=AlmaLinux $releasever - Extras
+baseurl=http://202.122.33.67/yum/almalinux/9.4/extras/$basearch/os/
+enabled=1
+gpgcheck=0
+priority=20

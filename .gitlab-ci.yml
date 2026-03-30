@@ -1,9 +1,65 @@
 stages:
+  - build
+  - publish
   - trigger
   - release
 
+.build-images:
+  script:
+    - export IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+    - docker build -t "fastink-server:${IMAGE_TAG}" -f deploy/images/server/Dockerfile .
+    - docker build --build-arg "BASE_IMAGE=fastink-server:${IMAGE_TAG}" -t "fastink-redis-cron:${IMAGE_TAG}" -f deploy/images/cron/Dockerfile .
+    - docker build -t "fastink-rootbrowse:${IMAGE_TAG}" -f deploy/images/rootbrowse/Dockerfile .
+  after_script:
+    - docker system prune -f
+
+build_dev_images:
+  extends: .build-images
+  stage: build
+  tags:
+    - fastink-test
+  before_script:
+    - export IMAGE_TAG="dev-local"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+
+publish_release_images:
+  extends: .build-images
+  stage: publish
+  tags:
+    - fastink
+  before_script:
+    - export IMAGE_TAG="$CI_COMMIT_TAG"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+  script:
+    - export IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+    - echo "$DOCKERHUB_PASSWORD" | docker login dockerhub.ihep.ac.cn -u "$DOCKERHUB_USER" --password-stdin
+    - docker build -t "fastink-server:${IMAGE_TAG}" -f deploy/images/server/Dockerfile .
+    - docker build --build-arg "BASE_IMAGE=fastink-server:${IMAGE_TAG}" -t "fastink-redis-cron:${IMAGE_TAG}" -f deploy/images/cron/Dockerfile .
+    - docker build -t "fastink-rootbrowse:${IMAGE_TAG}" -f deploy/images/rootbrowse/Dockerfile .
+    - docker tag "fastink-server:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-server:${IMAGE_TAG}"
+    - docker tag "fastink-redis-cron:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${IMAGE_TAG}"
+    - docker tag "fastink-rootbrowse:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${IMAGE_TAG}"
+    - docker tag "fastink-server:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-server:latest"
+    - docker tag "fastink-redis-cron:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest"
+    - docker tag "fastink-rootbrowse:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-server:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-server:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest"
+  after_script:
+    - docker logout dockerhub.ihep.ac.cn || true
+    - docker system prune -f
+
 trigger_dev:
   stage: trigger
+  needs:
+    - job: build_dev_images
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
       when: always
@@ -15,9 +71,15 @@ trigger_dev:
       pipeline_variables: true
   variables:
     TARGET_JOB: "deploy-dev-job"
+    FASTINK_SERVER_IMAGE: "fastink-server:dev-local"
+    FASTINK_CRON_IMAGE: "fastink-redis-cron:dev-local"
+    FASTINK_ROOTBROWSE_IMAGE: "fastink-rootbrowse:dev-local"
+    FASTINK_SKIP_PULL: "true"
 
 trigger_prod:
   stage: trigger
+  needs:
+    - job: publish_release_images
   rules:
     - if: $CI_COMMIT_TAG
       when: always
@@ -29,23 +91,20 @@ trigger_prod:
       pipeline_variables: true
   variables:
     TARGET_JOB: "deploy-prod-job"
-    RELEASE_TAG: $CI_COMMIT_TAG
+    FASTINK_SERVER_IMAGE: "dockerhub.ihep.ac.cn/ink/fastink-server:${CI_COMMIT_TAG}"
+    FASTINK_CRON_IMAGE: "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${CI_COMMIT_TAG}"
+    FASTINK_ROOTBROWSE_IMAGE: "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${CI_COMMIT_TAG}"
 
-# -------------------------------
-# 仅当存在 Release（非普通 tag）时，同步 release 源码到 GitHub
-# -------------------------------
 sync_release_to_github:
   stage: release
   tags:
     - fastink-test
   rules:
-    # 只有打 tag 时才考虑运行
     - if: $CI_COMMIT_TAG
       when: always
     - when: never
   script:
     - echo "=== Checking if tag '$CI_COMMIT_TAG' has a GitLab Release ==="
-    # 检查是否存在 release
     - |
       set -e
       RELEASE_API_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}"
@@ -54,13 +113,11 @@ sync_release_to_github:
         exit 0
       fi
       echo "✅ Release exists. Proceeding to download release archive..."
-    # 下载 release 源码
     - |
       WORKDIR=$(mktemp -d)
       ARCHIVE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/archive?sha=${CI_COMMIT_TAG}"
       curl -sL -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" "$ARCHIVE_URL" -o "$WORKDIR/release.tar.gz"
       tar -xzf "$WORKDIR/release.tar.gz" -C "$WORKDIR" --strip-components=1
-    # 初始化 Git 并推送到 GitHub
     - |
       export http_proxy=${GITHUB_HTTP_PROXY}
       export https_proxy=${GITHUB_HTTP_PROXY}
