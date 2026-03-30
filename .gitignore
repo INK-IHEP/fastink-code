@@ -1,5 +1,6 @@
 **/__pycache__/
 **/*.egg-info/
+.deploy/
 .idea/
 .venv/
 .vscode/
@@ -18,3 +19,4 @@ src/misc/openapi_schema.json
 *.vim
 **/.DS_Store
 **/.pytest_cache/
+src/fastink/misc/openapi_schema.json
