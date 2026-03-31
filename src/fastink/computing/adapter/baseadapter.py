@@ -74,21 +74,6 @@ class SchedulerBase(ABC):
         """
         raise NotImplementedError
 
-
-    # =========================
-    # Worker interface (must be implemented)
-    # =========================
-    @abstractmethod
-    async def submit_job_from_queue(self, job_dict: dict) -> dict:
-        """
-        Called by crond / worker.
-
-        - Fetch job data from redis
-        - Submit job to the real scheduler
-        - Return job_id for further recording
-        """
-
-
     # =========================
     # Other existing capabilities (unchanged)
     # =========================
@@ -96,7 +81,6 @@ class SchedulerBase(ABC):
     async def query_job(self, job_type: Optional[str] = None) -> dict:
         """Query job status"""
         raise NotImplementedError
-
 
 
     @abstractmethod
