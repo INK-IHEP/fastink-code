@@ -363,7 +363,6 @@ async def delete_common_job(
     submit_uuid: str | None = Body(None, description="use submit_uuid first because of async submission", embed=True),
     job_id: str | None = Body(None, description="job id once submitted", embed=True),
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
-
 ):
     try:
         if not job_id:
@@ -375,8 +374,8 @@ async def delete_common_job(
 
         adapter = get_scheduler(cluster_id, username)
         await adapter.cancel_job(
-            submit_uuid=submit_uuid,
-            job_id=job_id
+            job_id=job_id,
+            submit_uuid=submit_uuid
         )
 
         return {

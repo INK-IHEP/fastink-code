@@ -87,8 +87,8 @@ class SchedulerBase(ABC):
     async def cancel_job(
         self,
         *,
-        submit_uuid: Optional[str] = None,
         job_id: Optional[str] = None,
+        submit_uuid: Optional[str] = None,
     ) -> dict:
         """
         Cancel a job.

@@ -268,8 +268,7 @@ class HTC_Scheduler(SchedulerBase):
 
         return return_list
 
-    
-    async def cancel_job(self, job_id):
+    async def cancel_job(self, job_id, submit_uuid: Optional[str] = None):
 
         try:
         
