@@ -46,6 +46,7 @@ class SchedulerBase(ABC):
         else:
             raise ValueError(f"Unsupported submit_mode: {submit_mode}")
 
+
     # =========================
     # Synchronous submission (must be implemented)
     # =========================
@@ -58,6 +59,7 @@ class SchedulerBase(ABC):
         - Return the real scheduler job_id
         """
         raise NotImplementedError
+
 
     # =========================
     # Asynchronous submission (must be implemented)
@@ -72,6 +74,7 @@ class SchedulerBase(ABC):
         """
         raise NotImplementedError
 
+
     # =========================
     # Worker interface (must be implemented)
     # =========================
@@ -85,6 +88,7 @@ class SchedulerBase(ABC):
         - Return job_id for further recording
         """
 
+
     # =========================
     # Other existing capabilities (unchanged)
     # =========================
@@ -92,6 +96,8 @@ class SchedulerBase(ABC):
     async def query_job(self, job_type: Optional[str] = None) -> dict:
         """Query job status"""
         raise NotImplementedError
+
+
 
     @abstractmethod
     async def cancel_job(
