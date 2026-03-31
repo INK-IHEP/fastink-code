@@ -298,7 +298,7 @@ async def create_common_job(
         }
 
 
-@router.post("/query_jobs")
+@router.get("/query_jobs")
 async def query_common_job(
     username: str = Depends(get_username),
     cluster_id: str = Query(None, description="Cluster ID"),
