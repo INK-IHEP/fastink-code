@@ -84,7 +84,6 @@ class SchedulerBase(ABC):
         - Submit job to the real scheduler
         - Return job_id for further recording
         """
-        raise NotImplementedError
 
     # =========================
     # Other existing capabilities (unchanged)
