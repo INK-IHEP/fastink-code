@@ -26,4 +26,3 @@ sqlalchemy
 ujson
 uvicorn
 websockets
-htcondor
