@@ -14,6 +14,7 @@ from fastink.computing.tools.common.utils import (
     change_username_to_uid,
     get_user_exp_group,
 )
+from fastink.storage import common as storage_common
 from fastink.service.openclaw_schema import OpenClawSyncRequest
 
 
@@ -123,6 +124,20 @@ def _write_json_as_user(username: str, target_path: Path, payload: dict) -> None
         target_path,
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
     )
+
+
+async def _ensure_directory_mode(username: str, target_dir: Path, expected_mode: int) -> None:
+    stat_output = _run_as_user(
+        username,
+        f"stat -c %a {quote(str(target_dir))}",
+    ).strip()
+    if stat_output != f"{expected_mode:o}":
+        await storage_common.chmod(
+            fname=str(target_dir),
+            username=username,
+            mode=f"{expected_mode:o}",
+            mgm=get_config("storage", "xrd_host"),
+        )
 
 
 def _copy_template_dir_to_target(
@@ -325,7 +340,7 @@ def _update_target_openclaw_config(
     }
 
 
-def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
+async def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
     template_dir = _get_template_dir()
     if not template_dir.is_dir():
         raise FileNotFoundError(f"OpenClaw template directory not found: {template_dir}")
@@ -351,6 +366,7 @@ def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
         payload=payload,
         initialize_target=created,
     )
+    await _ensure_directory_mode(username=username, target_dir=target_dir, expected_mode=0o700)
 
     return {
         "username": username,

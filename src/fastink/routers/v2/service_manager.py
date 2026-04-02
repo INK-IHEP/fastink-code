@@ -93,7 +93,7 @@ async def post_sync_openclaw_models(
     username: str = Depends(get_username),
 ) -> dict:
     try:
-        result = sync_openclaw_models(username, payload)
+        result = await sync_openclaw_models(username, payload)
         return {
             "status": InkStatus.SUCCESS,
             "msg": "Sync OpenClaw template successfully",
