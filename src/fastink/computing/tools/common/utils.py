@@ -668,14 +668,22 @@ async def generate_condor_sync_submit(
             arguments += job_dir
         elif job_type == "openclaw":
             group_dir = get_user_exp_group_dir(uid)
-            scratchfs_root = get_config("service", "scratchfs_root", fallback="/scratchfs")
+            user_root_template = get_config(
+                "service",
+                "openclaw_user_root",
+                fallback="/scratchfs/{experiment_group_lower}/{username}",
+            )
             openclaw_relpath = get_config("service", "openclaw_models_relpath", fallback=".openclaw")
             image_template = get_config(
                 "service",
                 "openclaw_container_image",
                 fallback="/home/{group_dir}/{username}/container/openclaw_ihep_latest.sif",
             )
-            openclaw_user_root = f"{scratchfs_root}/{group_dir}/{username}"
+            openclaw_user_root = user_root_template.format(
+                username=username,
+                experiment_group_lower=group_dir,
+                group_dir=group_dir,
+            )
             openclaw_dir = f"{openclaw_user_root}/{openclaw_relpath}"
             openclaw_image = image_template.format(
                 group_dir=group_dir,

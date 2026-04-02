@@ -48,8 +48,19 @@ def _get_template_dir() -> Path:
     )
 
 
-def _get_scratchfs_root() -> Path:
-    return Path(get_config("service", "scratchfs_root", fallback="/scratchfs"))
+def _get_openclaw_user_root(username: str, group_dir: str) -> Path:
+    path_template = get_config(
+        "service",
+        "openclaw_user_root",
+        fallback="/scratchfs/{experiment_group_lower}/{username}",
+    )
+    return Path(
+        path_template.format(
+            username=username,
+            experiment_group_lower=group_dir,
+            group_dir=group_dir,
+        )
+    )
 
 
 def _get_target_relpath() -> Path:
@@ -284,10 +295,10 @@ def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
         raise FileNotFoundError(f"OpenClaw template directory not found: {template_dir}")
 
     group_dir = _resolve_user_experiment_group(username)
-    target_user_root = _get_scratchfs_root() / group_dir / username
+    target_user_root = _get_openclaw_user_root(username=username, group_dir=group_dir)
     if not target_user_root.is_dir():
         raise FileNotFoundError(
-            f"Target scratchfs user directory does not exist: {target_user_root}"
+            f"Target OpenClaw user directory does not exist: {target_user_root}"
         )
 
     target_dir = target_user_root / _get_target_relpath()
