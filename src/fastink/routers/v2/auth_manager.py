@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Body, Query, Header
+from fastapi import APIRouter, Body, Query, Header, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -131,6 +131,39 @@ async def validate_token(
                 "data": None,
             },
         )
+
+
+@router.get("/auth_request")
+async def auth_request(
+    username: str = Header(None, alias="Ink-Username"),
+    token: str = Header(None, alias="Ink-Token"),
+):
+    if not username or not token:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "status": InkStatus.TOKEN_INVALID,
+                "msg": "Ink-Username or Ink-Token is missing in request headers",
+                "data": None,
+            },
+        )
+
+    if headers.validate_token(username, token):
+        return Response(
+            status_code=204,
+            headers={
+                "X-Auth-Request-User": username,
+            },
+        )
+
+    return JSONResponse(
+        status_code=401,
+        content={
+            "status": InkStatus.TOKEN_INVALID,
+            "msg": "Token validation failed",
+            "data": None,
+        },
+    )
 
 
 @router.get("/get_permission")
