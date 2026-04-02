@@ -21,6 +21,7 @@ RUN dnf -y update && \
         tcsh \
         vim-minimal \
         wget \
+        which \
         xrootd-client \
         zip \
         zsh \
