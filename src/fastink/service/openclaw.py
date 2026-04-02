@@ -14,7 +14,7 @@ from fastink.computing.tools.common.utils import (
     change_username_to_uid,
     get_user_exp_group,
 )
-from fastink.service.openclaw_schema import OpenClawModelRequest, OpenClawSyncRequest
+from fastink.service.openclaw_schema import OpenClawSyncRequest
 
 
 DEFAULT_PROVIDER_KEY = "custom"
@@ -141,38 +141,80 @@ def _copy_template_dir_to_target(
         temp_path.unlink(missing_ok=True)
 
 
-def _normalize_model(model: OpenClawModelRequest | None) -> dict:
-    normalized = deepcopy(DEFAULT_MODEL)
-    if model is not None:
-        raw_model = model.dict(exclude_none=True)
-        for key, value in raw_model.items():
-            if key == "cost" and isinstance(value, dict):
-                normalized["cost"].update(value)
-            else:
-                normalized[key] = value
-
-    if not normalized.get("id"):
-        normalized["id"] = "custom"
-    if not normalized.get("name"):
-        normalized["name"] = "custom"
-    return normalized
+def _parse_primary_ref(target_config: dict) -> tuple[str, str | None]:
+    primary = (
+        target_config.get("agents", {})
+        .get("defaults", {})
+        .get("model", {})
+        .get("primary", "")
+    )
+    if isinstance(primary, str) and "/" in primary:
+        provider_key, model_id = primary.split("/", 1)
+        return provider_key or DEFAULT_PROVIDER_KEY, model_id or None
+    return DEFAULT_PROVIDER_KEY, None
 
 
-def _build_provider_config(payload: OpenClawSyncRequest) -> dict:
-    raw_models = payload.models or [OpenClawModelRequest()]
-    return {
-        "baseUrl": payload.baseUrl,
-        "apiKey": payload.apiKey,
-        "api": payload.api,
-        "models": [_normalize_model(model) for model in raw_models],
+def _find_model_by_id(models: list[dict], model_id: str) -> dict | None:
+    for model in models:
+        if model.get("id") == model_id:
+            return model
+    return None
+
+
+def _build_model_patch(payload: OpenClawSyncRequest) -> dict:
+    patch: dict = {
+        "id": payload.model_id,
     }
+    if payload.model_name is not None:
+        patch["name"] = payload.model_name
+    if payload.model_reasoning is not None:
+        patch["reasoning"] = payload.model_reasoning
+    if payload.model_input is not None:
+        patch["input"] = payload.model_input
+    if payload.model_context_window is not None:
+        patch["contextWindow"] = payload.model_context_window
+    if payload.model_max_tokens is not None:
+        patch["maxTokens"] = payload.model_max_tokens
+
+    cost_patch = {}
+    if payload.model_cost_input is not None:
+        cost_patch["input"] = payload.model_cost_input
+    if payload.model_cost_output is not None:
+        cost_patch["output"] = payload.model_cost_output
+    if payload.model_cost_cache_read is not None:
+        cost_patch["cacheRead"] = payload.model_cost_cache_read
+    if payload.model_cost_cache_write is not None:
+        cost_patch["cacheWrite"] = payload.model_cost_cache_write
+    if cost_patch:
+        patch["cost"] = cost_patch
+
+    return patch
+
+
+def _merge_model(existing_model: dict | None, payload: OpenClawSyncRequest) -> dict:
+    merged = deepcopy(existing_model) if existing_model is not None else deepcopy(DEFAULT_MODEL)
+    merged["id"] = payload.model_id
+    if not merged.get("name"):
+        merged["name"] = payload.model_id
+
+    model_patch = _build_model_patch(payload)
+    for key, value in model_patch.items():
+        if key == "cost":
+            cost = merged.setdefault("cost", deepcopy(DEFAULT_MODEL["cost"]))
+            cost.update(value)
+        else:
+            merged[key] = value
+
+    if not merged.get("name"):
+        merged["name"] = payload.model_id
+    return merged
 
 
 def _update_target_openclaw_config(
     username: str,
     target_openclaw_json: Path,
     target_user_root: Path,
-    provider_config: dict,
+    payload: OpenClawSyncRequest,
     initialize_target: bool,
 ) -> dict:
     if not target_openclaw_json.exists():
@@ -185,7 +227,25 @@ def _update_target_openclaw_config(
         providers_section = {}
         models_section["providers"] = providers_section
 
-    providers_section[DEFAULT_PROVIDER_KEY] = provider_config
+    provider_key, _ = _parse_primary_ref(target_config)
+    provider_config = providers_section.setdefault(provider_key, {})
+    provider_config["baseUrl"] = payload.base_url
+    provider_config["apiKey"] = payload.api_key
+    provider_config["api"] = payload.api_name
+
+    existing_models = provider_config.get("models")
+    if not isinstance(existing_models, list):
+        existing_models = []
+        provider_config["models"] = existing_models
+
+    existing_model = _find_model_by_id(existing_models, payload.model_id)
+    merged_model = _merge_model(existing_model, payload)
+    if existing_model is None:
+        existing_models.append(merged_model)
+    else:
+        existing_model.clear()
+        existing_model.update(merged_model)
+
     if not models_section.get("mode"):
         models_section["mode"] = "merge"
 
@@ -200,19 +260,21 @@ def _update_target_openclaw_config(
     control_ui["allowedOrigins"] = allowed_origins
 
     agents_defaults = target_config.setdefault("agents", {}).setdefault("defaults", {})
-    primary_model = provider_config["models"][0]["id"]
-    agents_defaults["model"] = {"primary": f"{DEFAULT_PROVIDER_KEY}/{primary_model}"}
-    agents_defaults["models"] = {
-        f"{DEFAULT_PROVIDER_KEY}/{model['id']}": {}
-        for model in provider_config["models"]
-    }
+    primary_model = merged_model["id"]
+    primary_key = f"{provider_key}/{primary_model}"
+    agents_defaults["model"] = {"primary": primary_key}
+    agents_models = agents_defaults.setdefault("models", {})
+    if not isinstance(agents_models, dict):
+        agents_models = {}
+        agents_defaults["models"] = agents_models
+    agents_models.setdefault(primary_key, {})
     if initialize_target or not agents_defaults.get("workspace"):
         agents_defaults["workspace"] = workspace_path
 
     _write_json_as_user(username, target_openclaw_json, target_config)
     return {
         "workspace": workspace_path,
-        "primary_model": f"{DEFAULT_PROVIDER_KEY}/{primary_model}",
+        "primary_model": primary_key,
     }
 
 
@@ -235,12 +297,11 @@ def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
         created = True
 
     target_openclaw_json = target_dir / "openclaw.json"
-    provider_config = _build_provider_config(payload)
     update_result = _update_target_openclaw_config(
         username=username,
         target_openclaw_json=target_openclaw_json,
         target_user_root=target_user_root,
-        provider_config=provider_config,
+        payload=payload,
         initialize_target=created,
     )
 
