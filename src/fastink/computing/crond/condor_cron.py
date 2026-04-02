@@ -250,7 +250,7 @@ async def refresh_redis_job_status():
 
         await pipe.execute()
 
-        redis_jobs = get_redis_all_jobs()
+        redis_jobs = await get_redis_all_jobs()
 
         for job in redis_jobs:
             job_id = job.get("job_id")
