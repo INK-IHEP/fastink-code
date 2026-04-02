@@ -39,13 +39,12 @@ RUN alternatives --install /usr/bin/python python /usr/bin/python3.12 1 && \
 
 WORKDIR /ink
 
-COPY requirements.txt README.md setup.py /ink/
+COPY README.md setup.py /ink/
 COPY bin /ink/bin
 COPY src /ink/src
 COPY tools /ink/tools
 
 RUN pip3.12 install --upgrade pip && \
-    pip3.12 install -r /ink/requirements.txt && \
     pip3.12 install -e /ink
 
 COPY deploy/images/server/start-ink.sh /usr/local/bin/start-ink.sh

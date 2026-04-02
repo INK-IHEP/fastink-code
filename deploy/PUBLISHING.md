@@ -22,12 +22,14 @@ This document defines how `ink-code` publishes official images and how
 
 The publishing pipeline builds:
 
+- `dockerhub.ihep.ac.cn/ink/fastink-init`
 - `dockerhub.ihep.ac.cn/ink/fastink-server`
 - `dockerhub.ihep.ac.cn/ink/fastink-redis-cron`
 - `dockerhub.ihep.ac.cn/ink/fastink-rootbrowse`
 
 Image definitions live under:
 
+- `deploy/images/init/`
 - `deploy/images/server/`
 - `deploy/images/cron/`
 - `deploy/images/rootbrowse/`
@@ -38,6 +40,7 @@ For `main` branch commits:
 
 - build local images only on the shared runner host
 - use fixed local tags:
+  - `fastink-init:dev-local`
   - `fastink-server:dev-local`
   - `fastink-redis-cron:dev-local`
   - `fastink-rootbrowse:dev-local`

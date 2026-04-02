@@ -348,9 +348,11 @@ def render_bundle(
     *,
     config_overlay_paths: Optional[list[Path]] = None,
     compose_overlay_paths: Optional[list[Path]] = None,
+    initialize_host_assets: bool = True,
 ) -> dict[str, str]:
-    ensure_rootbrowse_ssh_material(paths)
-    ensure_nginx_tls_material(answers, paths)
+    if initialize_host_assets:
+        ensure_rootbrowse_ssh_material(paths)
+        ensure_nginx_tls_material(answers, paths)
     mapping = build_mapping(profile, answers, paths, deploy_dir)
     bundle = {
         "config.yml": render_config(profile, mapping, extra_overlays=config_overlay_paths),

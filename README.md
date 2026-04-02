@@ -18,7 +18,6 @@ images and render logic from this repository.
 ## Local backend development
 
 ```bash
-pip install -r requirements.txt
 pip install -e .
 python -m uvicorn fastink.main:app --reload --host 0.0.0.0 --port 8001 --log-config src/fastink/misc/uvicorn_log_config.yaml
 ```

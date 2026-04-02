@@ -7,6 +7,7 @@ stages:
 .build-images:
   script:
     - export IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+    - docker build -t "fastink-init:${IMAGE_TAG}" -f deploy/images/init/Dockerfile .
     - docker build -t "fastink-server:${IMAGE_TAG}" -f deploy/images/server/Dockerfile .
     - docker build --build-arg "BASE_IMAGE=fastink-server:${IMAGE_TAG}" -t "fastink-redis-cron:${IMAGE_TAG}" -f deploy/images/cron/Dockerfile .
     - docker build -t "fastink-rootbrowse:${IMAGE_TAG}" -f deploy/images/rootbrowse/Dockerfile .
@@ -37,18 +38,23 @@ publish_release_images:
   script:
     - export IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
     - echo "$DOCKERHUB_PASSWORD" | docker login dockerhub.ihep.ac.cn -u "$DOCKERHUB_USER" --password-stdin
+    - docker build -t "fastink-init:${IMAGE_TAG}" -f deploy/images/init/Dockerfile .
     - docker build -t "fastink-server:${IMAGE_TAG}" -f deploy/images/server/Dockerfile .
     - docker build --build-arg "BASE_IMAGE=fastink-server:${IMAGE_TAG}" -t "fastink-redis-cron:${IMAGE_TAG}" -f deploy/images/cron/Dockerfile .
     - docker build -t "fastink-rootbrowse:${IMAGE_TAG}" -f deploy/images/rootbrowse/Dockerfile .
+    - docker tag "fastink-init:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-init:${IMAGE_TAG}"
     - docker tag "fastink-server:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-server:${IMAGE_TAG}"
     - docker tag "fastink-redis-cron:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${IMAGE_TAG}"
     - docker tag "fastink-rootbrowse:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${IMAGE_TAG}"
+    - docker tag "fastink-init:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-init:latest"
     - docker tag "fastink-server:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-server:latest"
     - docker tag "fastink-redis-cron:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest"
     - docker tag "fastink-rootbrowse:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-init:${IMAGE_TAG}"
     - docker push "dockerhub.ihep.ac.cn/ink/fastink-server:${IMAGE_TAG}"
     - docker push "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${IMAGE_TAG}"
     - docker push "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-init:latest"
     - docker push "dockerhub.ihep.ac.cn/ink/fastink-server:latest"
     - docker push "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest"
     - docker push "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest"

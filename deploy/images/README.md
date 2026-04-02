@@ -4,6 +4,7 @@ This directory is for publishable FastINK container images.
 
 Target split:
 
+- `init/`: one-shot deployment initialization image
 - `server/`: main FastINK API image
 - `cron/`: Redis-backed scheduled task image
 - `rootbrowse/`: ROOT browser image
@@ -33,11 +34,13 @@ Tagging policy:
 
 - branch `main`
   - build local runner images only
+  - `fastink-init:dev-local`
   - `fastink-server:dev-local`
   - `fastink-redis-cron:dev-local`
   - `fastink-rootbrowse:dev-local`
   - downstream `fastink-dev` consumes them from the same machine without pull
 - git tag `<release>`
+  - publish `fastink-init:<release>`
   - publish `fastink-server:<release>`
   - publish `fastink-redis-cron:<release>`
   - publish `fastink-rootbrowse:<release>`
