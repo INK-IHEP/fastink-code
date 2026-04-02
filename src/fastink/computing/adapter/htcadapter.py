@@ -192,7 +192,7 @@ class HTC_Scheduler(SchedulerBase):
                 job_status = "QUEUEING" 
             
             elif job_status == '2': 
-                job_status == "RUNNING"
+                job_status = "RUNNING"
                 if connect_sign == "False":
                     output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
                     if any(kw in output_content for kw in start_keywords):
