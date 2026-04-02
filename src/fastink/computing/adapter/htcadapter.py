@@ -188,11 +188,7 @@ class HTC_Scheduler(SchedulerBase):
                 job_type, db_job_status, job_iptables_status, job_iptables_clean = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
             connect_sign, = get_job_connect_info(self.UID, job_id, self.CLUSTER_TYPE)
 
-            if job_status == '1':    
-                job_status = "QUEUEING"
-
-            elif job_status == '2':
-                job_status = "RUNNING"
+            if job_status == "RUNNING":
                 if connect_sign == "False":
                     output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
                     if any(kw in output_content for kw in start_keywords):
@@ -205,17 +201,6 @@ class HTC_Scheduler(SchedulerBase):
                                 logger.error(f"HTC-LOG: {job_id} iptables set failed, the details: {e}")
                         update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
                         update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
-                        
-            elif job_status == '4':
-                job_status = "COMPLETED"
-            
-            elif job_status == '5':
-                job_status = "HOLDING"
-                
-            else:
-                if job_status != "SUBMITTING":
-                    job_status = "OTHER" 
-                    continue
             
             if db_job_status != job_status: 
                 update_job_status(self.UID, job_id, job_status, self.CLUSTER_TYPE)
@@ -265,8 +250,6 @@ class HTC_Scheduler(SchedulerBase):
             })
 
         return_list.sort(key=jobid_sort_key, reverse=True)
-
-        logger.info(f"Query func the htc result: {return_list}")
 
         return return_list
 

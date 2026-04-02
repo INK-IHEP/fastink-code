@@ -128,7 +128,7 @@ def condor_schedd_query():
             cluster_id = job.get("ClusterId")
             owner = job.get("Owner", "Unknown")
             status_code = job.get("JobStatus")
-            status_str = status_map.get(status_code, f"UNKNOWN({status_code})")
+            status_str = status_map.get(status_code, "UNKNOWN")
             qdate = ts_to_str(job.get("Qdate"))
             starttime = ts_to_str(job.get("JobStartDate"))
             host = job.get("RemoteHost")
