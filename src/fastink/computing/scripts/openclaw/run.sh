@@ -78,7 +78,12 @@ gateway = config.setdefault("gateway", {})
 gateway["port"] = int(os.environ["APP_PORT"])
 control_ui = gateway.setdefault("controlUi", {})
 control_ui["basePath"] = os.environ["APP_BASE_PATH"]
-control_ui["allowedOrigins"] = [f"https://{os.environ['APP_RUN_FQDN']}"]
+existing_origins = control_ui.get("allowedOrigins", [])
+merged_origins = []
+for origin in existing_origins + [f"https://{os.environ['APP_RUN_FQDN']}"]:
+    if origin and origin not in merged_origins:
+        merged_origins.append(origin)
+control_ui["allowedOrigins"] = merged_origins
 
 auth = gateway.setdefault("auth", {})
 trusted_proxy = auth.setdefault("trustedProxy", {})

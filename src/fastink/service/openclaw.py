@@ -18,6 +18,10 @@ from fastink.service.openclaw_schema import OpenClawModelRequest, OpenClawSyncRe
 
 
 DEFAULT_PROVIDER_KEY = "custom"
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://ink-dev.ihep.ac.cn",
+    "https://fastink-test.ihep.ac.cn",
+]
 DEFAULT_MODEL = {
     "id": "custom",
     "name": "custom",
@@ -186,6 +190,15 @@ def _update_target_openclaw_config(
         models_section["mode"] = "merge"
 
     workspace_path = str(target_user_root / _get_target_relpath() / "workspace")
+    gateway = target_config.setdefault("gateway", {})
+    control_ui = gateway.setdefault("controlUi", {})
+    existing_allowed_origins = control_ui.get("allowedOrigins", [])
+    allowed_origins = []
+    for origin in existing_allowed_origins + DEFAULT_ALLOWED_ORIGINS:
+        if origin and origin not in allowed_origins:
+            allowed_origins.append(origin)
+    control_ui["allowedOrigins"] = allowed_origins
+
     agents_defaults = target_config.setdefault("agents", {}).setdefault("defaults", {})
     primary_model = provider_config["models"][0]["id"]
     agents_defaults["model"] = {"primary": f"{DEFAULT_PROVIDER_KEY}/{primary_model}"}
