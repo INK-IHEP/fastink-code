@@ -172,6 +172,27 @@ def _find_model_by_id(models: list[dict], model_id: str) -> dict | None:
     return None
 
 
+def _select_target_model(
+    existing_models: list[dict],
+    target_config: dict,
+    payload: OpenClawSyncRequest,
+    initialize_target: bool,
+) -> tuple[str, dict | None, str | None]:
+    provider_key, primary_model_id = _parse_primary_ref(target_config)
+    target_model = None
+
+    if primary_model_id:
+        target_model = _find_model_by_id(existing_models, primary_model_id)
+
+    if target_model is None and initialize_target and len(existing_models) == 1:
+        target_model = existing_models[0]
+
+    if target_model is None:
+        target_model = _find_model_by_id(existing_models, payload.model_id)
+
+    return provider_key, target_model, primary_model_id
+
+
 def _build_model_patch(payload: OpenClawSyncRequest) -> dict:
     patch: dict = {
         "id": payload.model_id,
@@ -240,22 +261,29 @@ def _update_target_openclaw_config(
 
     provider_key, _ = _parse_primary_ref(target_config)
     provider_config = providers_section.setdefault(provider_key, {})
-    provider_config["baseUrl"] = payload.base_url
-    provider_config["apiKey"] = payload.api_key
-    provider_config["api"] = payload.api_name
-
     existing_models = provider_config.get("models")
     if not isinstance(existing_models, list):
         existing_models = []
         provider_config["models"] = existing_models
 
-    existing_model = _find_model_by_id(existing_models, payload.model_id)
+    provider_key, existing_model, previous_primary_model_id = _select_target_model(
+        existing_models=existing_models,
+        target_config=target_config,
+        payload=payload,
+        initialize_target=initialize_target,
+    )
+    provider_config["baseUrl"] = payload.base_url
+    provider_config["apiKey"] = payload.api_key
+    provider_config["api"] = payload.api_name
     merged_model = _merge_model(existing_model, payload)
     if existing_model is None:
         existing_models.append(merged_model)
     else:
         existing_model.clear()
         existing_model.update(merged_model)
+    if initialize_target:
+        provider_config["models"] = [merged_model]
+        existing_models = provider_config["models"]
 
     if not models_section.get("mode"):
         models_section["mode"] = "merge"
@@ -278,7 +306,15 @@ def _update_target_openclaw_config(
     if not isinstance(agents_models, dict):
         agents_models = {}
         agents_defaults["models"] = agents_models
-    agents_models.setdefault(primary_key, {})
+    previous_primary_key = None
+    if previous_primary_model_id:
+        previous_primary_key = f"{provider_key}/{previous_primary_model_id}"
+    if previous_primary_key and previous_primary_key != primary_key:
+        agents_models[primary_key] = agents_models.pop(previous_primary_key, {})
+    else:
+        agents_models.setdefault(primary_key, {})
+    if initialize_target:
+        agents_defaults["models"] = {primary_key: agents_models.get(primary_key, {})}
     if initialize_target or not agents_defaults.get("workspace"):
         agents_defaults["workspace"] = workspace_path
 
