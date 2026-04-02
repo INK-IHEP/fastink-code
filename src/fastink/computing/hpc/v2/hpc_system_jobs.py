@@ -29,8 +29,8 @@ async def get_hpc_system_jobs():
         raise HTTPException(status_code=500, detail="No output from sacct command")
     headers = lines[0].split('|')
 
-    job_queueing_map = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc":0}
-    job_running_map = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc":0}
+    job_queueing_map = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc":0, "openclaw": 0}
+    job_running_map = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc":0, "openclaw": 0}
 
     for line in lines[1:]:
         fields = line.split('|')

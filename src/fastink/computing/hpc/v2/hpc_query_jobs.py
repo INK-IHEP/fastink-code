@@ -29,7 +29,7 @@ async def get_user_jobs(uid, job_type, cluster_id):
                 continue
             
             admin_comment = job_data["AdminComment"].strip().lower()
-            if admin_comment not in ["common", "jupyter", "enode", "rootbrowse", "vscode", "vnc"]:
+            if admin_comment not in ["common", "jupyter", "enode", "rootbrowse", "vscode", "vnc", "openclaw"]:
                 admin_comment = "other"
                 continue
 

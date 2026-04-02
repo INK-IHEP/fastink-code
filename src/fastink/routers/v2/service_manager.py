@@ -14,6 +14,8 @@ from fastink.common.logger import logger
 from fastink.routers.headers import get_username
 from fastink.routers.status import InkStatus
 from fastink.service.monitor import get_job_monitor_url, get_monitor_url
+from fastink.service.openclaw import sync_openclaw_models
+from fastink.service.openclaw_schema import OpenClawSyncRequest
 from fastink.service.rootbrowse import access_rootfile
 
 router = APIRouter()
@@ -83,3 +85,26 @@ async def query_jobsmonitor(job_id: int = Body(..., embed=True)) -> dict:
         "msg": "Get jobs monitor url successfully",
         "data": {"url": get_job_monitor_url(job_id)},
     }
+
+
+@router.post("/service/openclaw/sync_models")
+async def post_sync_openclaw_models(
+    payload: OpenClawSyncRequest,
+    username: str = Depends(get_username),
+) -> dict:
+    try:
+        result = sync_openclaw_models(username, payload)
+        return {
+            "status": InkStatus.SUCCESS,
+            "msg": "Sync OpenClaw template successfully",
+            "data": result,
+        }
+    except Exception as e:
+        logger.error(
+            f"Failed to sync OpenClaw models for user {username}: {str(e)}\n{traceback.format_exc()}"
+        )
+        return {
+            "status": InkStatus.INTERNAL_ERROR,
+            "msg": f"Failed to sync OpenClaw models: {str(e)}",
+            "data": None,
+        }

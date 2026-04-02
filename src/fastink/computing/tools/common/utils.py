@@ -205,6 +205,32 @@ async def connect_vscode_job(job_id, uid, clusterid):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def connect_openclaw_job(job_id, uid, clusterid):
+
+    job_path, = get_job_path(uid, job_id, clusterid)
+    info_file = f"{job_path}/app_login.info"
+
+    try:
+        login_info = await read_file(uid, info_file)
+        NGINX_NODE = get_config("computing", "nginx_node")
+
+        host = parse_info(login_info, "HOST")
+        port = parse_info(login_info, "PORT")
+        base_path = parse_info(login_info, "BASE_PATH")
+        if not base_path:
+            username = change_uid_to_username(uid)
+            base_path = f"/openclaw/{host}/{port}/{username}/"
+        openclaw_url = f"{NGINX_NODE}{base_path}"
+
+        if not host or not port:
+            raise HTTPException(status_code=500, detail="No host and port record in openclaw loginfile.")
+
+        return host, port, openclaw_url
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def connect_rootbrowse_job(job_id, uid, clusterid):
 
     # 切换到指定的作业目录
@@ -346,6 +372,14 @@ def get_user_exp_group(uid):
     }
 
     return mapping.get(group_name), group_name
+
+
+def get_user_exp_group_dir(uid: int) -> str:
+    experiment_group, raw_group = get_user_exp_group(uid)
+    group_dir = (experiment_group or raw_group or "").lower()
+    if not group_dir:
+        raise ValueError(f"Failed to resolve experiment group for uid={uid}")
+    return group_dir
 
 
 async def init_job_dir(username: str, job_type: str):
@@ -632,6 +666,30 @@ async def generate_condor_sync_submit(
 
         if job_type == "npu":
             arguments += job_dir
+        elif job_type == "openclaw":
+            group_dir = get_user_exp_group_dir(uid)
+            scratchfs_root = get_config("service", "scratchfs_root", fallback="/scratchfs")
+            openclaw_relpath = get_config("service", "openclaw_models_relpath", fallback=".openclaw")
+            image_template = get_config(
+                "service",
+                "openclaw_container_image",
+                fallback="/home/{group_dir}/{username}/container/openclaw_ihep_latest.sif",
+            )
+            openclaw_user_root = f"{scratchfs_root}/{group_dir}/{username}"
+            openclaw_dir = f"{openclaw_user_root}/{openclaw_relpath}"
+            openclaw_image = image_template.format(
+                group_dir=group_dir,
+                username=username,
+            )
+            openclaw_args = [
+                quote(openclaw_user_root),
+                quote(openclaw_dir),
+                quote(openclaw_image),
+                quote(username),
+            ]
+            if arguments:
+                openclaw_args.append(arguments)
+            arguments = " ".join(openclaw_args)
         
         config = {
             "universe": "vanilla",
