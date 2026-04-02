@@ -263,9 +263,10 @@ async def refresh_redis_job_status():
                 IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
                 await r.delete(JOB_KEY)
                 await r.srem(IDX_KEY, str(job_id))
+                logger.debug(f"HTC-CROND-QUEUE-LOG: delete the redis expire job {JOB_KEY}")
 
     except Exception as e:
-        logger.exception(f"HTC-CROND-QUEUE-LOG: update_completed_jobs failed, the details: {e}")
+        logger.exception(f"HTC-CROND-QUEUE-LOG: refresh_redis_job_status failed, the details: {e}")
 
 
 def gen_history_list_command() -> str:
