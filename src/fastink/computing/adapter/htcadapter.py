@@ -192,19 +192,19 @@ class HTC_Scheduler(SchedulerBase):
                 job_status = "QUEUEING" 
             
             elif job_status == '2': 
-                if job_status == "RUNNING":
-                    if connect_sign == "False":
-                        output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
-                        if any(kw in output_content for kw in start_keywords):
-                            connect_sign = "True"
-                            if job_type in iptables_jobtype:
-                                try:
-                                    await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
-                                except Exception as e:
-                                    connect_sign = "False"
-                                    logger.error(f"HTC-LOG: {job_id} iptables set failed, the details: {e}")
-                            update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
-                            update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
+                job_status == "RUNNING"
+                if connect_sign == "False":
+                    output_content, _ = await get_job_output(uid=self.UID, job_id=job_id, clusterid="htcondor")
+                    if any(kw in output_content for kw in start_keywords):
+                        connect_sign = "True"
+                        if job_type in iptables_jobtype:
+                            try:
+                                await create_iptables(self.UID, job_id, job_iptables_status, job_iptables_clean, self.CLUSTER_TYPE)
+                            except Exception as e:
+                                connect_sign = "False"
+                                logger.error(f"HTC-LOG: {job_id} iptables set failed, the details: {e}")
+                        update_connect_status(self.UID, job_id, connect_sign, self.CLUSTER_TYPE)
+                        update_start_time(self.UID, job_id, job_start_time, self.CLUSTER_TYPE)
             
             elif job_status == '4': 
                 job_status = "COMPLETED" 
