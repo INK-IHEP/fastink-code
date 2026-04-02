@@ -89,7 +89,18 @@ def write_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def initialize_nginx_tls_material(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
+def annotate_runtime_asset_paths(paths: dict[str, Path]) -> None:
+    server_private_key = Path(
+        paths.get("server_ssh_private_key_path", paths["keys_dir"] / "ssh-client" / "id_rsa")
+    ).resolve()
+    paths["server_ssh_private_key_path"] = server_private_key
+    paths["server_ssh_public_key_path"] = (server_private_key.parent / "id_rsa.pub").resolve()
+    paths["rootbrowse_authorized_keys_path"] = Path(
+        paths.get("rootbrowse_authorized_keys_path", paths["keys_dir"] / "rootbrowse_authorized_keys")
+    ).resolve()
+
+
+def stage_nginx_tls_material(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
     notes: list[str] = []
     if not bool(answers.get("enable_nginx")):
         return notes
@@ -124,34 +135,37 @@ def initialize_nginx_tls_material(answers: dict[str, object], paths: dict[str, P
     return notes
 
 
-def initialize_xrootd_keytabs(paths: dict[str, Path]) -> list[str]:
-    notes: list[str] = []
-    sss_keytab = paths.get("xrootd_sss_keytab_path")
-    krb5_keytab = paths.get("xrootd_krb5_keytab_path")
-    if sss_keytab is None or krb5_keytab is None:
-        return notes
+def build_xrootd_notes(paths: dict[str, Path]) -> list[str]:
+    sss_keytab = Path(paths["xrootd_sss_keytab_path"]).resolve()
+    krb5_keytab = Path(paths["xrootd_krb5_keytab_path"]).resolve()
+    return [
+        f"xrootd shared-secret keytab: {sss_keytab}",
+        f"If Kerberos-backed xrootd is required, ask your krb5 administrator to place a service keytab at: {krb5_keytab}",
+    ]
 
-    if sss_keytab.exists() and sss_keytab.stat().st_size > 0:
-        sss_keytab.chmod(0o400)
-        notes.append(f"xrootd sss keytab: {sss_keytab}")
-    elif shutil.which("xrdsssadmin") is not None:
-        subprocess.run(["xrdsssadmin", "-c", str(sss_keytab), "-u", "xrootd"], check=True)
-        sss_keytab.chmod(0o400)
-        notes.append(f"Generated xrootd shared-secret keytab: {sss_keytab}")
-    else:
-        sss_keytab.touch(exist_ok=True)
-        sss_keytab.chmod(0o600)
-        notes.append(
-            f"Initialize xrootd shared-secret keytab manually: xrdsssadmin -c {sss_keytab} -u xrootd"
-        )
 
-    if not krb5_keytab.exists():
-        krb5_keytab.touch()
-    krb5_keytab.chmod(0o600)
-    notes.append(
-        f"If Kerberos-backed xrootd is required, ask your krb5 administrator to place a service keytab at: {krb5_keytab}"
-    )
-    return notes
+def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> None:
+    print_step("Initialize runtime assets")
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "-e",
+        f"FASTINK_ENABLE_NGINX={'true' if answers.get('enable_nginx') else 'false'}",
+        "-e",
+        f"FASTINK_ENABLE_XROOTD={'true' if answers.get('enable_xrootd') else 'false'}",
+        "-e",
+        f"FASTINK_HOST_NAME={answers.get('host_name', 'localhost')}",
+        "-v",
+        f"{paths['keys_dir'].resolve()}:/work/keys",
+    ]
+    if bool(answers.get("enable_nginx")):
+        cmd.extend(["-v", f"{paths['nginx_dir'].resolve()}:/work/nginx"])
+    if bool(answers.get("enable_xrootd")):
+        cmd.extend(["-v", f"{paths['xrootd_dir'].resolve()}:/work/xrootd"])
+    cmd.append(str(answers["init_image"]))
+    run_command(cmd)
+
 
 
 def print_post_install_notes(answers: dict[str, object], paths: dict[str, Path], nginx_notes: list[str], xrootd_notes: list[str]) -> None:
@@ -283,6 +297,17 @@ def build_or_pull_images(answers: dict[str, object]) -> None:
                 "docker",
                 "build",
                 "-f",
+                "deploy/images/init/Dockerfile",
+                "-t",
+                str(answers["init_image"]),
+                ".",
+            ]
+        )
+        run_command(
+            [
+                "docker",
+                "build",
+                "-f",
                 "deploy/images/server/Dockerfile",
                 "-t",
                 str(answers["server_image"]),
@@ -362,17 +387,25 @@ def main() -> None:
         preload_cron_dir=DEPLOY_DIR / "preload" / "cron",
         preload_rootbrowse_dir=DEPLOY_DIR / "preload" / "rootbrowse",
     )
+    annotate_runtime_asset_paths(paths)
 
-    nginx_notes = initialize_nginx_tls_material(answers, paths)
-    xrootd_notes = initialize_xrootd_keytabs(paths) if bool(answers.get("enable_xrootd")) else []
+    nginx_notes = stage_nginx_tls_material(answers, paths)
+    xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
 
     print_step("Render deployment files")
-    bundle = render_bundle(str(answers["profile"]), answers, paths, DEPLOY_DIR)
+    bundle = render_bundle(
+        str(answers["profile"]),
+        answers,
+        paths,
+        DEPLOY_DIR,
+        initialize_host_assets=False,
+    )
     for relative_path, content in bundle.items():
         write_file(DEPLOY_DIR / relative_path, content)
     write_file(DEPLOY_DIR / "answers.json", json.dumps(answers, indent=2, default=str))
 
     build_or_pull_images(answers)
+    run_init_container(answers, paths)
     deploy_stack(answers)
 
     public_base_url = str(answers["public_base_url"])

@@ -7,6 +7,7 @@ BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "ink_production", "init_database
 INT_FIELDS = {"host_port", "rootbrowse_port", "xrootd_port", "workers"}
 
 DEFAULT_BUILD_IMAGES = {
+    "init_image": "fastink-init:local",
     "server_image": "fastink-server:local",
     "cron_image": "fastink-redis-cron:local",
     "rootbrowse_image": "fastink-rootbrowse:local",
@@ -14,6 +15,7 @@ DEFAULT_BUILD_IMAGES = {
 }
 
 DEFAULT_PULL_IMAGES = {
+    "init_image": "dockerhub.ihep.ac.cn/ink/fastink-init:latest",
     "server_image": "dockerhub.ihep.ac.cn/ink/fastink-server:latest",
     "cron_image": "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest",
     "rootbrowse_image": "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest",
@@ -135,6 +137,7 @@ def parse_override_value(key: str, value: str):
 
 def required_images(answers: dict[str, Any]) -> list[tuple[str, str]]:
     images = [
+        ("init", str(answers["init_image"])),
         ("server", str(answers["server_image"])),
         ("cron", str(answers["cron_image"])),
         ("rootbrowse", str(answers["rootbrowse_image"])),
