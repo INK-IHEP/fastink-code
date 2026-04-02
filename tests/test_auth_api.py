@@ -76,6 +76,40 @@ class TestTokenAPI:
         assert data["status"] == InkStatus.TOKEN_INVALID
         assert data["msg"] == "Token validation failed"
 
+    def test_auth_request(self):
+        correct_token = get_krb5(test_username)
+        response = client.get(
+            "/api/v2/auth/auth_request",
+            headers={
+                "Ink-Username": f"{test_username}",
+                "Ink-Token": f"{correct_token}",
+            },
+        )
+        assert response.status_code == 204
+        assert response.headers["X-Auth-Request-User"] == test_username
+        assert response.text == ""
+
+    def test_auth_request_missing_headers(self):
+        response = client.get("/api/v2/auth/auth_request")
+        assert response.status_code == 401
+        data = response.json()
+        assert data["status"] == InkStatus.TOKEN_INVALID
+        assert data["msg"] == "Ink-Username or Ink-Token is missing in request headers"
+
+    def test_auth_request_failure(self):
+        incorrect_token = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        response = client.get(
+            "/api/v2/auth/auth_request",
+            headers={
+                "Ink-Username": f"{test_username}",
+                "Ink-Token": f"{incorrect_token}",
+            },
+        )
+        assert response.status_code == 401
+        data = response.json()
+        assert data["status"] == InkStatus.TOKEN_INVALID
+        assert data["msg"] == "Token validation failed"
+
     def test_ip_whitelist(self):
         if get_config("common", "ip_whitelist_access"):
             response = client.get(
