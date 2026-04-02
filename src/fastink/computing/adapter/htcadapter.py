@@ -266,6 +266,8 @@ class HTC_Scheduler(SchedulerBase):
 
         return_list.sort(key=jobid_sort_key, reverse=True)
 
+        logger.info(f"Query func the htc result: {return_list}")
+
         return return_list
 
     async def cancel_job(self, job_id, submit_uuid: Optional[str] = None):
