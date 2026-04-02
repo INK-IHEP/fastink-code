@@ -121,14 +121,12 @@ def condor_schedd_query():
             projection=["ClusterId", "Owner", "Qdate", "JobStatus", "JobStartDate", "RemoteHost", "HepJob_JobType", "HepJob_RequestOS", "IWD", "Out", "Err", "Holdreason"]
         )
 
-        status_map = {1: "IDLE", 2: "RUNNING", 3: "REMOVED", 4: "COMPLETED", 5: "HELD"}
         job_list = []
 
         for job in jobs:
             cluster_id = job.get("ClusterId")
             owner = job.get("Owner", "Unknown")
             status_code = job.get("JobStatus")
-            status_str = status_map.get(status_code, "UNKNOWN")
             qdate = ts_to_str(job.get("Qdate"))
             starttime = ts_to_str(job.get("JobStartDate"))
             host = job.get("RemoteHost")
@@ -144,7 +142,7 @@ def condor_schedd_query():
                 "jobId": clean_query_value(f"{cluster_id}"),
                 "jobType": clean_query_value(jobtype),
                 "jobOwner": clean_query_value(owner),
-                "jobStatus": clean_query_value(status_str),
+                "jobStatus": clean_query_value(status_code),
                 "jobSubmitTime": clean_query_value(qdate),
                 "jobStartTime": clean_query_value(starttime),
                 "jobNodeList": clean_query_value(host),
