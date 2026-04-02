@@ -1,6 +1,4 @@
 import htcondor
-import classad
-from datetime import datetime
 import json, shlex
 from shlex import quote
 from fastink.common.logger import logger
