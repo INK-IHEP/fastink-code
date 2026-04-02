@@ -51,8 +51,6 @@ def get_history_records(jobid):
     for ad in ads:
         entered_current_status = ad.get("EnteredCurrentStatus")
         job_start_date = ad.get("JobStartDate", "")
-        qdate = ad.get("QDate")
-        owner = ad.get("Owner", "")
         job_type = ad.get("HepJob_JobType")
         
         job_info = {
