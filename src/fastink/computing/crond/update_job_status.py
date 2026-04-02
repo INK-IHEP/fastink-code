@@ -1,3 +1,6 @@
+import htcondor
+import classad
+from datetime import datetime
 import json, shlex
 from shlex import quote
 from fastink.common.logger import logger
@@ -27,6 +30,44 @@ def query_cluster_jobs():
     return command
 
 
+def get_history_records(jobid):
+    schedd_host = get_config("computing", "schedd_host")
+    coll = htcondor.Collector()
+    schedd_ad = coll.locate(htcondor.DaemonTypes.Schedd, schedd_host)
+    schedd = htcondor.Schedd(schedd_ad)
+
+    ads = schedd.history(
+        constraint=f"'ClusterId == {jobid}'",
+        projection=[
+            "EnteredCurrentStatus",
+            "JobStartDate",
+            "QDate",
+            "HepJob_JobType",
+            "Owner",
+            "ClusterId",
+        ],
+        match=-1,
+    )
+
+    results = []
+    for ad in ads:
+        entered_current_status = ad.get("EnteredCurrentStatus")
+        job_start_date = ad.get("JobStartDate", "")
+        qdate = ad.get("QDate")
+        owner = ad.get("Owner", "")
+        job_type = ad.get("HepJob_JobType")
+        
+        job_info = {
+            "job_end_time": ts_to_str(entered_current_status),
+            "job_start_time": ts_to_str(job_start_date),
+            "job_type": job_type
+        }
+
+        results.append(job_info)
+
+    return results
+
+
 def get_condor_history_command(job_id: str) -> str:
     SCHEDD_HOST = get_config("computing", "schedd_host")
     BASE_CMD = f"condor_history -name {quote(SCHEDD_HOST)} -limit 1"
@@ -46,6 +87,86 @@ def get_condor_history_command(job_id: str) -> str:
     return command
 
 
+async def get_redis_all_jobs():
+    r = redis_connect()
+    cursor = 0
+    jobs = []
+
+    while True:
+        cursor, keys = await r.scan(cursor=cursor, match="cluster_jobs:*:*", count=1000)
+
+        for key in keys:
+            if isinstance(key, bytes):
+                key = key.decode()
+
+            parts = key.split(":")
+            if len(parts) == 3 and parts[0] == "cluster_jobs" and parts[2] != "job_ids" and parts[2].isdigit():
+                jobs.append({
+                    "key": key,
+                    "user": parts[1],
+                    "job_id": parts[2],
+                })
+
+        if int(cursor) == 0:
+            break
+
+    return jobs
+
+
+def condor_schedd_query():
+
+    SCHEDD_HOST = get_config("computing", "schedd_host")
+    try:
+        coll = htcondor.Collector()
+        schedd_ad = coll.locate(htcondor.DaemonTypes.Schedd, SCHEDD_HOST)
+        schedd = htcondor.Schedd(schedd_ad)
+        
+        jobs = schedd.query(
+            projection=["ClusterId", "Owner", "Qdate", "JobStatus", "JobStartDate", "RemoteHost", "HepJob_JobType", "HepJob_RequestOS", "IWD", "Out", "Err", "Holdreason"]
+        )
+
+        status_map = {1: "IDLE", 2: "RUNNING", 3: "REMOVED", 4: "COMPLETED", 5: "HELD"}
+        job_list = []
+
+        for job in jobs:
+            cluster_id = job.get("ClusterId")
+            owner = job.get("Owner", "Unknown")
+            status_code = job.get("JobStatus")
+            status_str = status_map.get(status_code, f"UNKNOWN({status_code})")
+            qdate = ts_to_str(job.get("Qdate"))
+            starttime = ts_to_str(job.get("JobStartDate"))
+            host = job.get("RemoteHost")
+            jobtype = job.get("HepJob_JobType")
+            job_request_os = job.get("HepJob_RequestOS")
+            job_out_path = job.get("Out")
+            job_err_path = job.get("Err")
+            job_hold_reason = job.get("Holdreason")
+            job_iwd = job.get("IWD")
+
+            job_info = {
+                "ClusterId": "HTCondor",
+                "jobId": clean_query_value(f"{cluster_id}"),
+                "jobType": clean_query_value(jobtype),
+                "jobOwner": clean_query_value(owner),
+                "jobStatus": clean_query_value(status_str),
+                "jobSubmitTime": clean_query_value(qdate),
+                "jobStartTime": clean_query_value(starttime),
+                "jobNodeList": clean_query_value(host),
+                "jobrunos": clean_query_value(job_request_os),
+                "jobiwd": clean_query_value(job_iwd),
+                "joboutpath": clean_query_value(job_out_path),
+                "joberrpath": clean_query_value(job_err_path),
+                "hold_reason": clean_query_value(job_hold_reason)
+            }
+            job_list.append(job_info)
+
+        return job_list
+
+    except Exception as e:
+        logger.error(f"HTC-CROND-LOG: Condor API query job failed, and details: {e}")
+        return []
+
+
 async def update_completed_jobs():
     try:
         r = redis_connect()
@@ -59,57 +180,12 @@ async def update_completed_jobs():
         to_delete = []
         
         if lines != ['']:
-            pipe = r.pipeline(transaction=False)
             for line in lines:
                 job_param_list = shlex.split(line, posix=True)
-
-                job_owner = safe_get(job_param_list, 0)
-                job_owner = job_owner.strip().strip('"').strip("'") if job_owner else ""
                 job_clusterid = safe_int(safe_get(job_param_list, 1))
-                qdate_ts = safe_int(safe_get(job_param_list, 4), default=None)
-                start_ts = safe_int(safe_get(job_param_list, 6), default=None)
-
-                job_submit_time = ts_to_str(qdate_ts)
-                job_start_time  = ts_to_str(start_ts)
-
-                job_status = safe_get(job_param_list, 5)
-                job_remote_host = safe_get(job_param_list, 7)
-                job_type = safe_get(job_param_list, 8)
-                job_request_os = safe_get(job_param_list, 9)
-                job_iwd = safe_get(job_param_list, 10)
-                job_out_path = safe_get(job_param_list, 11)
-                job_err_path = safe_get(job_param_list, 12)
-                job_hold_reason = " ".join(job_param_list[13:]) if len(job_param_list) > 13 else ""
                 
                 if job_clusterid in need_change_status_jobs.keys():
-                    del need_change_status_jobs[job_clusterid]
-                    
-                tomb = await r.exists(f"cluster_jobs:deleted:{job_owner}:{job_clusterid}")
-                if tomb:
-                    continue 
-                
-                job_record = {
-                    "ClusterId": "HTCondor",
-                    "jobId": clean_query_value(job_clusterid),
-                    "jobType": clean_query_value(job_type),
-                    "jobStatus": clean_query_value(job_status),
-                    "jobSubmitTime": clean_query_value(job_submit_time),
-                    "jobStartTime": clean_query_value(job_start_time),
-                    "jobNodeList": clean_query_value(job_remote_host),
-                    "jobrunos": clean_query_value(job_request_os),
-                    "jobiwd": clean_query_value(job_iwd),
-                    "joboutpath": clean_query_value(job_out_path),
-                    "joberrpath": clean_query_value(job_err_path),
-                    "hold_reason": clean_query_value(job_hold_reason),
-                }
-                
-                JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
-                IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
-                pipe.sadd(IDX_KEY, job_clusterid)
-                pipe.hset(JOB_KEY, mapping=job_record)
-                
-            await pipe.execute()
-                
+                    del need_change_status_jobs[job_clusterid]      
 
         if need_change_status_jobs:
             logger.debug(f"HTC-CROND-QUEUE-LOG: Need change status jobs: {need_change_status_jobs}")
@@ -155,6 +231,43 @@ async def update_completed_jobs():
         logger.exception(f"HTC-CROND-QUEUE-LOG: update_completed_jobs failed, the details: {e}")
 
 
+async def refresh_redis_job_status():
+    try:
+        r = redis_connect()
+        pipe = r.pipeline(transaction=False)
+
+        condor_joblist = []
+        condor_q_jobs = condor_schedd_query()
+        for job in condor_q_jobs:
+            job_owner = job.get("jobOwner")
+            job_clusterid = job.get("jobId")
+            condor_joblist.append(job_clusterid)
+
+            tomb = await r.exists(f"cluster_jobs:deleted:{job_owner}:{job_clusterid}")
+            if tomb:
+                continue
+
+            JOB_KEY = f"cluster_jobs:{job_owner}:{job_clusterid}"
+            IDX_KEY = f"cluster_jobs:{job_owner}:job_ids"
+            pipe.sadd(IDX_KEY, job_clusterid)
+            pipe.hset(JOB_KEY, mapping=job)
+
+        await pipe.execute()
+
+        redis_jobs = get_redis_all_jobs()
+
+        for job in redis_jobs:
+            job_id = job.get("job_id")
+            job_user = job.get("user")
+            if job_id not in condor_joblist:
+                # delete redis record
+                JOB_KEY = f"cluster_jobs:{job_user}:{job_id}"
+                IDX_KEY = f"cluster_jobs:{job_user}:job_ids"
+                await r.delete(JOB_KEY)
+                await r.srem(IDX_KEY, str(job_id))
+
+    except Exception as e:
+        logger.exception(f"HTC-CROND-QUEUE-LOG: update_completed_jobs failed, the details: {e}")
 
 
 def gen_history_list_command() -> str:
