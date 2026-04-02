@@ -42,7 +42,9 @@ OPENCLAW_IMAGE=${3:-}
 OPENCLAW_USER=${4:-${USER:-}}
 
 touch "${LOG_FILE}"
-exec >> "${LOG_FILE}" 2>&1
+# Keep a dedicated launch log while preserving stdout/stderr for the scheduler
+# output files that drive connect_sign detection.
+exec > >(tee -a "${LOG_FILE}") 2>&1
 
 log "starting shell.sh"
 log "uid=${UID:-unknown} user=${USER:-unknown} openclaw_user=${OPENCLAW_USER}"

@@ -25,9 +25,6 @@ OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
 
-touch "${LOG_FILE}"
-exec >> "${LOG_FILE}" 2>&1
-
 log "starting run.sh"
 log "app_port=${APP_PORT}"
 log "openclaw_user=${OPENCLAW_USER}"
@@ -123,7 +120,7 @@ for _ in $(seq 1 60); do
     fi
 
     if [ -n "${PORT_CHECK_BIN}" ] && "${PORT_CHECK_BIN}" -ltn 2>/dev/null | grep -q ":${APP_PORT}\\b"; then
-        log "openclaw gateway listening on ${APP_RUN_FQDN}:${APP_PORT}"
+        log "OpenClaw gateway listening on ${APP_RUN_FQDN}:${APP_PORT}"
         READY=1
         break
     fi
