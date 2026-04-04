@@ -1,88 +1,94 @@
 {
-  "wizard": {},
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "custom": {
-        "baseUrl": "",
-        "apiKey": "",
-        "api": "",
-        "models": [
-          {
-            "id": "custom",
-            "name": "custom",
-            "reasoning": false,
-            "input": [
-              "text"
-            ],
-            "cost": {
-              "input": 0,
-              "output": 0,
-              "cacheRead": 0,
-              "cacheWrite": 0
+    "wizard": {},
+    "models": {
+        "mode": "merge",
+        "providers": {
+            "custom": {
+                "baseUrl": "",
+                "apiKey": "",
+                "api": "",
+                "models": [
+                    {
+                        "id": "custom",
+                        "name": "custom",
+                        "reasoning": false,
+                        "input": ["text"],
+                        "cost": {
+                            "input": 0,
+                            "output": 0,
+                            "cacheRead": 0,
+                            "cacheWrite": 0
+                        },
+                        "contextWindow": 16000,
+                        "maxTokens": 4096
+                    }
+                ]
+            }
+        }
+    },
+    "agents": {
+        "defaults": {
+            "model": {
+                "primary": "custom/custom"
             },
-            "contextWindow": 16000,
-            "maxTokens": 4096
-          }
-        ]
-      }
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "custom/custom"
-      },
-      "models": {
-        "custom/custom": {}
-      },
-      "workspace": ""
-    }
-  },
-  "tools": {
-    "profile": "coding"
-  },
-  "commands": {
-    "native": "auto",
-    "nativeSkills": "auto",
-    "restart": true,
-    "ownerDisplay": "raw"
-  },
-  "session": {
-    "dmScope": "per-channel-peer"
-  },
-  "gateway": {
-    "port": 16871,
-    "mode": "local",
-    "bind": "loopback",
-    "controlUi": {
-      "basePath": "/openclaw/{username}/",
-      "allowedOrigins": []
+            "models": {
+                "custom/custom": {}
+            },
+            "workspace": ""
+        }
     },
-    "trustedProxies": [
-      "127.0.0.1"
-    ],
-    "auth": {
-      "mode": "trusted-proxy",
-      "trustedProxy": {
-        "userHeader": "x-forwarded-user",
-        "allowUsers": []
-      }
+    "tools": {
+        "profile": "coding"
     },
-    "tailscale": {
-      "mode": "off",
-      "resetOnExit": false
+    "commands": {
+        "native": "auto",
+        "nativeSkills": "auto",
+        "restart": true,
+        "ownerDisplay": "raw"
     },
-    "nodes": {
-      "denyCommands": [
-        "camera.snap",
-        "camera.clip",
-        "screen.record",
-        "contacts.add",
-        "calendar.add",
-        "reminders.add",
-        "sms.send"
-      ]
+    "session": {
+        "dmScope": "per-channel-peer"
+    },
+    "gateway": {
+        "port": 16871,
+        "mode": "local",
+        "bind": "loopback",
+        "controlUi": {
+            "basePath": "/openclaw/{username}/",
+            "allowedOrigins": []
+        },
+        "trustedProxies": ["127.0.0.1"],
+        "auth": {
+            "mode": "trusted-proxy",
+            "trustedProxy": {
+                "userHeader": "x-forwarded-user",
+                "allowUsers": []
+            }
+        },
+        "tailscale": {
+            "mode": "off",
+            "resetOnExit": false
+        },
+        "nodes": {
+            "denyCommands": [
+                "camera.snap",
+                "camera.clip",
+                "screen.record",
+                "contacts.add",
+                "calendar.add",
+                "reminders.add",
+                "sms.send"
+            ]
+        }
+    },
+    "hooks": {
+        "internal": {
+            "enabled": true,
+            "entries": {
+                "boot-md": {
+                    "enabled": true
+                }
+            }
+        }
     }
-  }
 }
