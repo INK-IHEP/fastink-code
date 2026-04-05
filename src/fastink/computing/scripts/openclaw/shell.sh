@@ -19,21 +19,6 @@ if [ -n "${INKPATH:-}" ] && [ -n "${INKLDPATH:-}" ]; then
     export APPTAINERENV_LD_LIBRARY_PATH="$INKLDPATH"
 fi
 
-get_free_port() {
-    if [ -z "${PORT_CHECK_BIN}" ]; then
-        echo "No port check command found." >&2
-        exit 1
-    fi
-    while true; do
-        PORT=$(shuf -i 49152-65535 -n 1)
-        if ! "${PORT_CHECK_BIN}" -ltn 2>/dev/null | grep -q ":$PORT\\b"; then
-            echo "$PORT"
-            break
-        fi
-    done
-}
-
-APP_PORT=$(get_free_port)
 APP_PATH="`/bin/pwd`"
 LOG_FILE="${APP_PATH}/openclaw-launch.log"
 OPENCLAW_USER_ROOT=${1:-}
@@ -48,7 +33,6 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 
 log "starting shell.sh"
 log "uid=${UID:-unknown} user=${USER:-unknown} openclaw_user=${OPENCLAW_USER}"
-log "selected_port=${APP_PORT}"
 log "openclaw_user_root=${OPENCLAW_USER_ROOT:-missing}"
 log "openclaw_dir=${OPENCLAW_DIR:-missing}"
 log "openclaw_image=${OPENCLAW_IMAGE:-missing}"
@@ -73,4 +57,4 @@ else
 fi
 
 log "handoff to run.sh"
-"${APP_PATH}/run.sh" "${APP_PATH}" "${APP_PORT}" "${OPENCLAW_USER_ROOT}" "${OPENCLAW_DIR}" "${OPENCLAW_IMAGE}" "${OPENCLAW_USER}"
+"${APP_PATH}/run.sh" "${APP_PATH}" "${OPENCLAW_USER_ROOT}" "${OPENCLAW_DIR}" "${OPENCLAW_IMAGE}" "${OPENCLAW_USER}"

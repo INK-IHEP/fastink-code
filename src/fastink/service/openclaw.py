@@ -2,6 +2,8 @@
 
 import json
 import os
+import random
+import socket
 import subprocess
 import tempfile
 from copy import deepcopy
@@ -37,6 +39,27 @@ DEFAULT_MODEL = {
     "contextWindow": 16000,
     "maxTokens": 4096,
 }
+
+
+def _is_local_port_available(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", port))
+        except OSError:
+            return False
+    return True
+
+
+def _get_initial_gateway_port(username: str) -> int:
+    uid = change_username_to_uid(username)
+    if 10000 <= uid <= 65535:
+        return uid
+
+    while True:
+        port = random.randint(49152, 65535)
+        if _is_local_port_available(port):
+            return port
 
 
 def _get_template_dir() -> Path:
@@ -84,6 +107,26 @@ def _run_as_user(username: str, command: str) -> str:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "unknown error")
     return result.stdout
+
+
+def _path_exists_as_user(username: str, path: Path) -> bool:
+    result = subprocess.run(
+        ["su", "-s", "/bin/bash", username, "-c", f"test -e {quote(str(path))}"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _path_is_file_as_user(username: str, path: Path) -> bool:
+    result = subprocess.run(
+        ["su", "-s", "/bin/bash", username, "-c", f"test -f {quote(str(path))}"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
 
 
 def _resolve_user_experiment_group(username: str) -> str:
@@ -264,7 +307,7 @@ def _update_target_openclaw_config(
     payload: OpenClawSyncRequest,
     initialize_target: bool,
 ) -> dict:
-    if not target_openclaw_json.exists():
+    if not _path_is_file_as_user(username, target_openclaw_json):
         raise FileNotFoundError(f"Target OpenClaw config not found: {target_openclaw_json}")
 
     target_config = json.loads(_read_text_as_user(username, target_openclaw_json))
@@ -305,6 +348,8 @@ def _update_target_openclaw_config(
 
     workspace_path = str(target_user_root / _get_target_relpath() / "workspace")
     gateway = target_config.setdefault("gateway", {})
+    if initialize_target:
+        gateway["port"] = _get_initial_gateway_port(username)
     control_ui = gateway.setdefault("controlUi", {})
     existing_allowed_origins = control_ui.get("allowedOrigins", [])
     allowed_origins = []
@@ -340,6 +385,13 @@ def _update_target_openclaw_config(
     }
 
 
+def has_openclaw_config(username: str) -> bool:
+    group_dir = _resolve_user_experiment_group(username)
+    target_user_root = _get_openclaw_user_root(username=username, group_dir=group_dir)
+    target_config_path = target_user_root / _get_target_relpath() / "openclaw.json"
+    return _path_is_file_as_user(username, target_config_path)
+
+
 async def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
     template_dir = _get_template_dir()
     if not template_dir.is_dir():
@@ -354,7 +406,7 @@ async def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> d
 
     target_dir = target_user_root / _get_target_relpath()
     created = False
-    if not target_dir.exists():
+    if not _path_exists_as_user(username, target_dir):
         _copy_template_dir_to_target(template_dir, target_dir, username)
         created = True
 

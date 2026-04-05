@@ -11,27 +11,84 @@ log() {
 }
 
 APP_PATH=${1}
-APP_PORT=${2}
-OPENCLAW_USER_ROOT=${3}
-OPENCLAW_DIR=${4}
-OPENCLAW_IMAGE=${5}
-OPENCLAW_USER=${6:-${USER:-}}
+OPENCLAW_USER_ROOT=${2}
+OPENCLAW_DIR=${3}
+OPENCLAW_IMAGE=${4}
+OPENCLAW_USER=${5:-${USER:-}}
 APP_LOGIN_INFO="app_login.info"
 LOG_FILE="${APP_PATH}/openclaw-launch.log"
 APP_RUN_FQDN="`/bin/hostname -f 2>/dev/null || /bin/hostname`"
 APP_RUN_HOST="`printf '%s' \"${APP_RUN_FQDN}\" | /bin/awk -F '.' '{print $1}'`"
-APP_BASE_PATH="/openclaw/${APP_RUN_HOST}/${APP_PORT}/${OPENCLAW_USER}/"
 OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
 
-log "starting run.sh"
-log "app_port=${APP_PORT}"
-log "openclaw_user=${OPENCLAW_USER}"
-log "openclaw_dir=${OPENCLAW_DIR}"
-log "openclaw_image=${OPENCLAW_IMAGE}"
-log "hostname_fqdn=${APP_RUN_FQDN}"
-log "base_path=${APP_BASE_PATH}"
+is_port_available() {
+    local port=$1
+    if [ -z "${port}" ]; then
+        return 1
+    fi
+    if ! printf '%s' "${port}" | grep -Eq '^[0-9]+$'; then
+        return 1
+    fi
+    if [ -n "${PORT_CHECK_BIN}" ] && "${PORT_CHECK_BIN}" -ltn 2>/dev/null | grep -q ":${port}\\b"; then
+        return 1
+    fi
+    return 0
+}
+
+get_free_port() {
+    if [ -z "${PORT_CHECK_BIN}" ]; then
+        echo "No port check command found." >&2
+        exit 1
+    fi
+    while true; do
+        port=$(shuf -i 49152-65535 -n 1)
+        if is_port_available "${port}"; then
+            echo "${port}"
+            break
+        fi
+    done
+}
+
+get_existing_config_port() {
+    OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path(os.environ["OPENCLAW_CONFIG_FILE"])
+try:
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    port = config.get("gateway", {}).get("port")
+    if isinstance(port, int):
+        print(port)
+    elif isinstance(port, str) and port.isdigit():
+        print(port)
+except Exception:
+    pass
+PY
+}
+
+select_app_port() {
+    local user_uid existing_port
+    user_uid=$(id -u "${OPENCLAW_USER}" 2>/dev/null || id -u)
+    if [ "${user_uid}" -ge 10000 ] && [ "${user_uid}" -le 65535 ] && is_port_available "${user_uid}"; then
+        log "using uid port ${user_uid}" >&2
+        echo "${user_uid}"
+        return 0
+    fi
+
+    existing_port=$(get_existing_config_port)
+    if is_port_available "${existing_port}"; then
+        log "using existing config port ${existing_port}" >&2
+        echo "${existing_port}"
+        return 0
+    fi
+
+    log "falling back to random free port" >&2
+    get_free_port
+}
 
 if [ ! -d "${OPENCLAW_USER_ROOT}" ]; then
     log "openclaw user root does not exist: ${OPENCLAW_USER_ROOT}"
@@ -57,6 +114,17 @@ if ! command -v "${APPTAINER_BIN}" >/dev/null 2>&1; then
     log "apptainer command not found in PATH"
     exit 1
 fi
+
+APP_PORT=$(select_app_port)
+APP_BASE_PATH="/openclaw/${APP_RUN_HOST}/${APP_PORT}/${OPENCLAW_USER}/"
+
+log "starting run.sh"
+log "app_port=${APP_PORT}"
+log "openclaw_user=${OPENCLAW_USER}"
+log "openclaw_dir=${OPENCLAW_DIR}"
+log "openclaw_image=${OPENCLAW_IMAGE}"
+log "hostname_fqdn=${APP_RUN_FQDN}"
+log "base_path=${APP_BASE_PATH}"
 
 OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" \
 APP_PORT="${APP_PORT}" \
