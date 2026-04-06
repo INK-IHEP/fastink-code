@@ -70,11 +70,10 @@ def build_runtime_paths(
                 target.touch()
 
     if enable_xrootd:
-        for key in ('xrootd_sss_keytab_path', 'xrootd_krb5_keytab_path'):
-            target = paths[key]
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.exists():
-                target.touch()
+        target = paths['xrootd_krb5_keytab_path']
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if not target.exists():
+            target.touch()
 
     resolved_rootbrowse_keys = (
         rootbrowse_authorized_keys_path or (paths['keys_dir'] / 'rootbrowse_authorized_keys')

@@ -6,6 +6,7 @@ COPY deploy/images/repos/epel.repo /etc/yum.repos.d/epel.repo
 
 RUN dnf -y update && \
     dnf install -y --allowerasing \
+        openssh-server \
         openssh-clients \
         openssl \
         xrootd-server && \

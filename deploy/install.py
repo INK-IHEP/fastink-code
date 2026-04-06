@@ -157,6 +157,16 @@ def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> No
         "-e",
         f"FASTINK_HOST_NAME={answers.get('host_name', 'localhost')}",
         "-v",
+        f"{paths['etc_init_dir'].resolve()}:/work/etc-init",
+        "-v",
+        "/etc/passwd:/host-etc/passwd:ro",
+        "-v",
+        "/etc/group:/host-etc/group:ro",
+        "-v",
+        "/etc/shadow:/host-etc/shadow:ro",
+        "-v",
+        "/etc/gshadow:/host-etc/gshadow:ro",
+        "-v",
         f"{paths['keys_dir'].resolve()}:/work/keys",
     ]
     if bool(answers.get("enable_nginx")):
