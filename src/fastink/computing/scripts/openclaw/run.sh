@@ -22,6 +22,8 @@ APP_RUN_HOST="`printf '%s' \"${APP_RUN_FQDN}\" | /bin/awk -F '.' '{print $1}'`"
 OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
+LOCAL_MODEL_BASE_URL="https://aiapi.ihep.ac.cn/apiv2"
+MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-15}"
 APP_TOKEN="$(python3 - <<'PY'
 import secrets
 print(secrets.token_hex(32))
@@ -95,6 +97,86 @@ select_app_port() {
     get_free_port
 }
 
+all_agent_models_are_local_only() {
+    OPENCLAW_DIR="${OPENCLAW_DIR}" LOCAL_MODEL_BASE_URL="${LOCAL_MODEL_BASE_URL}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+openclaw_dir = Path(os.environ["OPENCLAW_DIR"])
+local_base_url = os.environ["LOCAL_MODEL_BASE_URL"].rstrip("/")
+agents_dir = openclaw_dir / "agents"
+model_files = sorted(agents_dir.glob("*/agent/models.json"))
+
+if not model_files:
+    print("false")
+    raise SystemExit(0)
+
+has_model = False
+for model_file in model_files:
+    try:
+        payload = json.loads(model_file.read_text(encoding="utf-8"))
+    except Exception:
+        print("false")
+        raise SystemExit(0)
+
+    providers = payload.get("providers")
+    if not isinstance(providers, dict):
+        print("false")
+        raise SystemExit(0)
+
+    for provider in providers.values():
+        if not isinstance(provider, dict):
+            print("false")
+            raise SystemExit(0)
+        provider_base_url = str(provider.get("baseUrl", "")).rstrip("/")
+        models = provider.get("models")
+        if not isinstance(models, list):
+            print("false")
+            raise SystemExit(0)
+        for model in models:
+            if not isinstance(model, dict):
+                print("false")
+                raise SystemExit(0)
+            has_model = True
+            model_id = str(model.get("id", ""))
+            if provider_base_url != local_base_url or not model_id.startswith("hepai/"):
+                print("false")
+                raise SystemExit(0)
+
+print("true" if has_model else "false")
+PY
+}
+
+resolve_extra_readonly_binds() {
+    local group_key
+    group_key=$(basename "$(dirname "${OPENCLAW_USER_ROOT}")")
+    case "${group_key}" in
+        cc|u07)
+            if [ -d /workfs2/cc ]; then
+                printf '%s\n' "/workfs2/cc:/workfs2/cc:ro"
+            fi
+            ;;
+    esac
+}
+
+monitor_agent_models() {
+    local app_pid=$1
+    while kill -0 "${app_pid}" 2>/dev/null; do
+        sleep "${MODEL_CHECK_INTERVAL}"
+        if ! kill -0 "${app_pid}" 2>/dev/null; then
+            break
+        fi
+        if [ "$(all_agent_models_are_local_only)" != "true" ]; then
+            log "detected non-local model during runtime; stopping openclaw gateway"
+            kill "${app_pid}" 2>/dev/null || true
+            sleep 2
+            kill -9 "${app_pid}" 2>/dev/null || true
+            exit 0
+        fi
+    done
+}
+
 if [ ! -d "${OPENCLAW_USER_ROOT}" ]; then
     log "openclaw user root does not exist: ${OPENCLAW_USER_ROOT}"
     exit 1
@@ -122,6 +204,16 @@ fi
 
 APP_PORT=$(select_app_port)
 APP_BASE_PATH="/openclaw/${APP_RUN_HOST}/${APP_PORT}/${OPENCLAW_USER}/"
+LOCAL_ONLY_MODELS="false"
+EXTRA_BINDS=()
+
+if [ "$(all_agent_models_are_local_only)" = "true" ]; then
+    LOCAL_ONLY_MODELS="true"
+    while IFS= read -r bind_entry; do
+        [ -n "${bind_entry}" ] || continue
+        EXTRA_BINDS+=(--bind "${bind_entry}")
+    done < <(resolve_extra_readonly_binds)
+fi
 
 log "starting run.sh"
 log "app_port=${APP_PORT}"
@@ -131,6 +223,10 @@ log "openclaw_image=${OPENCLAW_IMAGE}"
 log "hostname_fqdn=${APP_RUN_FQDN}"
 log "base_path=${APP_BASE_PATH}"
 log "auth_mode=token"
+log "local_only_models=${LOCAL_ONLY_MODELS}"
+if [ "${#EXTRA_BINDS[@]}" -gt 0 ]; then
+    log "extra_readonly_binds=${EXTRA_BINDS[*]}"
+fi
 
 OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" \
 APP_PORT="${APP_PORT}" \
@@ -182,10 +278,18 @@ log "wrote app_login.info"
         --bind "${OPENCLAW_DIR}:/workspace:rw" \
         --bind /cvmfs:/cvmfs:ro \
         --bind "${OPENCLAW_USER_ROOT}:${OPENCLAW_USER_ROOT}:rw" \
+        "${EXTRA_BINDS[@]}" \
         "${OPENCLAW_IMAGE}" openclaw gateway
 ) 2>&1 &
 APP_PID=$!
 log "spawned background pid=${APP_PID}"
+
+MONITOR_PID=""
+if [ "${LOCAL_ONLY_MODELS}" = "true" ]; then
+    monitor_agent_models "${APP_PID}" &
+    MONITOR_PID=$!
+    log "started model monitor pid=${MONITOR_PID}"
+fi
 
 READY=0
 for _ in $(seq 1 60); do
@@ -209,4 +313,12 @@ if [ "${READY}" -eq 0 ]; then
 fi
 
 log "waiting for background process ${APP_PID}"
-wait "${APP_PID}"
+APP_STATUS=0
+wait "${APP_PID}" || APP_STATUS=$?
+
+if [ -n "${MONITOR_PID}" ]; then
+    kill "${MONITOR_PID}" 2>/dev/null || true
+    wait "${MONITOR_PID}" 2>/dev/null || true
+fi
+
+exit "${APP_STATUS}"
