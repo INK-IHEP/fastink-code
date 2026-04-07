@@ -97,6 +97,50 @@ select_app_port() {
     get_free_port
 }
 
+all_config_models_are_local_only() {
+    OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" LOCAL_MODEL_BASE_URL="${LOCAL_MODEL_BASE_URL}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path(os.environ["OPENCLAW_CONFIG_FILE"])
+local_base_url = os.environ["LOCAL_MODEL_BASE_URL"].rstrip("/")
+
+try:
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+except Exception:
+    print("false")
+    raise SystemExit(0)
+
+providers = payload.get("models", {}).get("providers")
+if not isinstance(providers, dict):
+    print("false")
+    raise SystemExit(0)
+
+has_model = False
+for provider in providers.values():
+    if not isinstance(provider, dict):
+        print("false")
+        raise SystemExit(0)
+    provider_base_url = str(provider.get("baseUrl", "")).rstrip("/")
+    models = provider.get("models")
+    if not isinstance(models, list):
+        print("false")
+        raise SystemExit(0)
+    for model in models:
+        if not isinstance(model, dict):
+            print("false")
+            raise SystemExit(0)
+        has_model = True
+        model_id = str(model.get("id", ""))
+        if provider_base_url != local_base_url or not model_id.startswith("hepai/"):
+            print("false")
+            raise SystemExit(0)
+
+print("true" if has_model else "false")
+PY
+}
+
 all_agent_models_are_local_only() {
     OPENCLAW_DIR="${OPENCLAW_DIR}" LOCAL_MODEL_BASE_URL="${LOCAL_MODEL_BASE_URL}" python3 - <<'PY'
 import json
@@ -207,7 +251,7 @@ APP_BASE_PATH="/openclaw/${APP_RUN_HOST}/${APP_PORT}/${OPENCLAW_USER}/"
 LOCAL_ONLY_MODELS="false"
 EXTRA_BINDS=()
 
-if [ "$(all_agent_models_are_local_only)" = "true" ]; then
+if [ "$(all_config_models_are_local_only)" = "true" ]; then
     LOCAL_ONLY_MODELS="true"
     while IFS= read -r bind_entry; do
         [ -n "${bind_entry}" ] || continue
