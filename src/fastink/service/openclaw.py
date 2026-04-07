@@ -357,6 +357,11 @@ def _update_target_openclaw_config(
         if origin and origin not in allowed_origins:
             allowed_origins.append(origin)
     control_ui["allowedOrigins"] = allowed_origins
+    control_ui["dangerouslyDisableDeviceAuth"] = True
+
+    auth = gateway.setdefault("auth", {})
+    auth["mode"] = "token"
+    auth.setdefault("token", "")
 
     agents_defaults = target_config.setdefault("agents", {}).setdefault("defaults", {})
     primary_model = merged_model["id"]

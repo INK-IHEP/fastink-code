@@ -217,15 +217,19 @@ async def connect_openclaw_job(job_id, uid, clusterid):
         host = parse_info(login_info, "HOST")
         port = parse_info(login_info, "PORT")
         base_path = parse_info(login_info, "BASE_PATH")
+        token = parse_info(login_info, "TOKEN")
         if not base_path:
             username = change_uid_to_username(uid)
             base_path = f"/openclaw/{host}/{port}/{username}/"
         openclaw_url = f"{NGINX_NODE}{base_path}"
+        if token:
+            separator = "&" if "?" in openclaw_url else "?"
+            openclaw_url = f"{openclaw_url}{separator}token={token}"
 
         if not host or not port:
             raise HTTPException(status_code=500, detail="No host and port record in openclaw loginfile.")
 
-        return host, port, openclaw_url
+        return host, port, token, openclaw_url
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

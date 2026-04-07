@@ -103,13 +103,14 @@ async def connect_common_job(
             }
 
         elif job_type == "openclaw":
-            host, port, openclaw_url = await connect_openclaw_job(job_id=job_id, uid=uid, clusterid=cluster_id)
+            host, port, openclaw_token, openclaw_url = await connect_openclaw_job(job_id=job_id, uid=uid, clusterid=cluster_id)
             return {
                 "status": InkStatus.SUCCESS,
                 "msg": "Request Success",
                 "data": {
                     "host": host,
                     "port": port,
+                    "token": openclaw_token,
                     "url": openclaw_url,
                     "jobId": job_id,
                     "connect_type": "openclaw"

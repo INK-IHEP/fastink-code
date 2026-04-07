@@ -22,6 +22,11 @@ APP_RUN_HOST="`printf '%s' \"${APP_RUN_FQDN}\" | /bin/awk -F '.' '{print $1}'`"
 OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
+APP_TOKEN="$(python3 - <<'PY'
+import secrets
+print(secrets.token_hex(32))
+PY
+)"
 
 is_port_available() {
     local port=$1
@@ -125,12 +130,14 @@ log "openclaw_dir=${OPENCLAW_DIR}"
 log "openclaw_image=${OPENCLAW_IMAGE}"
 log "hostname_fqdn=${APP_RUN_FQDN}"
 log "base_path=${APP_BASE_PATH}"
+log "auth_mode=token"
 
 OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" \
 APP_PORT="${APP_PORT}" \
 APP_BASE_PATH="${APP_BASE_PATH}" \
 APP_RUN_FQDN="${APP_RUN_FQDN}" \
 OPENCLAW_USER="${OPENCLAW_USER}" \
+APP_TOKEN="${APP_TOKEN}" \
 python3 - <<'PY'
 import json
 import os
@@ -149,10 +156,11 @@ for origin in existing_origins + [f"https://{os.environ['APP_RUN_FQDN']}"]:
     if origin and origin not in merged_origins:
         merged_origins.append(origin)
 control_ui["allowedOrigins"] = merged_origins
+control_ui["dangerouslyDisableDeviceAuth"] = True
 
 auth = gateway.setdefault("auth", {})
-trusted_proxy = auth.setdefault("trustedProxy", {})
-trusted_proxy["allowUsers"] = [os.environ["OPENCLAW_USER"]]
+auth["mode"] = "token"
+auth["token"] = os.environ["APP_TOKEN"]
 
 config_path.write_text(
     json.dumps(config, ensure_ascii=False, indent=2) + "\n",
@@ -162,7 +170,7 @@ PY
 
 log "updated gateway config"
 
-/bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"HOST_FQDN\": \"${APP_RUN_FQDN}\", \"PORT\": \"${APP_PORT}\", \"USERNAME\": \"${OPENCLAW_USER}\", \"BASE_PATH\": \"${APP_BASE_PATH}\"}" > "${APP_LOGIN_INFO}"
+/bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"HOST_FQDN\": \"${APP_RUN_FQDN}\", \"PORT\": \"${APP_PORT}\", \"USERNAME\": \"${OPENCLAW_USER}\", \"BASE_PATH\": \"${APP_BASE_PATH}\", \"TOKEN\": \"${APP_TOKEN}\"}" > "${APP_LOGIN_INFO}"
 log "wrote app_login.info"
 
 (
