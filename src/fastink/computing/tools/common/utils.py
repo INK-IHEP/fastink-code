@@ -437,6 +437,7 @@ async def generate_condor_submit(
     job_cpus = default_job_config.get("RequestCpus", cpu)
     job_mem = default_job_config.get("RequestMemory", mem)
     XROOTD_PATH = get_config("computing", "xrootd_path")
+    uid = change_username_to_uid(username)
     
     workernode = default_job_config.get("workernode", request_wn)
     arch = default_job_config.get("arch", request_arch)
@@ -454,7 +455,13 @@ async def generate_condor_submit(
     await common.upload_file(src_data=job_script_content, dst=f"{jobdir}/run.sh", username=username, mgm=XROOTD_PATH, mode="700")
 
     if jobtype == "npu":
-        arguments += jobdir
+        arguments = (arguments or "") + jobdir
+    elif jobtype == "openclaw":
+        arguments = build_openclaw_arguments(
+            username=username,
+            uid=uid,
+            arguments=arguments,
+        )
     
     config = {
         "universe": "vanilla",
@@ -474,7 +481,6 @@ async def generate_condor_submit(
 
     if extra_param:
         job_plugin = importlib.import_module(f"fastink.computing.scripts.plugins.set_extra_config")
-        uid = change_username_to_uid(username)
         groupname = grp.getgrgid(pwd.getpwuid(uid).pw_gid).gr_name
         extra_job_config = job_plugin.get_extra_job_config(username, groupname, jobtype, request_os)
         for key, value in extra_job_config.items():
@@ -555,6 +561,44 @@ def generate_submit_command(username: str, job_dir: str, job_type: str, submitfi
 def get_parent_dir(path_str: str) -> str:
     parent = str(Path(path_str).parent)
     return "" if parent == "." else parent
+
+
+def build_openclaw_arguments(
+    username: str,
+    uid: int,
+    arguments: Optional[str] = None,
+) -> str:
+    group_dir = get_user_exp_group_dir(uid)
+    user_root_template = get_config(
+        "service",
+        "openclaw_user_root",
+        fallback="/scratchfs/{experiment_group_lower}/{username}",
+    )
+    openclaw_relpath = get_config("service", "openclaw_models_relpath", fallback=".openclaw")
+    image_template = get_config(
+        "service",
+        "openclaw_container_image",
+        fallback="/home/{group_dir}/{username}/container/openclaw_ihep_latest.sif",
+    )
+    openclaw_user_root = user_root_template.format(
+        username=username,
+        experiment_group_lower=group_dir,
+        group_dir=group_dir,
+    )
+    openclaw_dir = f"{openclaw_user_root}/{openclaw_relpath}"
+    openclaw_image = image_template.format(
+        group_dir=group_dir,
+        username=username,
+    )
+    openclaw_args = [
+        quote(openclaw_user_root),
+        quote(openclaw_dir),
+        quote(openclaw_image),
+        quote(username),
+    ]
+    if arguments:
+        openclaw_args.append(arguments)
+    return " ".join(openclaw_args)
 
 
 async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
@@ -669,39 +713,13 @@ async def generate_condor_sync_submit(
         await common.upload_file(src_data=job_script_content, dst=f"{job_dir}/run.sh", username=username, mgm=XROOTD_PATH, mode="700")
 
         if job_type == "npu":
-            arguments += job_dir
+            arguments = (arguments or "") + job_dir
         elif job_type == "openclaw":
-            group_dir = get_user_exp_group_dir(uid)
-            user_root_template = get_config(
-                "service",
-                "openclaw_user_root",
-                fallback="/scratchfs/{experiment_group_lower}/{username}",
-            )
-            openclaw_relpath = get_config("service", "openclaw_models_relpath", fallback=".openclaw")
-            image_template = get_config(
-                "service",
-                "openclaw_container_image",
-                fallback="/home/{group_dir}/{username}/container/openclaw_ihep_latest.sif",
-            )
-            openclaw_user_root = user_root_template.format(
+            arguments = build_openclaw_arguments(
                 username=username,
-                experiment_group_lower=group_dir,
-                group_dir=group_dir,
+                uid=uid,
+                arguments=arguments,
             )
-            openclaw_dir = f"{openclaw_user_root}/{openclaw_relpath}"
-            openclaw_image = image_template.format(
-                group_dir=group_dir,
-                username=username,
-            )
-            openclaw_args = [
-                quote(openclaw_user_root),
-                quote(openclaw_dir),
-                quote(openclaw_image),
-                quote(username),
-            ]
-            if arguments:
-                openclaw_args.append(arguments)
-            arguments = " ".join(openclaw_args)
         
         config = {
             "universe": "vanilla",
