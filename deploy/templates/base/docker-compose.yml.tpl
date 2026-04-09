@@ -48,6 +48,7 @@ services:
       - ${plugins_dir}:/plugins
       - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${preload_server_dir}:/opt/preload/server:ro
+${server_extra_mounts_block}
 ${server_port_block}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/health"]

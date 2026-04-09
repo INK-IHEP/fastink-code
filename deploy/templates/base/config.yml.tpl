@@ -47,9 +47,11 @@ storage:
 
 computing:
   site: ${site}
-  cluster_list: []
+  cluster_list:
+${cluster_list_block}
   iptables_jobtype: []
-  noenv_jobtype: []
+  noenv_jobtype:
+${noenv_jobtype_block}
   schedd_host: ${schedd_host}
   cm_host: ${cm_host}
   xrootd_path: ${xrootd_path}
@@ -57,13 +59,15 @@ computing:
   cluster_scripts: ${cluster_scripts}
   nginx_node: ${public_base_url_yaml}
   ink_dir: ${ink_dir}
-  start_keywords: []
+  start_keywords:
+${start_keywords_block}
 
 crond:
   submit_workers: []
   async_submit_retries: 3
 
-jobtype: {}
+jobtype:
+${jobtype_defaults_block}
 
 app:
   plugins: ${app_plugins}
@@ -75,7 +79,7 @@ unified_plugins:
   packages: ${unified_plugin_packages}
 
 service:
-  service_node: ${host_name_yaml}
+  service_node: ${service_node_yaml}
   service_port: ${service_port}
   ink_dir: ${ink_dir}
   monitor_url: ${public_base_url_yaml}

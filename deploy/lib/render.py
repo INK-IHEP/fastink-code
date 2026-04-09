@@ -125,6 +125,93 @@ def yaml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def load_extra_mount_entries(path_value: object) -> list[str]:
+    path_text = str(path_value or "").strip()
+    if not path_text:
+        return []
+
+    mount_file = Path(path_text).expanduser().resolve()
+    if not mount_file.exists():
+        raise FileNotFoundError(f"Extra mount list file not found: {mount_file}")
+
+    entries: list[str] = []
+    for raw_line in mount_file.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            raise ValueError(f"Invalid mount entry (expected host:container[:mode]): {line}")
+        entries.append(line)
+    return entries
+
+
+def parse_mount_entry(entry: str) -> tuple[str, str, str]:
+    parts = entry.split(":")
+    if len(parts) == 2:
+        host_path, container_path = parts
+        mode = ""
+    elif len(parts) == 3:
+        host_path, container_path, mode = parts
+    else:
+        raise ValueError(f"Invalid mount entry (expected host:container[:mode]): {entry}")
+
+    host_path = host_path.strip()
+    container_path = container_path.strip()
+    mode = mode.strip()
+    if not host_path or not container_path:
+        raise ValueError(f"Invalid mount entry (expected host:container[:mode]): {entry}")
+    return host_path, container_path, mode
+
+
+def build_xrootd_vo_entries(extra_mount_entries: list[str]) -> list[str]:
+    seen: set[str] = set()
+    entries: list[str] = []
+    for mount_entry in extra_mount_entries:
+        _, container_path, _ = parse_mount_entry(mount_entry)
+        normalized = container_path.rstrip("/") or "/"
+        if normalized == "/":
+            continue
+        vo_entry = f"{normalized}/"
+        if vo_entry in seen:
+            continue
+        seen.add(vo_entry)
+        entries.append(vo_entry)
+    return entries
+
+
+def render_volume_block(entries: list[str], indent: int = 6) -> str:
+    if not entries:
+        return ""
+    prefix = " " * indent
+    return "\n" + "\n".join(f"{prefix}- {entry}" for entry in entries)
+
+
+def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
+    rendered = yaml.safe_dump(values, sort_keys=False, allow_unicode=True).rstrip()
+    prefix = " " * indent
+    return "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
+
+
+def default_jobtype_config_block(schedd_host: str, cm_host: str, indent: int = 2) -> str:
+    jobtypes = ["vscode", "jupyter", "vnc", "rootbrowse"]
+    payload = {
+        name: {
+            "htc": {
+                "RequestMemory": 6000,
+                "RequestCpus": 1,
+                "walltime": "default",
+                "schedd_host": schedd_host,
+                "cm_host": cm_host,
+                "extra_param": True,
+            }
+        }
+        for name in jobtypes
+    }
+    rendered = yaml.safe_dump(payload, sort_keys=False, allow_unicode=True).rstrip()
+    prefix = " " * indent
+    return "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
+
+
 def render_template_text(path: Path, mapping: dict[str, str]) -> str:
     return Template(path.read_text(encoding="utf-8")).substitute(mapping)
 
@@ -184,6 +271,21 @@ def build_mapping(
     )
     enable_nginx = bool(answers["enable_nginx"])
     enable_xrootd = bool(answers.get("enable_xrootd", False))
+    extra_mount_entries = load_extra_mount_entries(answers.get("extra_mounts_file", ""))
+    extra_mounts_block = render_volume_block(extra_mount_entries)
+    xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
+    schedd_host = str(answers.get("schedd_host", "localhost"))
+    cm_host = str(answers.get("cm_host", "localhost"))
+    cluster_list = ["htcondor"]
+    noenv_jobtype = ["jupyter", "vnc"]
+    start_keywords = [
+        "jupyterlab | extension was successfully loaded.",
+        "Session server listening on",
+        "Starting noVNC proxy on",
+        "SSH server starting",
+        "Start rootbrowse in screen session",
+        "OpenClaw gateway listening on",
+    ]
 
     if enable_nginx:
         server_port_block = '    expose:\n      - "8000"'
@@ -230,6 +332,9 @@ def build_mapping(
         "xrootd_sss_keytab_container_path": "/etc/xrootd/sss.keytab",
         "xrootd_krb5_keytab_host_path": str(paths.get("xrootd_krb5_keytab_path", paths["xrootd_data_dir"] / "krb5.keytab").resolve()),
         "xrootd_krb5_keytab_container_path": "/etc/xrootd/krb5.keytab",
+        "xrootd_vo_list_host_path": str(paths.get("xrootd_vo_list_path", paths["xrootd_data_dir"] / "vo-list.cfg").resolve()),
+        "xrootd_vo_list_container_path": "/etc/xrootd/vo-list.cfg",
+        "xrootd_vo_list_content": "\n".join(xrootd_vo_entries) + ("\n" if xrootd_vo_entries else ""),
         "rootbrowse_authorized_keys_host_path": str(rootbrowse_keys_host_path.resolve()),
         "rootbrowse_authorized_keys_container_path": "/run/fastink/rootbrowse_authorized_keys",
         "timezone": yaml_string("Asia/Shanghai"),
@@ -254,6 +359,10 @@ def build_mapping(
         "rootbrowse_preload_scripts": yaml_string(str(answers["rootbrowse_preload_scripts"])),
         "plugin_pip_packages": yaml_string(str(answers.get("plugin_pip_packages", ""))),
         "plugin_editable_dirs": yaml_string(str(answers.get("plugin_editable_dirs", ""))),
+        "server_extra_mounts_block": extra_mounts_block,
+        "cron_extra_mounts_block": extra_mounts_block,
+        "rootbrowse_extra_mounts_block": extra_mounts_block,
+        "xrootd_extra_mounts_block": extra_mounts_block,
         "krb5_enabled": str(False).lower(),
         "security_access": str(False).lower(),
         "ip_whitelist_access": str(False).lower(),
@@ -267,16 +376,21 @@ def build_mapping(
         "xrd_host": yaml_string("root://fastink-xrootd:1098" if enable_xrootd else "root://127.0.0.1:1094"),
         "max_file_size": str(2147483648),
         "site": yaml_string("generic"),
-        "schedd_host": yaml_string("localhost"),
-        "cm_host": yaml_string("localhost"),
+        "cluster_list_block": render_yaml_list_block(cluster_list),
+        "noenv_jobtype_block": render_yaml_list_block(noenv_jobtype),
+        "schedd_host": yaml_string(schedd_host),
+        "cm_host": yaml_string(cm_host),
         "xrootd_path": yaml_string("root://fastink-xrootd:1098/" if enable_xrootd else "root://127.0.0.1:1094/"),
         "gateway_node": yaml_string("localhost"),
         "cluster_scripts": yaml_string("/ink/src/fastink/computing/scripts"),
-        "ink_dir": yaml_string("/tmp/ink/{user_group}/{username}"),
+        "ink_dir": yaml_string("/home/{username}"),
+        "start_keywords_block": render_yaml_list_block(start_keywords),
+        "jobtype_defaults_block": default_jobtype_config_block(schedd_host, cm_host),
         "app_plugins": yaml_string(""),
         "router_plugins": yaml_string(""),
         "unified_plugin_packages": yaml_string(""),
         "service_port": str(2000),
+        "service_node_yaml": yaml_string("fastink-rootbrowse"),
     }
 
 
@@ -369,4 +483,5 @@ def render_bundle(
         bundle["nginx/default.conf"] = render_nginx_conf(mapping)
     if bool(answers.get("enable_xrootd", False)):
         bundle["xrootd/xrootd-proxy.cfg"] = render_xrootd_conf(mapping)
+        bundle["xrootd/vo-list.cfg"] = str(mapping.get("xrootd_vo_list_content", ""))
     return bundle

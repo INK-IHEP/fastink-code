@@ -45,6 +45,18 @@ or:
 ./deploy/bin/fastink-deploy
 ```
 
+To reuse an existing `.deploy/` directory without rerunning the questionnaire:
+
+```bash
+python deploy/install.py --reuse
+```
+
+To see the CLI help:
+
+```bash
+python deploy/install.py --help
+```
+
 The flow is:
 
 1. Run host prechecks.
@@ -64,6 +76,24 @@ The flow is:
 7. Run `docker build` or `docker pull` for the official images, including the one-shot `fastink-init` image.
 8. Run the one-shot `fastink-init` container to generate deployment assets such as SSH keys, self-signed TLS certificates, and `sss.keytab`.
 9. Run `docker compose up -d` and wait for the health check.
+
+`--reuse` skips steps 2 through 8. It reuses the existing `.deploy/answers.json` and `.deploy/docker-compose.yml`, then runs `docker compose up -d` again with the saved project name.
+
+## Preparation Notes Before Starting The CLI
+
+Before running `python deploy/install.py`, users may want to prepare some optional inputs in advance.
+
+Typical optional inputs include:
+
+- an extra mount list file
+- plugin source or plugin packages
+- preload scripts
+- an existing TLS certificate and private key
+- a Kerberos keytab for xrootd if Kerberos-backed xrootd is required
+
+The installer prints these preparation notes at startup so that users know what can be prepared ahead of time.
+
+If `.deploy/answers.json` already exists, the interactive questionnaire also accepts `r` on prompts to reuse the saved value for that field.
 
 ## Host Commands Required
 
@@ -88,6 +118,50 @@ The host no longer needs these commands just to complete initialization:
 - `xrdsssadmin`
 
 Those are now executed inside the one-shot `fastink-init` container.
+
+## Optional Extra Mount List
+
+The interactive installer now supports an optional extra mount list file.
+
+By default, the installer creates `.deploy/extra-mounts.txt` if it does not already exist. Its initial content is:
+
+```text
+/home/:/home/
+```
+
+If enabled during the questionnaire, the user provides a file path. Each non-empty, non-comment line in that file is treated as a Docker volume rule.
+
+Supported line format:
+
+```text
+/host/path:/container/path
+/host/path:/container/path:ro
+```
+
+Lines starting with `#` are ignored.
+
+A typical suggested location is:
+
+```text
+.deploy/extra-mounts.txt
+```
+
+Current behavior:
+
+- the same extra mounts are applied to:
+  - `fastink-server`
+  - `fastink-redis-cron`
+  - `fastink-rootbrowse`
+  - `fastink-xrootd`
+- this is intended for generic runtime filesystem mounts that should be visible in the main service containers
+
+This mechanism is intentionally simpler than asking users to edit raw compose YAML during the interactive flow.
+
+At the moment, the interactive installer does not provide a dedicated `--set key=value` or "edit one saved parameter" mode. If a user wants to change one parameter only, the current choices are:
+
+- rerun `python deploy/install.py` and answer the questionnaire again
+- edit the generated files under `.deploy/` manually
+- use `python deploy/install.py --reuse` only when the existing `.deploy/` configuration should be reused as-is
 
 ## Profiles And Service Layers
 
@@ -127,6 +201,7 @@ Typical contents include:
 - `preload/`
 - `xrootd/`
 - `nginx/`
+- `extra-mounts.txt` (optional)
 
 The files that users should normally maintain directly are mainly:
 
@@ -134,6 +209,7 @@ The files that users should normally maintain directly are mainly:
 - `plugins/`
 - `preload/`
 - runtime materials under `xrootd/` and `nginx/`
+- `extra-mounts.txt` when extra host paths need to be mounted into the runtime containers
 
 Generated outputs such as `config.yml` and `docker-compose.yml` are better regenerated than edited long-term by hand.
 

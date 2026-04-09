@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import json
 import secrets
 import shutil
@@ -10,6 +11,7 @@ import urllib.error
 import urllib.request
 from getpass import getpass
 from pathlib import Path
+from typing import Optional
 
 from lib.defaults import default_answers, default_image_answers, normalize_answers, required_images
 from lib.host_runtime import check_host_prerequisites
@@ -20,55 +22,111 @@ from lib.render import render_bundle
 DEPLOY_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = DEPLOY_ROOT.parent
 DEPLOY_DIR = REPO_ROOT / ".deploy"
+REUSE_PREVIOUS = "__FASTINK_REUSE_PREVIOUS__"
 
 
 def print_step(message: str) -> None:
     print(f"\n==> {message}")
 
 
-def prompt_text(label: str, default: str = "") -> str:
-    suffix = f" [{default}]" if default else ""
+def ensure_default_extra_mounts_file() -> Path:
+    path = DEPLOY_DIR / "extra-mounts.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text("/home/:/home/\n", encoding="utf-8")
+    return path
+
+
+def print_preparation_notes() -> None:
+    extra_mounts_path = DEPLOY_DIR / "extra-mounts.txt"
+    print_step("Preparation notes")
+    print("Prepare these items before continuing if your deployment needs them:")
+    print(f"- Optional extra mount list file (one mount per line): {extra_mounts_path}")
+    print("  Format: /host/path:/container/path or /host/path:/container/path:ro")
+    print("  These mounts are applied to fastink-server, fastink-redis-cron, fastink-rootbrowse, and fastink-xrootd.")
+    print(f"- Optional plugin source or packages under: {DEPLOY_DIR / 'plugins'}")
+    print(f"- Optional preload scripts under: {DEPLOY_DIR / 'preload'}")
+    print("- Optional existing TLS certificate and private key if you do not want a self-signed certificate.")
+    print("- If xrootd is enabled and Kerberos-backed xrootd is needed, prepare a krb5 keytab to place at .deploy/xrootd/krb5.keytab after initialization.")
+    if (DEPLOY_DIR / "answers.json").exists():
+        print("- During the interactive questionnaire, type 'r' to reuse the saved value from .deploy/answers.json.")
+
+
+def prompt_text(label: str, default: str = "", reuse_value: Optional[str] = None) -> str:
+    suffix_parts: list[str] = []
+    if default:
+        suffix_parts.append(default)
+    if reuse_value is not None:
+        suffix_parts.append("r=reuse saved value")
+    suffix = f" [{', '.join(suffix_parts)}]" if suffix_parts else ""
     value = input(f"{label}{suffix}: ").strip()
+    if reuse_value is not None and value.lower() == "r":
+        return reuse_value
     return value or default
 
 
-def prompt_secret(label: str, default: str = "") -> str:
-    suffix = " [press enter to use generated value]" if default else ""
+def prompt_secret(label: str, default: str = "", reuse_value: Optional[str] = None) -> str:
+    suffix_parts: list[str] = []
+    if default:
+        suffix_parts.append("press enter to use generated value")
+    if reuse_value is not None:
+        suffix_parts.append("r=reuse saved value")
+    suffix = f" [{' ; '.join(suffix_parts)}]" if suffix_parts else ""
     value = getpass(f"{label}{suffix}: ").strip()
+    if reuse_value is not None and value.lower() == "r":
+        return reuse_value
     return value or default
 
 
-def prompt_bool(label: str, default: bool = False) -> bool:
+def prompt_bool(label: str, default: bool = False, reuse_value: Optional[bool] = None) -> bool:
     default_hint = "Y/n" if default else "y/N"
+    if reuse_value is not None:
+        saved_hint = "Y" if reuse_value else "N"
+        default_hint = f"{default_hint}, r=reuse saved {saved_hint}"
     while True:
         value = input(f"{label} [{default_hint}]: ").strip().lower()
         if not value:
             return default
+        if reuse_value is not None and value == "r":
+            return reuse_value
         if value in {"y", "yes"}:
             return True
         if value in {"n", "no"}:
             return False
-        print("Please answer y or n.")
+        if reuse_value is not None:
+            print("Please answer y, n, or r.")
+        else:
+            print("Please answer y or n.")
 
 
-def prompt_int(label: str, default: int) -> int:
+def prompt_int(label: str, default: int, reuse_value: Optional[int] = None) -> int:
     while True:
-        value = prompt_text(label, str(default))
+        value = prompt_text(
+            label,
+            str(default),
+            str(reuse_value) if reuse_value is not None else None,
+        )
         try:
             return int(value)
         except ValueError:
             print("Please enter a valid integer.")
 
 
-def prompt_choice(label: str, options: list[str], default: str) -> str:
+def prompt_choice(label: str, options: list[str], default: str, reuse_value: Optional[str] = None) -> str:
     options_display = "/".join(options)
     while True:
-        value = input(f"{label} [{options_display}] (default: {default}): ").strip().lower()
+        reuse_hint = f", r=reuse saved {reuse_value}" if reuse_value is not None else ""
+        value = input(f"{label} [{options_display}] (default: {default}{reuse_hint}): ").strip().lower()
         if not value:
             return default
+        if reuse_value is not None and value == "r":
+            return reuse_value
         if value in options:
             return value
-        print(f"Please choose one of: {options_display}")
+        if reuse_value is not None:
+            print(f"Please choose one of: {options_display}, or r.")
+        else:
+            print(f"Please choose one of: {options_display}")
 
 
 def run_command(cmd: list[str], cwd: Path = REPO_ROOT) -> None:
@@ -82,6 +140,18 @@ def check_prerequisites() -> None:
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
         sys.exit(1)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Interactive installer for the generic FastINK deployment bundle."
+    )
+    parser.add_argument(
+        "--reuse",
+        action="store_true",
+        help="Reuse the existing .deploy answers and docker-compose files, then start services without rerunning the interactive questionnaire.",
+    )
+    return parser.parse_args()
 
 
 def write_file(path: Path, content: str) -> None:
@@ -215,51 +285,132 @@ def wait_for_health(url: str, timeout_seconds: int = 90) -> bool:
     return False
 
 
-def collect_answers() -> dict[str, object]:
+def load_saved_answers() -> dict[str, object]:
+    answers_path = DEPLOY_DIR / "answers.json"
+    if not answers_path.exists():
+        print(f"Saved answers file not found: {answers_path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        answers = json.loads(answers_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"Failed to parse saved answers file {answers_path}: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finalize_mount_answers(answers)
+    profile = str(answers.get("profile") or "minimal")
+    return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
+
+
+def try_load_saved_answers() -> Optional[dict[str, object]]:
+    answers_path = DEPLOY_DIR / "answers.json"
+    if not answers_path.exists():
+        return None
+    try:
+        answers = json.loads(answers_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    finalize_mount_answers(answers)
+    profile = str(answers.get("profile") or "minimal")
+    return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
+
+
+def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
+    _, paths = build_runtime_paths(
+        output_dir=DEPLOY_DIR,
+        data_root=Path(answers["data_root"]),
+        enable_nginx=bool(answers["enable_nginx"]),
+        enable_xrootd=bool(answers.get("enable_xrootd", False)),
+        db_data_dir=Path(answers["data_root"]) / "db",
+        redis_data_dir=Path(answers["data_root"]) / "redis",
+        etc_init_dir=Path(answers["data_root"]) / "etc-init",
+        tmp_dir=Path(answers["data_root"]) / "tmp",
+        plugins_dir=DEPLOY_DIR / "plugins",
+        keys_dir=DEPLOY_DIR / "keys",
+        preload_server_dir=DEPLOY_DIR / "preload" / "server",
+        preload_cron_dir=DEPLOY_DIR / "preload" / "cron",
+        preload_rootbrowse_dir=DEPLOY_DIR / "preload" / "rootbrowse",
+    )
+    annotate_runtime_asset_paths(paths)
+    return paths
+
+
+def finalize_mount_answers(answers: dict[str, object]) -> dict[str, object]:
+    if bool(answers.get("enable_xrootd")) and not str(answers.get("extra_mounts_file") or "").strip():
+        answers["extra_mounts_file"] = str(ensure_default_extra_mounts_file().resolve())
+    return answers
+
+
+def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dict[str, object]:
     print_step("Choose deployment profile")
-    profile = prompt_choice("Deployment profile", ["minimal", "full"], "minimal")
+    profile = prompt_choice(
+        "Deployment profile",
+        ["minimal", "full"],
+        "minimal",
+        str(previous_answers["profile"]) if previous_answers and previous_answers.get("profile") else None,
+    )
     defaults = default_answers(profile, DEPLOY_DIR)
 
     print_step("Choose image source")
-    image_source = prompt_choice("Image source", ["build", "pull"], str(defaults["image_source"]))
+    image_source = prompt_choice(
+        "Image source",
+        ["build", "pull"],
+        str(defaults["image_source"]),
+        str(previous_answers["image_source"]) if previous_answers and previous_answers.get("image_source") else None,
+    )
     image_defaults = default_image_answers(image_source)
 
     if image_source == "build":
-        server_image = prompt_text("Server image tag", str(image_defaults["server_image"]))
-        cron_image = prompt_text("Cron image tag", str(image_defaults["cron_image"]))
-        rootbrowse_image = prompt_text("Rootbrowse image tag", str(image_defaults["rootbrowse_image"]))
+        server_image = prompt_text("Server image tag", str(image_defaults["server_image"]), str(previous_answers["server_image"]) if previous_answers and previous_answers.get("server_image") else None)
+        cron_image = prompt_text("Cron image tag", str(image_defaults["cron_image"]), str(previous_answers["cron_image"]) if previous_answers and previous_answers.get("cron_image") else None)
+        rootbrowse_image = prompt_text("Rootbrowse image tag", str(image_defaults["rootbrowse_image"]), str(previous_answers["rootbrowse_image"]) if previous_answers and previous_answers.get("rootbrowse_image") else None)
     else:
-        server_image = prompt_text("Server image reference", str(image_defaults["server_image"]))
-        cron_image = prompt_text("Cron image reference", str(image_defaults["cron_image"]))
-        rootbrowse_image = prompt_text("Rootbrowse image reference", str(image_defaults["rootbrowse_image"]))
-    xrootd_image = prompt_text("Xrootd image reference", str(image_defaults["xrootd_image"]))
+        server_image = prompt_text("Server image reference", str(image_defaults["server_image"]), str(previous_answers["server_image"]) if previous_answers and previous_answers.get("server_image") else None)
+        cron_image = prompt_text("Cron image reference", str(image_defaults["cron_image"]), str(previous_answers["cron_image"]) if previous_answers and previous_answers.get("cron_image") else None)
+        rootbrowse_image = prompt_text("Rootbrowse image reference", str(image_defaults["rootbrowse_image"]), str(previous_answers["rootbrowse_image"]) if previous_answers and previous_answers.get("rootbrowse_image") else None)
+    xrootd_image = prompt_text("Xrootd image reference", str(image_defaults["xrootd_image"]), str(previous_answers["xrootd_image"]) if previous_answers and previous_answers.get("xrootd_image") else None)
 
     print_step("Basic deployment settings")
-    project_name = prompt_text("Compose project name", str(defaults["project_name"]))
-    data_root = Path(prompt_text("Data directory", str(defaults["data_root"]))).resolve()
-    enable_nginx = prompt_bool("Enable nginx HTTPS reverse proxy", bool(defaults["enable_nginx"]))
-    enable_xrootd = prompt_bool("Enable local xrootd service", bool(defaults["enable_xrootd"]))
-    host_name = prompt_text("Public host name", str(defaults["host_name"]))
+    project_name = prompt_text("Compose project name", str(defaults["project_name"]), str(previous_answers["project_name"]) if previous_answers and previous_answers.get("project_name") else None)
+    data_root = Path(
+        prompt_text(
+            "Data directory",
+            str(defaults["data_root"]),
+            str(previous_answers["data_root"]) if previous_answers and previous_answers.get("data_root") else None,
+        )
+    ).resolve()
+    enable_nginx = prompt_bool("Enable nginx HTTPS reverse proxy", bool(defaults["enable_nginx"]), bool(previous_answers["enable_nginx"]) if previous_answers and previous_answers.get("enable_nginx") is not None else None)
+    enable_xrootd = prompt_bool("Enable xrootd service container", bool(defaults["enable_xrootd"]), bool(previous_answers["enable_xrootd"]) if previous_answers and previous_answers.get("enable_xrootd") is not None else None)
+    host_name = prompt_text("Public host name", str(defaults["host_name"]), str(previous_answers["host_name"]) if previous_answers and previous_answers.get("host_name") else None)
     host_port_default = 443 if enable_nginx and int(defaults["host_port"]) == 8000 else int(defaults["host_port"])
-    host_port = prompt_int("Public HTTPS port" if enable_nginx else "Public port", host_port_default)
-    rootbrowse_port = prompt_int("Rootbrowse port", int(defaults["rootbrowse_port"]))
-    xrootd_port = prompt_int("Xrootd port", int(defaults["xrootd_port"]))
-    workers = prompt_int("Uvicorn workers in production mode", int(defaults["workers"]))
-    ink_production = prompt_bool("Run FastINK in production mode", bool(defaults["ink_production"]))
-    init_database = prompt_bool("Initialize database on container start", bool(defaults["init_database"]))
+    host_port = prompt_int("Public HTTPS port" if enable_nginx else "Public port", host_port_default, int(previous_answers["host_port"]) if previous_answers and previous_answers.get("host_port") is not None else None)
+    rootbrowse_port = prompt_int("Rootbrowse port", int(defaults["rootbrowse_port"]), int(previous_answers["rootbrowse_port"]) if previous_answers and previous_answers.get("rootbrowse_port") is not None else None)
+    xrootd_port = prompt_int("Xrootd port", int(defaults["xrootd_port"]), int(previous_answers["xrootd_port"]) if previous_answers and previous_answers.get("xrootd_port") is not None else None)
+    schedd_host = prompt_text("HTCondor schedd host", str(defaults["schedd_host"]), str(previous_answers["schedd_host"]) if previous_answers and previous_answers.get("schedd_host") else None)
+    cm_host = prompt_text("HTCondor collector/CM host", str(defaults["cm_host"]), str(previous_answers["cm_host"]) if previous_answers and previous_answers.get("cm_host") else None)
+    ink_production = prompt_bool("Run FastINK in production mode", bool(defaults["ink_production"]), bool(previous_answers["ink_production"]) if previous_answers and previous_answers.get("ink_production") is not None else None)
+    workers = int(defaults["workers"])
+    if ink_production:
+        workers = prompt_int("Uvicorn workers in production mode", int(defaults["workers"]), int(previous_answers["workers"]) if previous_answers and previous_answers.get("workers") is not None else None)
+    init_database = prompt_bool("Initialize database on container start", bool(defaults["init_database"]), bool(previous_answers["init_database"]) if previous_answers and previous_answers.get("init_database") is not None else None)
 
     nginx_cert_source_path = ""
     nginx_key_source_path = ""
-    if enable_nginx and prompt_bool("Use an existing TLS certificate and key", False):
-        nginx_cert_source_path = prompt_text("TLS certificate path")
-        nginx_key_source_path = prompt_text("TLS private key path")
+    extra_mounts_file_default = str((DEPLOY_DIR / "extra-mounts.txt").resolve())
+    extra_mounts_file = ""
+    previous_extra_mounts = str(previous_answers["extra_mounts_file"]) if previous_answers and previous_answers.get("extra_mounts_file") else None
+    if prompt_bool("Use an extra mount list file", False, bool(previous_extra_mounts) if previous_extra_mounts is not None else None):
+        ensure_default_extra_mounts_file()
+        extra_mounts_file = prompt_text("Extra mount list file path", extra_mounts_file_default, previous_extra_mounts)
+    previous_has_tls = bool(previous_answers and previous_answers.get("nginx_cert_source_path") and previous_answers.get("nginx_key_source_path"))
+    if enable_nginx and prompt_bool("Use an existing TLS certificate and key", False, previous_has_tls if previous_answers is not None else None):
+        nginx_cert_source_path = prompt_text("TLS certificate path", "", str(previous_answers["nginx_cert_source_path"]) if previous_answers and previous_answers.get("nginx_cert_source_path") else None)
+        nginx_key_source_path = prompt_text("TLS private key path", "", str(previous_answers["nginx_key_source_path"]) if previous_answers and previous_answers.get("nginx_key_source_path") else None)
 
     print_step("Runtime credentials")
-    db_name = prompt_text("Database name", str(defaults["db_name"]))
-    db_user = prompt_text("Database user", str(defaults["db_user"]))
-    db_root_password = prompt_secret("Database root password", secrets.token_urlsafe(18))
-    db_password = prompt_secret("Database user password", secrets.token_urlsafe(18))
-    redis_password = prompt_secret("Redis password", secrets.token_urlsafe(18))
+    db_name = prompt_text("Database name", str(defaults["db_name"]), str(previous_answers["db_name"]) if previous_answers and previous_answers.get("db_name") else None)
+    db_user = prompt_text("Database user", str(defaults["db_user"]), str(previous_answers["db_user"]) if previous_answers and previous_answers.get("db_user") else None)
+    db_root_password = prompt_secret("Database root password", secrets.token_urlsafe(18), str(previous_answers["db_root_password"]) if previous_answers and previous_answers.get("db_root_password") else None)
+    db_password = prompt_secret("Database user password", secrets.token_urlsafe(18), str(previous_answers["db_password"]) if previous_answers and previous_answers.get("db_password") else None)
+    redis_password = prompt_secret("Redis password", secrets.token_urlsafe(18), str(previous_answers["redis_password"]) if previous_answers and previous_answers.get("redis_password") else None)
 
     answers = {
         "profile": profile,
@@ -276,6 +427,8 @@ def collect_answers() -> dict[str, object]:
         "host_port": host_port,
         "rootbrowse_port": rootbrowse_port,
         "xrootd_port": xrootd_port,
+        "schedd_host": schedd_host,
+        "cm_host": cm_host,
         "workers": workers,
         "ink_production": ink_production,
         "init_database": init_database,
@@ -286,6 +439,7 @@ def collect_answers() -> dict[str, object]:
         "redis_password": redis_password,
         "plugin_pip_packages": str(defaults["plugin_pip_packages"]),
         "plugin_editable_dirs": str(defaults["plugin_editable_dirs"]),
+        "extra_mounts_file": extra_mounts_file,
         "server_preload_script_dirs": str(defaults["server_preload_script_dirs"]),
         "server_preload_scripts": str(defaults["server_preload_scripts"]),
         "cron_preload_script_dirs": str(defaults["cron_preload_script_dirs"]),
@@ -295,6 +449,7 @@ def collect_answers() -> dict[str, object]:
         "nginx_cert_source_path": nginx_cert_source_path,
         "nginx_key_source_path": nginx_key_source_path,
     }
+    finalize_mount_answers(answers)
     return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
 
 
@@ -373,50 +528,46 @@ def deploy_stack(answers: dict[str, object]) -> None:
 
 
 def main() -> None:
+    args = parse_args()
     check_prerequisites()
+    if args.reuse:
+        print_step("Reuse existing deployment")
+        answers = load_saved_answers()
+        paths = build_paths_from_answers(answers)
+        nginx_notes: list[str] = []
+        xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
+        deploy_stack(answers)
+    else:
+        print_preparation_notes()
+        previous_answers = try_load_saved_answers()
 
-    if DEPLOY_DIR.exists() and any(DEPLOY_DIR.iterdir()):
-        overwrite = prompt_bool(f"{DEPLOY_DIR} already exists. Overwrite generated files", True)
-        if not overwrite:
-            print("Aborted.")
-            sys.exit(0)
+        if DEPLOY_DIR.exists() and any(DEPLOY_DIR.iterdir()):
+            overwrite = prompt_bool(f"{DEPLOY_DIR} already exists. Overwrite generated files", True)
+            if not overwrite:
+                print("Aborted.")
+                sys.exit(0)
 
-    answers = collect_answers()
-    _, paths = build_runtime_paths(
-        output_dir=DEPLOY_DIR,
-        data_root=Path(answers["data_root"]),
-        enable_nginx=bool(answers["enable_nginx"]),
-        enable_xrootd=bool(answers.get("enable_xrootd", False)),
-        db_data_dir=Path(answers["data_root"]) / "db",
-        redis_data_dir=Path(answers["data_root"]) / "redis",
-        etc_init_dir=Path(answers["data_root"]) / "etc-init",
-        tmp_dir=Path(answers["data_root"]) / "tmp",
-        plugins_dir=DEPLOY_DIR / "plugins",
-        keys_dir=DEPLOY_DIR / "keys",
-        preload_server_dir=DEPLOY_DIR / "preload" / "server",
-        preload_cron_dir=DEPLOY_DIR / "preload" / "cron",
-        preload_rootbrowse_dir=DEPLOY_DIR / "preload" / "rootbrowse",
-    )
-    annotate_runtime_asset_paths(paths)
+        answers = collect_answers(previous_answers=previous_answers)
+        paths = build_paths_from_answers(answers)
 
-    nginx_notes = stage_nginx_tls_material(answers, paths)
-    xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
+        nginx_notes = stage_nginx_tls_material(answers, paths)
+        xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
 
-    print_step("Render deployment files")
-    bundle = render_bundle(
-        str(answers["profile"]),
-        answers,
-        paths,
-        DEPLOY_DIR,
-        initialize_host_assets=False,
-    )
-    for relative_path, content in bundle.items():
-        write_file(DEPLOY_DIR / relative_path, content)
-    write_file(DEPLOY_DIR / "answers.json", json.dumps(answers, indent=2, default=str))
+        print_step("Render deployment files")
+        bundle = render_bundle(
+            str(answers["profile"]),
+            answers,
+            paths,
+            DEPLOY_DIR,
+            initialize_host_assets=False,
+        )
+        for relative_path, content in bundle.items():
+            write_file(DEPLOY_DIR / relative_path, content)
+        write_file(DEPLOY_DIR / "answers.json", json.dumps(answers, indent=2, default=str))
 
-    build_or_pull_images(answers)
-    run_init_container(answers, paths)
-    deploy_stack(answers)
+        build_or_pull_images(answers)
+        run_init_container(answers, paths)
+        deploy_stack(answers)
 
     public_base_url = str(answers["public_base_url"])
     health_url = f"{public_base_url}/health"

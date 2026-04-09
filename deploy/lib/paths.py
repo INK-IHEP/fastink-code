@@ -56,6 +56,7 @@ def build_runtime_paths(
         paths['xrootd_dir'] = (output_dir / 'xrootd').resolve()
         paths['xrootd_sss_keytab_path'] = (paths['xrootd_dir'] / 'sss.keytab').resolve()
         paths['xrootd_krb5_keytab_path'] = (paths['xrootd_dir'] / 'krb5.keytab').resolve()
+        paths['xrootd_vo_list_path'] = (paths['xrootd_dir'] / 'vo-list.cfg').resolve()
 
     for key, path in paths.items():
         if key.endswith('_path'):
@@ -74,6 +75,10 @@ def build_runtime_paths(
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
             target.touch()
+        vo_list_target = paths['xrootd_vo_list_path']
+        vo_list_target.parent.mkdir(parents=True, exist_ok=True)
+        if not vo_list_target.exists():
+            vo_list_target.touch()
 
     resolved_rootbrowse_keys = (
         rootbrowse_authorized_keys_path or (paths['keys_dir'] / 'rootbrowse_authorized_keys')

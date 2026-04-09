@@ -29,6 +29,7 @@ services:
       - ${etc_init_dir}:/etc-init
       - ${plugins_dir}:/plugins
       - ${preload_cron_dir}:/opt/preload/cron:ro
+${cron_extra_mounts_block}
 
   fastink-rootbrowse:
     image: ${rootbrowse_image}
@@ -45,6 +46,7 @@ services:
       - ${etc_init_dir}:/etc-init
       - ${rootbrowse_authorized_keys_host_path}:${rootbrowse_authorized_keys_container_path}:ro
       - ${preload_rootbrowse_dir}:/opt/preload/rootbrowse:ro
+${rootbrowse_extra_mounts_block}
     ports:
       - "${rootbrowse_port}:${rootbrowse_container_port}"
     tmpfs:

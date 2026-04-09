@@ -13,6 +13,8 @@ services:
       - ${xrootd_conf_path}:/opt/fastink-xrootd/xrootd-proxy.cfg:ro
       - ${xrootd_sss_keytab_host_path}:${xrootd_sss_keytab_container_path}:ro
       - ${xrootd_krb5_keytab_host_path}:${xrootd_krb5_keytab_container_path}:ro
+      - ${xrootd_vo_list_host_path}:${xrootd_vo_list_container_path}:ro
+${xrootd_extra_mounts_block}
     environment:
       XC_ENABLE_MULTIUSER: "1"
     command: >-
