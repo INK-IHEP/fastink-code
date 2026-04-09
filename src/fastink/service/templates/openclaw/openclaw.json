@@ -39,6 +39,10 @@
     },
     "tools": {
         "profile": "coding",
+        "exec": {
+            "security": "allowlist",
+            "ask": "on-miss"
+        },
         "elevated": {
             "enabled": true
         }
