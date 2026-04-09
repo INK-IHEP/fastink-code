@@ -10,6 +10,18 @@ log() {
     echo "[$(timestamp)] [openclaw-run] $*"
 }
 
+log_multiline() {
+    local prefix=$1
+    local content=${2:-}
+    if [ -z "${content}" ]; then
+        log "${prefix}: <empty>"
+        return 0
+    fi
+    while IFS= read -r line; do
+        log "${prefix}: ${line}"
+    done <<< "${content}"
+}
+
 APP_PATH=${1}
 OPENCLAW_USER_ROOT=${2}
 OPENCLAW_DIR=${3}
@@ -97,7 +109,7 @@ select_app_port() {
     get_free_port
 }
 
-all_config_models_are_local_only() {
+inspect_config_models() {
     OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" LOCAL_MODEL_BASE_URL="${LOCAL_MODEL_BASE_URL}" python3 - <<'PY'
 import json
 import os
@@ -109,39 +121,52 @@ local_base_url = os.environ["LOCAL_MODEL_BASE_URL"].rstrip("/")
 try:
     payload = json.loads(config_path.read_text(encoding="utf-8"))
 except Exception:
-    print("false")
+    print("error=failed to parse openclaw.json")
+    print("RESULT=false")
     raise SystemExit(0)
 
 providers = payload.get("models", {}).get("providers")
 if not isinstance(providers, dict):
-    print("false")
+    print("error=models.providers is not a dict")
+    print("RESULT=false")
     raise SystemExit(0)
 
 has_model = False
 for provider in providers.values():
     if not isinstance(provider, dict):
-        print("false")
+        print("error=provider entry is not a dict")
+        print("RESULT=false")
         raise SystemExit(0)
     provider_base_url = str(provider.get("baseUrl", "")).rstrip("/")
     models = provider.get("models")
     if not isinstance(models, list):
-        print("false")
+        print(f"provider_base_url={provider_base_url} models_type=invalid")
+        print("RESULT=false")
         raise SystemExit(0)
     for model in models:
         if not isinstance(model, dict):
-            print("false")
+            print(f"provider_base_url={provider_base_url} model_type=invalid")
+            print("RESULT=false")
             raise SystemExit(0)
         has_model = True
         model_id = str(model.get("id", ""))
-        if provider_base_url != local_base_url or not model_id.startswith("hepai/"):
-            print("false")
+        is_local = provider_base_url == local_base_url and model_id.startswith("hepai/")
+        print(f"provider_base_url={provider_base_url} model_id={model_id} local_only={str(is_local).lower()}")
+        if not is_local:
+            print("RESULT=false")
             raise SystemExit(0)
 
-print("true" if has_model else "false")
+print("RESULT=true" if has_model else "RESULT=false")
 PY
 }
 
-all_agent_models_are_local_only() {
+all_config_models_are_local_only() {
+    local report
+    report="$(inspect_config_models)"
+    printf '%s\n' "${report}" | awk -F= '/^RESULT=/{print $2}' | tail -n 1
+}
+
+inspect_agent_models() {
     OPENCLAW_DIR="${OPENCLAW_DIR}" LOCAL_MODEL_BASE_URL="${LOCAL_MODEL_BASE_URL}" python3 - <<'PY'
 import json
 import os
@@ -153,7 +178,8 @@ agents_dir = openclaw_dir / "agents"
 model_files = sorted(agents_dir.glob("*/agent/models.json"))
 
 if not model_files:
-    print("false")
+    print("error=no agent models.json found")
+    print("RESULT=false")
     raise SystemExit(0)
 
 has_model = False
@@ -161,34 +187,41 @@ for model_file in model_files:
     try:
         payload = json.loads(model_file.read_text(encoding="utf-8"))
     except Exception:
-        print("false")
+        print(f"file={model_file} error=failed to parse")
+        print("RESULT=false")
         raise SystemExit(0)
 
     providers = payload.get("providers")
     if not isinstance(providers, dict):
-        print("false")
+        print(f"file={model_file} error=providers is not a dict")
+        print("RESULT=false")
         raise SystemExit(0)
 
     for provider in providers.values():
         if not isinstance(provider, dict):
-            print("false")
+            print(f"file={model_file} error=provider entry is not a dict")
+            print("RESULT=false")
             raise SystemExit(0)
         provider_base_url = str(provider.get("baseUrl", "")).rstrip("/")
         models = provider.get("models")
         if not isinstance(models, list):
-            print("false")
+            print(f"file={model_file} provider_base_url={provider_base_url} models_type=invalid")
+            print("RESULT=false")
             raise SystemExit(0)
         for model in models:
             if not isinstance(model, dict):
-                print("false")
+                print(f"file={model_file} provider_base_url={provider_base_url} model_type=invalid")
+                print("RESULT=false")
                 raise SystemExit(0)
             has_model = True
             model_id = str(model.get("id", ""))
-            if provider_base_url != local_base_url or not model_id.startswith("hepai/"):
-                print("false")
+            is_local = provider_base_url == local_base_url and model_id.startswith("hepai/")
+            print(f"file={model_file} provider_base_url={provider_base_url} model_id={model_id} local_only={str(is_local).lower()}")
+            if not is_local:
+                print("RESULT=false")
                 raise SystemExit(0)
 
-print("true" if has_model else "false")
+print("RESULT=true" if has_model else "RESULT=false")
 PY
 }
 
@@ -204,19 +237,65 @@ resolve_extra_readonly_binds() {
     esac
 }
 
-monitor_agent_models() {
+run_openclaw_command() {
+    "${APPTAINER_BIN}" run \
+        --containall \
+        --home "${OPENCLAW_USER_ROOT}" \
+        --bind "${OPENCLAW_DIR}:/workspace:rw" \
+        --bind /cvmfs:/cvmfs:ro \
+        --bind "${OPENCLAW_USER_ROOT}:${OPENCLAW_USER_ROOT}:rw" \
+        "${EXTRA_BINDS[@]}" \
+        "${OPENCLAW_IMAGE}" openclaw "$@"
+}
+
+extract_pending_device_count() {
+    sed -n 's/^Pending (\([0-9][0-9]*\)).*/\1/p' | tail -n 1
+}
+
+monitor_openclaw_runtime() {
     local app_pid=$1
+    local enforce_local_only=$2
+    local agent_report agent_local_only devices_output devices_rc pending_count approve_output approve_rc
     while kill -0 "${app_pid}" 2>/dev/null; do
         sleep "${MODEL_CHECK_INTERVAL}"
         if ! kill -0 "${app_pid}" 2>/dev/null; then
             break
         fi
-        if [ "$(all_agent_models_are_local_only)" != "true" ]; then
+
+        log "monitor tick: checking agent models"
+        agent_report="$(inspect_agent_models)"
+        log_multiline "agent-models" "${agent_report}"
+        agent_local_only="$(printf '%s\n' "${agent_report}" | awk -F= '/^RESULT=/{print $2}' | tail -n 1)"
+
+        if [ "${enforce_local_only}" = "true" ] && [ "${agent_local_only}" != "true" ]; then
             log "detected non-local model during runtime; stopping openclaw gateway"
             kill "${app_pid}" 2>/dev/null || true
             sleep 2
             kill -9 "${app_pid}" 2>/dev/null || true
             exit 0
+        fi
+
+        log "monitor tick: checking openclaw devices list"
+        if devices_output="$(run_openclaw_command devices list 2>&1)"; then
+            devices_rc=0
+        else
+            devices_rc=$?
+        fi
+        log "devices list exit_code=${devices_rc}"
+        log_multiline "devices-list" "${devices_output}"
+
+        pending_count="$(printf '%s\n' "${devices_output}" | extract_pending_device_count)"
+        if [ -n "${pending_count}" ] && [ "${pending_count}" -gt 0 ]; then
+            log "pending device requests detected: ${pending_count}; running approve"
+            if approve_output="$(run_openclaw_command devices approve 2>&1)"; then
+                approve_rc=0
+            else
+                approve_rc=$?
+            fi
+            log "devices approve exit_code=${approve_rc}"
+            log_multiline "devices-approve" "${approve_output}"
+        else
+            log "no pending device requests detected"
         fi
     done
 }
@@ -249,9 +328,12 @@ fi
 APP_PORT=$(select_app_port)
 APP_BASE_PATH="/openclaw/${APP_RUN_HOST}/${APP_PORT}/${OPENCLAW_USER}/"
 LOCAL_ONLY_MODELS="false"
+CONFIG_MODEL_REPORT=""
 EXTRA_BINDS=()
 
-if [ "$(all_config_models_are_local_only)" = "true" ]; then
+CONFIG_MODEL_REPORT="$(inspect_config_models)"
+log_multiline "config-models" "${CONFIG_MODEL_REPORT}"
+if [ "$(printf '%s\n' "${CONFIG_MODEL_REPORT}" | awk -F= '/^RESULT=/{print $2}' | tail -n 1)" = "true" ]; then
     LOCAL_ONLY_MODELS="true"
     while IFS= read -r bind_entry; do
         [ -n "${bind_entry}" ] || continue
@@ -316,24 +398,15 @@ log "wrote app_login.info"
 (
     cd "${OPENCLAW_DIR}"
     log "launching apptainer from $(pwd)"
-    "${APPTAINER_BIN}" run \
-        --containall \
-        --home "${OPENCLAW_USER_ROOT}" \
-        --bind "${OPENCLAW_DIR}:/workspace:rw" \
-        --bind /cvmfs:/cvmfs:ro \
-        --bind "${OPENCLAW_USER_ROOT}:${OPENCLAW_USER_ROOT}:rw" \
-        "${EXTRA_BINDS[@]}" \
-        "${OPENCLAW_IMAGE}" openclaw gateway
+    run_openclaw_command gateway
 ) 2>&1 &
 APP_PID=$!
 log "spawned background pid=${APP_PID}"
 
 MONITOR_PID=""
-if [ "${LOCAL_ONLY_MODELS}" = "true" ]; then
-    monitor_agent_models "${APP_PID}" &
-    MONITOR_PID=$!
-    log "started model monitor pid=${MONITOR_PID}"
-fi
+monitor_openclaw_runtime "${APP_PID}" "${LOCAL_ONLY_MODELS}" &
+MONITOR_PID=$!
+log "started runtime monitor pid=${MONITOR_PID} enforce_local_only=${LOCAL_ONLY_MODELS}"
 
 READY=0
 for _ in $(seq 1 60); do
