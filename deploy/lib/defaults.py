@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "ink_production", "init_database"}
+BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "enable_local_htcondor", "ink_production", "init_database"}
 INT_FIELDS = {"host_port", "rootbrowse_port", "xrootd_port", "workers"}
 
 DEFAULT_BUILD_IMAGES = {
@@ -11,6 +11,7 @@ DEFAULT_BUILD_IMAGES = {
     "server_image": "fastink-server:local",
     "cron_image": "fastink-redis-cron:local",
     "rootbrowse_image": "fastink-rootbrowse:local",
+    "htcondor_image": "fastink-htcondor:local",
     "xrootd_image": "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3",
 }
 
@@ -19,6 +20,7 @@ DEFAULT_PULL_IMAGES = {
     "server_image": "dockerhub.ihep.ac.cn/ink/fastink-server:latest",
     "cron_image": "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest",
     "rootbrowse_image": "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest",
+    "htcondor_image": "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest",
     "xrootd_image": "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3",
 }
 
@@ -54,10 +56,12 @@ PROFILE_DEFAULTS = {
     "minimal": {
         "enable_nginx": False,
         "enable_xrootd": False,
+        "enable_local_htcondor": False,
     },
     "full": {
         "enable_nginx": True,
         "enable_xrootd": True,
+        "enable_local_htcondor": False,
     },
 }
 
@@ -147,4 +151,6 @@ def required_images(answers: dict[str, Any]) -> list[tuple[str, str]]:
     ]
     if answers.get("enable_xrootd"):
         images.append(("xrootd", str(answers["xrootd_image"])))
+    if answers.get("enable_local_htcondor"):
+        images.append(("htcondor", str(answers["htcondor_image"])))
     return images

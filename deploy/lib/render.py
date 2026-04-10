@@ -271,11 +271,12 @@ def build_mapping(
     )
     enable_nginx = bool(answers["enable_nginx"])
     enable_xrootd = bool(answers.get("enable_xrootd", False))
+    enable_local_htcondor = bool(answers.get("enable_local_htcondor", False))
     extra_mount_entries = load_extra_mount_entries(answers.get("extra_mounts_file", ""))
     extra_mounts_block = render_volume_block(extra_mount_entries)
     xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
-    schedd_host = str(answers.get("schedd_host", "localhost"))
-    cm_host = str(answers.get("cm_host", "localhost"))
+    schedd_host = "fastink-htcondor" if enable_local_htcondor else str(answers.get("schedd_host", "localhost"))
+    cm_host = "fastink-htcondor" if enable_local_htcondor else str(answers.get("cm_host", "localhost"))
     cluster_list = ["htcondor"]
     noenv_jobtype = ["jupyter", "vnc"]
     start_keywords = [
@@ -298,9 +299,11 @@ def build_mapping(
         "server_image_raw": str(answers["server_image"]),
         "cron_image_raw": str(answers["cron_image"]),
         "rootbrowse_image_raw": str(answers["rootbrowse_image"]),
+        "htcondor_image_raw": str(answers.get("htcondor_image", "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest")),
         "server_image": yaml_string(str(answers["server_image"])),
         "cron_image": yaml_string(str(answers["cron_image"])),
         "rootbrowse_image": yaml_string(str(answers["rootbrowse_image"])),
+        "htcondor_image": yaml_string(str(answers.get("htcondor_image", "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest"))),
         "project_name": str(answers["project_name"]),
         "public_base_url": str(answers["public_base_url"]),
         "db_name": str(answers["db_name"]),
@@ -363,6 +366,7 @@ def build_mapping(
         "cron_extra_mounts_block": extra_mounts_block,
         "rootbrowse_extra_mounts_block": extra_mounts_block,
         "xrootd_extra_mounts_block": extra_mounts_block,
+        "htcondor_extra_mounts_block": extra_mounts_block,
         "krb5_enabled": str(False).lower(),
         "security_access": str(False).lower(),
         "ip_whitelist_access": str(False).lower(),
@@ -391,6 +395,8 @@ def build_mapping(
         "unified_plugin_packages": yaml_string(""),
         "service_port": str(2000),
         "service_node_yaml": yaml_string("fastink-rootbrowse"),
+        "enable_local_htcondor": str(enable_local_htcondor).lower(),
+        "htcondor_host_name": yaml_string("fastink-htcondor"),
     }
 
 
@@ -436,6 +442,11 @@ def render_compose(
         merged = deep_merge(
             merged,
             render_yaml_template(TEMPLATE_ROOT / "extras" / "xrootd.compose.yml.tpl", mapping),
+        )
+    if bool(mapping.get("enable_local_htcondor", "false") == "true"):
+        merged = deep_merge(
+            merged,
+            render_yaml_template(TEMPLATE_ROOT / "extras" / "htcondor.compose.yml.tpl", mapping),
         )
     for overlay_path in extra_overlays or []:
         merged = deep_merge(merged, load_yaml_file(overlay_path))

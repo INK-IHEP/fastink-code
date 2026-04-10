@@ -16,14 +16,14 @@ This directory is responsible for three things:
 ## Directory Layout
 
 - `images/`
-  Official image definitions. Current images include `init`, `server`, `cron`, and `rootbrowse`.
+  Official image definitions. Current images include `init`, `server`, `cron`, `rootbrowse`, and the optional local `htcondor` image.
 - `lib/`
   Shared deployment core, including defaults, path planning, host checks, and rendering.
 - `templates/`
   Layered templates.
   - `base/`: common templates
   - `profiles/`: `minimal` and `full` profile overlays
-  - `extras/`: optional capabilities such as `nginx` and `xrootd`
+  - `extras/`: optional capabilities such as `nginx`, `xrootd`, and local `htcondor`
 - `install.py`
   Interactive CLI for open-source users.
 - `render_profile.py`
@@ -153,6 +153,7 @@ Current behavior:
   - `fastink-redis-cron`
   - `fastink-rootbrowse`
   - `fastink-xrootd`
+  - `fastink-htcondor` when local HTCondor is enabled
 - this is intended for generic runtime filesystem mounts that should be visible in the main service containers
 
 This mechanism is intentionally simpler than asking users to edit raw compose YAML during the interactive flow.
@@ -184,6 +185,27 @@ Current optional extras:
   - provides an HTTPS entrypoint in front of `fastink-server`
 - `enable_xrootd`
   - adds `fastink-xrootd`
+- `enable_local_htcondor`
+  - adds `fastink-htcondor`
+  - starts a single-container HTCondor all-in-one pool for local/open-source testing
+  - automatically points `schedd_host` and `cm_host` to `fastink-htcondor`
+
+## Local HTCondor
+
+When `enable_local_htcondor` is enabled, deploy starts one `fastink-htcondor`
+container that combines:
+
+- collector
+- negotiator
+- schedd
+- execute/startd
+
+Integration rules:
+
+- it uses the same shared `/etc-init` account view as `server`, `rootbrowse`, and `xrootd`
+- it receives the same extra mount list entries as the main runtime containers
+- if no extra mount list is specified, deploy falls back to `.deploy/extra-mounts.txt`, whose default content is `/home/:/home/`
+- it is intended for local/open-source testing, not for a multi-node Condor cluster deployment
 
 ## What `.deploy/` Contains
 

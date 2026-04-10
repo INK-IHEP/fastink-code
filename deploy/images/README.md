@@ -8,6 +8,7 @@ Target split:
 - `server/`: main FastINK API image
 - `cron/`: Redis-backed scheduled task image
 - `rootbrowse/`: ROOT browser image
+- `htcondor/`: optional local HTCondor all-in-one image
 - `repos/`: shared RPM repository definitions for image builds that need them
 
 Design rules:
@@ -38,12 +39,14 @@ Tagging policy:
   - `fastink-server:dev-local`
   - `fastink-redis-cron:dev-local`
   - `fastink-rootbrowse:dev-local`
+  - `fastink-htcondor:dev-local`
   - downstream `fastink-dev` consumes them from the same machine without pull
 - git tag `<release>`
   - publish `fastink-init:<release>`
   - publish `fastink-server:<release>`
   - publish `fastink-redis-cron:<release>`
   - publish `fastink-rootbrowse:<release>`
+  - publish `fastink-htcondor:<release>`
   - also update `latest`
 
 Consumer contract with `fastink-dev`:
