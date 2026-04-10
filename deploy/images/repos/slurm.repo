@@ -1,0 +1,6 @@
+[slurm]
+name=IHEP Slurm 23.11.6 EL9 x86_64
+baseurl=http://mirror.ihep.ac.cn/yum/slurm/9/23.11.6/x86_64/
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0

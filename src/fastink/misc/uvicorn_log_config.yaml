@@ -1,0 +1,19 @@
+version: 1
+disable_existing_loggers: False
+formatters:
+  default:
+    "()": uvicorn.logging.DefaultFormatter
+    format: "%(levelprefix)s %(message)s"
+handlers:
+  default:
+    class: logging.StreamHandler
+    stream: ext://sys.stdout
+    formatter: default
+  file:
+    class: logging.FileHandler
+    filename: app.log
+    formatter: default
+loggers:
+  uvicorn:
+    handlers: [default, file]
+    level: DEBUG
