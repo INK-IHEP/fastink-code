@@ -1,0 +1,11 @@
+.git
+.pytest_cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
+src/fastink.egg-info/
+tests/
+src/fastink/misc/openapi_schema.json

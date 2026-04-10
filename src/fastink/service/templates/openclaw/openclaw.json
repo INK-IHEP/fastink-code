@@ -1,0 +1,89 @@
+{
+    "wizard": {},
+    "models": {
+        "mode": "merge",
+        "providers": {
+            "custom": {
+                "baseUrl": "",
+                "apiKey": "",
+                "api": "",
+                "models": [
+                    {
+                        "id": "custom",
+                        "name": "custom",
+                        "reasoning": false,
+                        "input": ["text"],
+                        "cost": {
+                            "input": 0,
+                            "output": 0,
+                            "cacheRead": 0,
+                            "cacheWrite": 0
+                        },
+                        "contextWindow": 128000,
+                        "maxTokens": 8192
+                    }
+                ]
+            }
+        }
+    },
+    "agents": {
+        "defaults": {
+            "model": {
+                "primary": "custom/custom"
+            },
+            "models": {
+                "custom/custom": {}
+            },
+            "workspace": ""
+        }
+    },
+    "tools": {
+        "profile": "coding",
+        "exec": {
+            "security": "allowlist",
+            "ask": "on-miss"
+        },
+        "elevated": {
+            "enabled": true
+        }
+    },
+    "commands": {
+        "native": "auto",
+        "nativeSkills": "auto",
+        "restart": true,
+        "ownerDisplay": "raw"
+    },
+    "session": {
+        "dmScope": "per-channel-peer"
+    },
+    "gateway": {
+        "port": 16871,
+        "mode": "local",
+        "bind": "loopback",
+        "controlUi": {
+            "basePath": "/openclaw/{username}/",
+            "allowedOrigins": [],
+            "dangerouslyDisableDeviceAuth": true
+        },
+        "trustedProxies": ["127.0.0.1"],
+        "auth": {
+            "mode": "token",
+            "token": ""
+        },
+        "tailscale": {
+            "mode": "off",
+            "resetOnExit": false
+        },
+        "nodes": {
+            "denyCommands": [
+                "camera.snap",
+                "camera.clip",
+                "screen.record",
+                "contacts.add",
+                "calendar.add",
+                "reminders.add",
+                "sms.send"
+            ]
+        }
+    }
+}
