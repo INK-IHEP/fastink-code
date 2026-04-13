@@ -4,7 +4,14 @@ from pathlib import Path
 from typing import Any
 
 BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "enable_local_htcondor", "ink_production", "init_database"}
-INT_FIELDS = {"host_port", "rootbrowse_port", "xrootd_port", "workers"}
+INT_FIELDS = {
+    "host_port",
+    "rootbrowse_port",
+    "xrootd_port",
+    "workers",
+    "htcondor_default_request_cpus",
+    "htcondor_default_request_memory",
+}
 
 DEFAULT_BUILD_IMAGES = {
     "init_image": "fastink-init:local",
@@ -28,10 +35,13 @@ COMMON_DEFAULTS = {
     "image_source": "pull",
     "project_name": "fastink",
     "host_name": "localhost",
+    "htcondor_internal_domain": "local",
     "host_port": 8000,
     "rootbrowse_port": 2000,
     "xrootd_port": 1094,
     "workers": 4,
+    "htcondor_default_request_cpus": 1,
+    "htcondor_default_request_memory": 6000,
     "ink_production": False,
     "init_database": True,
     "schedd_host": "localhost",

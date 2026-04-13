@@ -1,6 +1,7 @@
 services:
   fastink-xrootd:
     image: ${xrootd_image}
+    hostname: fastink-xrootd
     restart: unless-stopped
     cap_add:
       - CAP_SETGID
@@ -19,13 +20,9 @@ ${xrootd_extra_mounts_block}
       XC_ENABLE_MULTIUSER: "1"
     command: >-
       sh -c "
+      mkdir -p /xrootd && chown xrootd:xrootd /xrootd &&
       if [ ! -f /etc/xrootd/xrootd-proxy.cfg ]; then
         cp /opt/fastink-xrootd/xrootd-proxy.cfg /etc/xrootd/xrootd-proxy.cfg;
-      fi;
-      if [ -s /etc/xrootd/sss.keytab ]; then
-        grep -q 'sec.protocol sss' /etc/xrootd/xrootd-proxy.cfg || \
-          sed -i '/sec.protocol unix/a\    sec.protocol sss -s /etc/xrootd/sss.keytab -c /etc/xrootd/sss.keytab -r 60 -g -p unix' /etc/xrootd/xrootd-proxy.cfg;
-        sed -i 's/sec.protbind \* only unix/sec.protbind * only unix sss/' /etc/xrootd/xrootd-proxy.cfg;
       fi;
       sleep 5 && /srv/run.sh
       "

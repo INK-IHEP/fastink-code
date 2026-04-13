@@ -35,6 +35,13 @@ python deploy/install.py
 This writes a durable `.deploy/` directory containing rendered compose, config,
 keys, plugin mount points, and preload directories.
 
+Generic deploy now also supports:
+
+- optional local HTCondor all-in-one deployment for open-source testing
+- optional local xrootd service
+- shared-filesystem HTCondor semantics through an interactive internal-domain input
+- local CVMFS-backed validation of `jupyter` and `rootbrowse`
+
 ### Non-interactive render
 
 For CI or site overlays:

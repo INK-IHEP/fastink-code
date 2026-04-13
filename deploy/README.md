@@ -71,6 +71,7 @@ The flow is:
    - default is `pull`, which uses the official images
    - `build` is still available if the user wants to build locally from `deploy/images/`
 4. Fill the interactive runtime parameters.
+   - when local HTCondor is enabled, the questionnaire also asks for an internal HTCondor domain used for shared-filesystem semantics
 5. Generate the persistent `.deploy/` directory.
 6. Render `config.yml`, `docker-compose.yml`, `.env`, keys, and runtime directories.
 7. Run `docker build` or `docker pull` for the official images, including the one-shot `fastink-init` image.
@@ -188,7 +189,7 @@ Current optional extras:
 - `enable_local_htcondor`
   - adds `fastink-htcondor`
   - starts a single-container HTCondor all-in-one pool for local/open-source testing
-  - automatically points `schedd_host` and `cm_host` to `fastink-htcondor`
+  - automatically points `schedd_host` to `schedd@fastink-htcondor` and `cm_host` to `fastink-htcondor`
 
 ## Local HTCondor
 
@@ -205,7 +206,66 @@ Integration rules:
 - it uses the same shared `/etc-init` account view as `server`, `rootbrowse`, and `xrootd`
 - it receives the same extra mount list entries as the main runtime containers
 - if no extra mount list is specified, deploy falls back to `.deploy/extra-mounts.txt`, whose default content is `/home/:/home/`
+- the installer asks once for `HTCondor internal domain`
+- deploy writes that value into both:
+  - `.deploy/condor/ink.conf` for the FastINK client containers
+  - `.deploy/condor/htcondor.local.conf` for the local HTCondor AIO container
+- this enables shared-filesystem behavior through matching `FILESYSTEM_DOMAIN` and `UID_DOMAIN`
+- the installer prompts once for the default HTCondor job CPU and memory values
+- those defaults are reused for `vscode`, `jupyter`, `vnc`, and `rootbrowse`
+- the default values are `1` CPU and `6000` MB
 - it is intended for local/open-source testing, not for a multi-node Condor cluster deployment
+
+### Shared Filesystem Semantics
+
+For local HTCondor AIO, FastINK assumes that the submit side and execute side
+share the same mounted job directory tree.
+
+Current generic deploy behavior is:
+
+- `fastink-server` and `fastink-htcondor` receive the same extra mount list
+- if local HTCondor or xrootd is enabled and no mount list is provided, deploy
+  auto-enables `.deploy/extra-mounts.txt`
+- the default initial content is:
+
+```text
+/home/:/home/
+```
+
+- the internal domain value provided during install is used as:
+  - `FILESYSTEM_DOMAIN`
+  - `UID_DOMAIN`
+
+This is important for HTCondor job execution. Without matching shared-fs domain
+settings, HTCondor treats the execute side as outside the submit filesystem
+domain and falls back to execute sandboxes such as `/var/lib/condor/execute/...`.
+
+### CVMFS-backed Job Types In Local HTCondor
+
+The local HTCondor AIO container now mounts:
+
+```text
+/cvmfs:/cvmfs:ro
+```
+
+This is enough for job types whose runtime is already hosted in CVMFS.
+
+Current local validation status:
+
+- `jupyter`
+  - validated in local HTCondor AIO
+  - launches from CVMFS-backed Jupyter environments
+- `rootbrowse`
+  - validated in local HTCondor AIO
+  - launches ROOT/browser runtime from CVMFS-backed software stacks
+- `vscode`
+  - still requires `/usr/bin/code-server` inside the execute image
+  - not solved by the `/cvmfs` mount alone
+
+So, at the moment:
+
+- CVMFS-backed job types can be validated with local HTCondor AIO
+- image-backed job types still depend on the software baked into the execute image
 
 ## What `.deploy/` Contains
 

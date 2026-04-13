@@ -1,6 +1,7 @@
 services:
   fastink-db:
     image: mariadb:10.5
+    hostname: fastink-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${db_root_password}
@@ -19,6 +20,7 @@ services:
 
   fastink-redis:
     image: redis:7-alpine
+    hostname: fastink-redis
     restart: unless-stopped
     command: ["redis-server", "--requirepass", ${redis_password_yaml}, "--appendonly", "yes"]
     volumes:
@@ -26,6 +28,7 @@ services:
 
   fastink-server:
     image: ${server_image}
+    hostname: fastink-server
     restart: unless-stopped
     depends_on:
       fastink-db:
@@ -47,6 +50,7 @@ services:
       - ${tmp_dir}:/tmp/ink
       - ${plugins_dir}:/plugins
       - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
+      - ${server_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
       - ${preload_server_dir}:/opt/preload/server:ro
 ${server_extra_mounts_block}
 ${server_port_block}

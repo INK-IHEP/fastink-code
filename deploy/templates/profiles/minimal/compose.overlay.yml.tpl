@@ -1,6 +1,7 @@
 services:
   fastink-redis-cron:
     image: ${cron_image}
+    hostname: fastink-redis-cron
     restart: unless-stopped
     depends_on:
       fastink-redis:
@@ -29,10 +30,12 @@ services:
       - ${etc_init_dir}:/etc-init
       - ${plugins_dir}:/plugins
       - ${preload_cron_dir}:/opt/preload/cron:ro
+      - ${cron_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
 ${cron_extra_mounts_block}
 
   fastink-rootbrowse:
     image: ${rootbrowse_image}
+    hostname: fastink-rootbrowse
     restart: unless-stopped
     depends_on:
       fastink-server:
