@@ -16,7 +16,6 @@ from fastink.routers.status import InkStatus
 from fastink.service.monitor import get_job_monitor_url, get_monitor_url
 from fastink.service.openclaw import (
     get_openclaw_template,
-    has_openclaw_config,
     sync_openclaw_models,
 )
 from fastink.service.openclaw_schema import OpenClawSyncRequest
@@ -132,27 +131,5 @@ async def get_openclaw_template_config(
         return {
             "status": InkStatus.INTERNAL_ERROR,
             "msg": f"Failed to get OpenClaw template: {str(e)}",
-            "data": None,
-        }
-
-
-@router.get("/service/openclaw/exists")
-async def get_openclaw_exists(
-    username: str = Depends(get_username),
-) -> dict:
-    try:
-        result = await has_openclaw_config(username)
-        return {
-            "status": InkStatus.SUCCESS,
-            "msg": "Get OpenClaw config existence successfully",
-            "data": result,
-        }
-    except Exception as e:
-        logger.error(
-            f"Failed to get OpenClaw config existence for user {username}: {str(e)}\n{traceback.format_exc()}"
-        )
-        return {
-            "status": InkStatus.INTERNAL_ERROR,
-            "msg": f"Failed to get OpenClaw config existence: {str(e)}",
             "data": None,
         }

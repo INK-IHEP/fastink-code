@@ -46,6 +46,17 @@ DEFAULT_OPENCLAW_TEMPLATES = {
         "model_id": "",
     },
 }
+DEFAULT_OPENCLAW_API_NAME_LIST = [
+    "openai-completions",
+    "openai-responses",
+    "openai-codex-responses",
+    "anthropic-messages",
+    "google-generative-ai",
+    "github-copilot",
+    "bedrock-converse-stream",
+    "ollama",
+    "azure-openai-responses",
+]
 DEFAULT_MODEL = {
     "id": "custom",
     "name": "custom",
@@ -356,8 +367,7 @@ def _build_model_patch(payload: OpenClawSyncRequest) -> dict:
 def _merge_model(existing_model: dict | None, payload: OpenClawSyncRequest) -> dict:
     merged = deepcopy(existing_model) if existing_model is not None else deepcopy(DEFAULT_MODEL)
     merged["id"] = payload.model_id
-    if not merged.get("name"):
-        merged["name"] = payload.model_id
+    merged["name"] = payload.model_name if payload.model_name is not None else payload.model_id
 
     model_patch = _build_model_patch(payload)
     for key, value in model_patch.items():
@@ -390,7 +400,10 @@ def _render_openclaw_templates(
         if selected_key == key and selected_values:
             entry.update(selected_values)
         rendered[key] = entry
-    return rendered
+    return {
+        "templates": rendered,
+        "api_name_list": deepcopy(DEFAULT_OPENCLAW_API_NAME_LIST),
+    }
 
 
 def _template_key_for_model(base_url: str, model_id: str) -> str:
@@ -558,11 +571,6 @@ def _build_updated_openclaw_config(
         "workspace": workspace_path,
         "primary_model": primary_key,
     }
-
-
-async def has_openclaw_config(username: str) -> bool:
-    context = await _build_openclaw_context(username)
-    return context["config_exists"]
 
 
 async def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
