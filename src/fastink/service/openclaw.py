@@ -17,6 +17,7 @@ from fastink.computing.tools.common.utils import (
     get_user_exp_group,
 )
 from fastink.storage import common as storage_common
+from fastink.storage.utils import PathType
 from fastink.service.openclaw_schema import OpenClawSyncRequest
 
 
@@ -25,6 +26,26 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://ink-dev.ihep.ac.cn",
     "https://fastink-test.ihep.ac.cn",
 ]
+DEFAULT_OPENCLAW_TEMPLATES = {
+    "hepai/deepseek": {
+        "base_url": "https://aiapi.ihep.ac.cn/apiv2",
+        "api_key": "",
+        "api_name": "openai-completions",
+        "model_id": "hepai/deepseek-v3.2",
+    },
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "",
+        "api_name": "openai-completions",
+        "model_id": "deepseek/deepseek-chat",
+    },
+    "custom": {
+        "base_url": "",
+        "api_key": "",
+        "api_name": "",
+        "model_id": "",
+    },
+}
 DEFAULT_MODEL = {
     "id": "custom",
     "name": "custom",
@@ -87,6 +108,10 @@ def _get_openclaw_user_root(username: str, group_dir: str) -> Path:
     )
 
 
+def _get_storage_mgm() -> str:
+    return get_config("storage", "xrd_host")
+
+
 def _get_target_relpath() -> Path:
     return Path(
         get_config(
@@ -109,24 +134,8 @@ def _run_as_user(username: str, command: str) -> str:
     return result.stdout
 
 
-def _path_exists_as_user(username: str, path: Path) -> bool:
-    result = subprocess.run(
-        ["su", "-s", "/bin/bash", username, "-c", f"test -e {quote(str(path))}"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return result.returncode == 0
-
-
-def _path_is_file_as_user(username: str, path: Path) -> bool:
-    result = subprocess.run(
-        ["su", "-s", "/bin/bash", username, "-c", f"test -f {quote(str(path))}"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    return result.returncode == 0
+def _normalize_base_url(value: str) -> str:
+    return str(value or "").rstrip("/")
 
 
 def _resolve_user_experiment_group(username: str) -> str:
@@ -138,35 +147,80 @@ def _resolve_user_experiment_group(username: str) -> str:
     return group_dir
 
 
-def _read_text_as_user(username: str, path: Path) -> str:
-    return _run_as_user(username, f"cat {quote(str(path))}")
+async def _path_status_as_user(username: str, path: Path) -> tuple[bool, PathType]:
+    return await storage_common.path_exist(
+        name=str(path),
+        username=username,
+        mgm=_get_storage_mgm(),
+    )
 
 
-def _write_text_as_user(username: str, target_path: Path, payload: str) -> None:
-    target_dir = target_path.parent
-
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", delete=False, dir="/tmp"
-    ) as temp_file:
-        temp_file.write(payload)
-        temp_path = Path(temp_file.name)
-
-    os.chmod(temp_path, 0o644)
-    try:
-        _run_as_user(
-            username,
-            f"mkdir -p {quote(str(target_dir))} && cat {quote(str(temp_path))} > {quote(str(target_path))}",
-        )
-    finally:
-        temp_path.unlink(missing_ok=True)
+async def _path_exists_as_user(username: str, path: Path) -> bool:
+    is_exist, _ = await _path_status_as_user(username, path)
+    return is_exist
 
 
-def _write_json_as_user(username: str, target_path: Path, payload: dict) -> None:
-    _write_text_as_user(
+async def _path_is_file_as_user(username: str, path: Path) -> bool:
+    is_exist, path_type = await _path_status_as_user(username, path)
+    return is_exist and path_type == PathType.FILE
+
+
+async def _read_text_as_user(username: str, path: Path) -> str:
+    return await storage_common.cat_file(
+        fname=str(path),
+        username=username,
+        mgm=_get_storage_mgm(),
+    )
+
+
+async def _write_text_as_user(username: str, target_path: Path, payload: str) -> None:
+    await storage_common.upload_file(
+        src_data=payload.encode("utf-8"),
+        dst=str(target_path),
+        username=username,
+        mgm=_get_storage_mgm(),
+    )
+
+
+async def _write_json_as_user(username: str, target_path: Path, payload: dict) -> None:
+    await _write_text_as_user(
         username,
         target_path,
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
     )
+
+
+async def _read_json_as_user(username: str, path: Path) -> dict:
+    return json.loads(await _read_text_as_user(username, path))
+
+
+async def _build_openclaw_context(username: str) -> dict:
+    group_dir = _resolve_user_experiment_group(username)
+    target_user_root = _get_openclaw_user_root(username=username, group_dir=group_dir)
+    target_dir = target_user_root / _get_target_relpath()
+    target_openclaw_json = target_dir / "openclaw.json"
+    target_dir_exists = await _path_exists_as_user(username, target_dir)
+    config_exists = await _path_is_file_as_user(username, target_openclaw_json)
+    config = None
+    config_error = None
+
+    if config_exists:
+        try:
+            config = await _read_json_as_user(username, target_openclaw_json)
+        except Exception as exc:
+            config_error = str(exc)
+
+    return {
+        "group_dir": group_dir,
+        "target_user_root": target_user_root,
+        "target_dir": target_dir,
+        "target_openclaw_json": target_openclaw_json,
+        "target_dir_exists": target_dir_exists,
+        "config_exists": config_exists,
+        "config_valid": config is not None,
+        "config_error": config_error,
+        "config": config,
+    }
 
 
 async def _ensure_directory_mode(username: str, target_dir: Path, expected_mode: int) -> None:
@@ -221,6 +275,24 @@ def _parse_primary_ref(target_config: dict) -> tuple[str, str | None]:
         provider_key, model_id = primary.split("/", 1)
         return provider_key or DEFAULT_PROVIDER_KEY, model_id or None
     return DEFAULT_PROVIDER_KEY, None
+
+
+def _get_primary_model_context(target_config: dict) -> tuple[str, dict | None, dict | None]:
+    provider_key, primary_model_id = _parse_primary_ref(target_config)
+    providers_section = target_config.get("models", {}).get("providers", {})
+    if not isinstance(providers_section, dict):
+        return provider_key, None, None
+    provider_config = providers_section.get(provider_key)
+    if not isinstance(provider_config, dict):
+        return provider_key, None, None
+    models = provider_config.get("models")
+    if not isinstance(models, list):
+        return provider_key, provider_config, None
+    if primary_model_id:
+        for model in models:
+            if isinstance(model, dict) and model.get("id") == primary_model_id:
+                return provider_key, provider_config, model
+    return provider_key, provider_config, None
 
 
 def _find_model_by_id(models: list[dict], model_id: str) -> dict | None:
@@ -300,24 +372,123 @@ def _merge_model(existing_model: dict | None, payload: OpenClawSyncRequest) -> d
     return merged
 
 
-def _update_target_openclaw_config(
+def _render_openclaw_templates(
+    selected_key: str | None = None,
+    selected_values: dict | None = None,
+) -> dict:
+    selected_key = selected_key if selected_key in DEFAULT_OPENCLAW_TEMPLATES else None
+    ordered_keys = []
+    if selected_key:
+        ordered_keys.append(selected_key)
+    ordered_keys.extend(
+        key for key in DEFAULT_OPENCLAW_TEMPLATES.keys() if key != selected_key
+    )
+
+    rendered = {}
+    for key in ordered_keys:
+        entry = deepcopy(DEFAULT_OPENCLAW_TEMPLATES[key])
+        if selected_key == key and selected_values:
+            entry.update(selected_values)
+        rendered[key] = entry
+    return rendered
+
+
+def _template_key_for_model(base_url: str, model_id: str) -> str:
+    normalized_base_url = _normalize_base_url(base_url)
+    normalized_model_id = str(model_id or "")
+    for key, template in DEFAULT_OPENCLAW_TEMPLATES.items():
+        if key == "custom":
+            continue
+        if (
+            _normalize_base_url(template["base_url"]) == normalized_base_url
+            and template["model_id"] == normalized_model_id
+        ):
+            return key
+    return "custom"
+
+
+async def get_openclaw_template(username: str) -> dict:
+    context = await _build_openclaw_context(username)
+    if not context["target_dir_exists"] or not context["config_exists"] or not context["config_valid"]:
+        return _render_openclaw_templates()
+
+    target_config = context["config"]
+    provider_key, provider_config, primary_model = _get_primary_model_context(target_config)
+    if provider_config is None or primary_model is None:
+        return _render_openclaw_templates()
+
+    selected_values = {
+        "base_url": provider_config.get("baseUrl", ""),
+        "api_key": provider_config.get("apiKey", ""),
+        "api_name": provider_config.get("api", ""),
+        "model_id": primary_model.get("id", ""),
+    }
+    selected_key = _template_key_for_model(
+        base_url=selected_values["base_url"],
+        model_id=selected_values["model_id"],
+    )
+    if selected_key != "custom":
+        return _render_openclaw_templates(selected_key=selected_key, selected_values=selected_values)
+
+    selected_values["api_key"] = provider_config.get("apiKey", "")
+    return _render_openclaw_templates(selected_key="custom", selected_values=selected_values)
+
+
+def _iter_provider_models(target_config: dict) -> list[tuple[str, dict, dict]]:
+    providers_section = target_config.get("models", {}).get("providers", {})
+    if not isinstance(providers_section, dict):
+        return []
+
+    items = []
+    for provider_key, provider_config in providers_section.items():
+        if not isinstance(provider_config, dict):
+            continue
+        models = provider_config.get("models")
+        if not isinstance(models, list):
+            continue
+        for model in models:
+            if isinstance(model, dict):
+                items.append((provider_key, provider_config, model))
+    return items
+
+
+def _is_local_model(base_url: str, model_id: str) -> bool:
+    return (
+        _normalize_base_url(base_url) == _normalize_base_url(DEFAULT_OPENCLAW_TEMPLATES["hepai/deepseek"]["base_url"])
+        and str(model_id or "").startswith("hepai/")
+    )
+
+
+def _validate_experiment_data_models(target_config: dict) -> None:
+    invalid_models = []
+    for provider_key, provider_config, model in _iter_provider_models(target_config):
+        base_url = provider_config.get("baseUrl", "")
+        model_id = model.get("id", "")
+        if not _is_local_model(base_url, model_id):
+            invalid_models.append(f"{provider_key}/{model_id}")
+
+    if invalid_models:
+        raise ValueError(
+            "add_experiment_data=true requires all OpenClaw models to use local IHEP models only. "
+            f"Found non-local models: {', '.join(invalid_models)}"
+        )
+
+
+def _build_updated_openclaw_config(
     username: str,
-    target_openclaw_json: Path,
+    target_config: dict,
     target_user_root: Path,
     payload: OpenClawSyncRequest,
     initialize_target: bool,
-) -> dict:
-    if not _path_is_file_as_user(username, target_openclaw_json):
-        raise FileNotFoundError(f"Target OpenClaw config not found: {target_openclaw_json}")
-
-    target_config = json.loads(_read_text_as_user(username, target_openclaw_json))
-    models_section = target_config.setdefault("models", {})
+) -> tuple[dict, dict]:
+    updated_config = deepcopy(target_config)
+    models_section = updated_config.setdefault("models", {})
     providers_section = models_section.setdefault("providers", {})
     if not isinstance(providers_section, dict):
         providers_section = {}
         models_section["providers"] = providers_section
 
-    provider_key, _ = _parse_primary_ref(target_config)
+    provider_key, _ = _parse_primary_ref(updated_config)
     provider_config = providers_section.setdefault(provider_key, {})
     existing_models = provider_config.get("models")
     if not isinstance(existing_models, list):
@@ -326,7 +497,7 @@ def _update_target_openclaw_config(
 
     provider_key, existing_model, previous_primary_model_id = _select_target_model(
         existing_models=existing_models,
-        target_config=target_config,
+        target_config=updated_config,
         payload=payload,
         initialize_target=initialize_target,
     )
@@ -347,7 +518,7 @@ def _update_target_openclaw_config(
         models_section["mode"] = "merge"
 
     workspace_path = str(target_user_root / _get_target_relpath() / "workspace")
-    gateway = target_config.setdefault("gateway", {})
+    gateway = updated_config.setdefault("gateway", {})
     if initialize_target:
         gateway["port"] = _get_initial_gateway_port(username)
     control_ui = gateway.setdefault("controlUi", {})
@@ -359,11 +530,11 @@ def _update_target_openclaw_config(
     control_ui["allowedOrigins"] = allowed_origins
     control_ui["dangerouslyDisableDeviceAuth"] = True
 
-    auth = gateway.setdefault("auth", {})
+    auth = updated_config.setdefault("gateway", {}).setdefault("auth", {})
     auth["mode"] = "token"
     auth.setdefault("token", "")
 
-    agents_defaults = target_config.setdefault("agents", {}).setdefault("defaults", {})
+    agents_defaults = updated_config.setdefault("agents", {}).setdefault("defaults", {})
     primary_model = merged_model["id"]
     primary_key = f"{provider_key}/{primary_model}"
     agents_defaults["model"] = {"primary": primary_key}
@@ -383,18 +554,15 @@ def _update_target_openclaw_config(
     if initialize_target or not agents_defaults.get("workspace"):
         agents_defaults["workspace"] = workspace_path
 
-    _write_json_as_user(username, target_openclaw_json, target_config)
-    return {
+    return updated_config, {
         "workspace": workspace_path,
         "primary_model": primary_key,
     }
 
 
-def has_openclaw_config(username: str) -> bool:
-    group_dir = _resolve_user_experiment_group(username)
-    target_user_root = _get_openclaw_user_root(username=username, group_dir=group_dir)
-    target_config_path = target_user_root / _get_target_relpath() / "openclaw.json"
-    return _path_is_file_as_user(username, target_config_path)
+async def has_openclaw_config(username: str) -> bool:
+    context = await _build_openclaw_context(username)
+    return context["config_exists"]
 
 
 async def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> dict:
@@ -402,27 +570,41 @@ async def sync_openclaw_models(username: str, payload: OpenClawSyncRequest) -> d
     if not template_dir.is_dir():
         raise FileNotFoundError(f"OpenClaw template directory not found: {template_dir}")
 
-    group_dir = _resolve_user_experiment_group(username)
-    target_user_root = _get_openclaw_user_root(username=username, group_dir=group_dir)
+    context = await _build_openclaw_context(username)
+    group_dir = context["group_dir"]
+    target_user_root = context["target_user_root"]
     if not target_user_root.is_dir():
         raise FileNotFoundError(
             f"Target OpenClaw user directory does not exist: {target_user_root}"
         )
 
-    target_dir = target_user_root / _get_target_relpath()
+    target_dir = context["target_dir"]
     created = False
-    if not _path_exists_as_user(username, target_dir):
+    if not context["target_dir_exists"] or not context["config_exists"]:
         _copy_template_dir_to_target(template_dir, target_dir, username)
         created = True
+        context = await _build_openclaw_context(username)
+    elif not context["config_valid"]:
+        raise ValueError(
+            f"Target OpenClaw config is invalid JSON: {context['target_openclaw_json']}"
+        )
 
-    target_openclaw_json = target_dir / "openclaw.json"
-    update_result = _update_target_openclaw_config(
+    if not context["config_valid"]:
+        raise FileNotFoundError(
+            f"Target OpenClaw config not found: {context['target_openclaw_json']}"
+        )
+
+    updated_config, update_result = _build_updated_openclaw_config(
         username=username,
-        target_openclaw_json=target_openclaw_json,
+        target_config=context["config"],
         target_user_root=target_user_root,
         payload=payload,
         initialize_target=created,
     )
+    if payload.add_experiment_data:
+        _validate_experiment_data_models(updated_config)
+
+    await _write_json_as_user(username, context["target_openclaw_json"], updated_config)
     await _ensure_directory_mode(username=username, target_dir=target_dir, expected_mode=0o700)
 
     return {
