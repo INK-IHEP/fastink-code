@@ -33,13 +33,37 @@ DEFAULT_OPENCLAW_TEMPLATES = {
         "api_name": "openai-completions",
         "model_id": "hepai/deepseek-v3.2",
     },
-    "deepseek": {
+    "Deepseek": {
         "base_url": "https://api.deepseek.com/v1",
         "api_key": "",
         "api_name": "openai-completions",
         "model_id": "deepseek/deepseek-chat",
     },
-    "custom": {
+    "Qwen coding plan": {
+        "base_url": "https://coding.dashscope.aliyuncs.com/v1",
+        "api_key": "",
+        "api_name": "openai-completions",
+        "model_id": "qwen3.6-plus",
+    },
+    "Z.ai (GLM) Coding Plan": {
+        "base_url": "https://open.bigmodel.cn/api/anthropic",
+        "api_key": "",
+        "api_name": "anthropic-messages",
+        "model_id": "glm-5.1",
+    },
+    "Minimax token plan": {
+        "base_url": "https://api.minimaxi.com/anthropic",
+        "api_key": "",
+        "api_name": "anthropic-messages",
+        "model_id": "MiniMax-M2.7",
+    },
+    "Xiaomi mimo token plan": {
+        "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
+        "api_key": "",
+        "api_name": "openai-completions",
+        "model_id": "mimo-v2-pro",
+    },
+    "Custom": {
         "base_url": "",
         "api_key": "",
         "api_name": "",
@@ -68,8 +92,8 @@ DEFAULT_MODEL = {
         "cacheRead": 0,
         "cacheWrite": 0,
     },
-    "contextWindow": 16000,
-    "maxTokens": 4096,
+    "contextWindow": 64000,
+    "maxTokens": 8192,
 }
 
 
