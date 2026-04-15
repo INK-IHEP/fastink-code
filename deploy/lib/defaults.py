@@ -3,14 +3,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "ink_production", "init_database"}
-INT_FIELDS = {"host_port", "rootbrowse_port", "xrootd_port", "workers"}
+BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "enable_local_htcondor", "ink_production", "init_database"}
+INT_FIELDS = {
+    "host_port",
+    "rootbrowse_port",
+    "xrootd_port",
+    "workers",
+    "htcondor_default_request_cpus",
+    "htcondor_default_request_memory",
+}
 
 DEFAULT_BUILD_IMAGES = {
     "init_image": "fastink-init:local",
     "server_image": "fastink-server:local",
     "cron_image": "fastink-redis-cron:local",
     "rootbrowse_image": "fastink-rootbrowse:local",
+    "htcondor_image": "fastink-htcondor:local",
     "xrootd_image": "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3",
 }
 
@@ -19,6 +27,7 @@ DEFAULT_PULL_IMAGES = {
     "server_image": "dockerhub.ihep.ac.cn/ink/fastink-server:latest",
     "cron_image": "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest",
     "rootbrowse_image": "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest",
+    "htcondor_image": "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest",
     "xrootd_image": "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3",
 }
 
@@ -26,10 +35,13 @@ COMMON_DEFAULTS = {
     "image_source": "pull",
     "project_name": "fastink",
     "host_name": "localhost",
+    "htcondor_internal_domain": "local",
     "host_port": 8000,
     "rootbrowse_port": 2000,
     "xrootd_port": 1094,
     "workers": 4,
+    "htcondor_default_request_cpus": 1,
+    "htcondor_default_request_memory": 6000,
     "ink_production": False,
     "init_database": True,
     "schedd_host": "localhost",
@@ -54,10 +66,12 @@ PROFILE_DEFAULTS = {
     "minimal": {
         "enable_nginx": False,
         "enable_xrootd": False,
+        "enable_local_htcondor": False,
     },
     "full": {
         "enable_nginx": True,
         "enable_xrootd": True,
+        "enable_local_htcondor": False,
     },
 }
 
@@ -147,4 +161,6 @@ def required_images(answers: dict[str, Any]) -> list[tuple[str, str]]:
     ]
     if answers.get("enable_xrootd"):
         images.append(("xrootd", str(answers["xrootd_image"])))
+    if answers.get("enable_local_htcondor"):
+        images.append(("htcondor", str(answers["htcondor_image"])))
     return images

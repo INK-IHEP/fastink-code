@@ -7,6 +7,7 @@ class OpenClawSyncRequest(BaseModel):
     base_url: str = Field(..., min_length=1)
     api_key: str = Field(..., min_length=1)
     api_name: str = Field(..., min_length=1)
+    add_experiment_data: bool
 
     model_id: str = Field(..., min_length=1)
     model_name: str | None = None

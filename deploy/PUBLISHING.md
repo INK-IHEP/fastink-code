@@ -26,6 +26,7 @@ The publishing pipeline builds:
 - `dockerhub.ihep.ac.cn/ink/fastink-server`
 - `dockerhub.ihep.ac.cn/ink/fastink-redis-cron`
 - `dockerhub.ihep.ac.cn/ink/fastink-rootbrowse`
+- `dockerhub.ihep.ac.cn/ink/fastink-htcondor`
 
 Image definitions live under:
 
@@ -33,6 +34,7 @@ Image definitions live under:
 - `deploy/images/server/`
 - `deploy/images/cron/`
 - `deploy/images/rootbrowse/`
+- `deploy/images/htcondor/`
 
 ## Tagging rules
 
@@ -44,6 +46,7 @@ For `main` branch commits:
   - `fastink-server:dev-local`
   - `fastink-redis-cron:dev-local`
   - `fastink-rootbrowse:dev-local`
+  - `fastink-htcondor:dev-local`
 - do not push dev images to the registry
 
 For release tags:
@@ -58,6 +61,7 @@ For release tags:
 - `FASTINK_SERVER_IMAGE`
 - `FASTINK_CRON_IMAGE`
 - `FASTINK_ROOTBROWSE_IMAGE`
+- `FASTINK_HTCONDOR_IMAGE`
 
 `fastink-dev` injects those values into its render step and deploys the
 generated stack together with:

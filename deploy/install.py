@@ -43,7 +43,7 @@ def print_preparation_notes() -> None:
     print("Prepare these items before continuing if your deployment needs them:")
     print(f"- Optional extra mount list file (one mount per line): {extra_mounts_path}")
     print("  Format: /host/path:/container/path or /host/path:/container/path:ro")
-    print("  These mounts are applied to fastink-server, fastink-redis-cron, fastink-rootbrowse, and fastink-xrootd.")
+    print("  These mounts are applied to fastink-server, fastink-redis-cron, fastink-rootbrowse, fastink-xrootd, and fastink-htcondor when enabled.")
     print(f"- Optional plugin source or packages under: {DEPLOY_DIR / 'plugins'}")
     print(f"- Optional preload scripts under: {DEPLOY_DIR / 'preload'}")
     print("- Optional existing TLS certificate and private key if you do not want a self-signed certificate.")
@@ -225,6 +225,8 @@ def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> No
         "-e",
         f"FASTINK_ENABLE_XROOTD={'true' if answers.get('enable_xrootd') else 'false'}",
         "-e",
+        f"FASTINK_ENABLE_LOCAL_HTCONDOR={'true' if answers.get('enable_local_htcondor') else 'false'}",
+        "-e",
         f"FASTINK_HOST_NAME={answers.get('host_name', 'localhost')}",
         "-v",
         f"{paths['etc_init_dir'].resolve()}:/work/etc-init",
@@ -334,9 +336,19 @@ def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
 
 
 def finalize_mount_answers(answers: dict[str, object]) -> dict[str, object]:
-    if bool(answers.get("enable_xrootd")) and not str(answers.get("extra_mounts_file") or "").strip():
+    if (
+        bool(answers.get("enable_xrootd")) or bool(answers.get("enable_local_htcondor"))
+    ) and not str(answers.get("extra_mounts_file") or "").strip():
         answers["extra_mounts_file"] = str(ensure_default_extra_mounts_file().resolve())
     return answers
+
+
+def default_htcondor_internal_domain(host_name: str, fallback: str) -> str:
+    host_name = host_name.strip()
+    if "." not in host_name:
+        return fallback
+    suffix = ".".join(part for part in host_name.split(".")[1:] if part)
+    return suffix or fallback
 
 
 def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dict[str, object]:
@@ -367,6 +379,7 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         cron_image = prompt_text("Cron image reference", str(image_defaults["cron_image"]), str(previous_answers["cron_image"]) if previous_answers and previous_answers.get("cron_image") else None)
         rootbrowse_image = prompt_text("Rootbrowse image reference", str(image_defaults["rootbrowse_image"]), str(previous_answers["rootbrowse_image"]) if previous_answers and previous_answers.get("rootbrowse_image") else None)
     xrootd_image = prompt_text("Xrootd image reference", str(image_defaults["xrootd_image"]), str(previous_answers["xrootd_image"]) if previous_answers and previous_answers.get("xrootd_image") else None)
+    htcondor_image_default = str(image_defaults["htcondor_image"])
 
     print_step("Basic deployment settings")
     project_name = prompt_text("Compose project name", str(defaults["project_name"]), str(previous_answers["project_name"]) if previous_answers and previous_answers.get("project_name") else None)
@@ -379,13 +392,39 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
     ).resolve()
     enable_nginx = prompt_bool("Enable nginx HTTPS reverse proxy", bool(defaults["enable_nginx"]), bool(previous_answers["enable_nginx"]) if previous_answers and previous_answers.get("enable_nginx") is not None else None)
     enable_xrootd = prompt_bool("Enable xrootd service container", bool(defaults["enable_xrootd"]), bool(previous_answers["enable_xrootd"]) if previous_answers and previous_answers.get("enable_xrootd") is not None else None)
+    enable_local_htcondor = prompt_bool("Enable local HTCondor all-in-one container", bool(defaults["enable_local_htcondor"]), bool(previous_answers["enable_local_htcondor"]) if previous_answers and previous_answers.get("enable_local_htcondor") is not None else None)
+    htcondor_image = htcondor_image_default
+    if enable_local_htcondor:
+        if image_source == "build":
+            htcondor_image = prompt_text("HTCondor image tag", htcondor_image_default, str(previous_answers["htcondor_image"]) if previous_answers and previous_answers.get("htcondor_image") else None)
+        else:
+            htcondor_image = prompt_text("HTCondor image reference", htcondor_image_default, str(previous_answers["htcondor_image"]) if previous_answers and previous_answers.get("htcondor_image") else None)
     host_name = prompt_text("Public host name", str(defaults["host_name"]), str(previous_answers["host_name"]) if previous_answers and previous_answers.get("host_name") else None)
+    htcondor_internal_domain = prompt_text(
+        "HTCondor internal domain",
+        default_htcondor_internal_domain(str(host_name), str(defaults["htcondor_internal_domain"])),
+        str(previous_answers["htcondor_internal_domain"]) if previous_answers and previous_answers.get("htcondor_internal_domain") else None,
+    )
     host_port_default = 443 if enable_nginx and int(defaults["host_port"]) == 8000 else int(defaults["host_port"])
     host_port = prompt_int("Public HTTPS port" if enable_nginx else "Public port", host_port_default, int(previous_answers["host_port"]) if previous_answers and previous_answers.get("host_port") is not None else None)
     rootbrowse_port = prompt_int("Rootbrowse port", int(defaults["rootbrowse_port"]), int(previous_answers["rootbrowse_port"]) if previous_answers and previous_answers.get("rootbrowse_port") is not None else None)
     xrootd_port = prompt_int("Xrootd port", int(defaults["xrootd_port"]), int(previous_answers["xrootd_port"]) if previous_answers and previous_answers.get("xrootd_port") is not None else None)
-    schedd_host = prompt_text("HTCondor schedd host", str(defaults["schedd_host"]), str(previous_answers["schedd_host"]) if previous_answers and previous_answers.get("schedd_host") else None)
-    cm_host = prompt_text("HTCondor collector/CM host", str(defaults["cm_host"]), str(previous_answers["cm_host"]) if previous_answers and previous_answers.get("cm_host") else None)
+    if enable_local_htcondor:
+        schedd_host = "schedd@fastink-htcondor"
+        cm_host = "fastink-htcondor"
+    else:
+        schedd_host = prompt_text("HTCondor schedd host", str(defaults["schedd_host"]), str(previous_answers["schedd_host"]) if previous_answers and previous_answers.get("schedd_host") else None)
+        cm_host = prompt_text("HTCondor collector/CM host", str(defaults["cm_host"]), str(previous_answers["cm_host"]) if previous_answers and previous_answers.get("cm_host") else None)
+    htcondor_default_request_cpus = prompt_int(
+        "Default HTCondor job CPUs",
+        int(defaults["htcondor_default_request_cpus"]),
+        int(previous_answers["htcondor_default_request_cpus"]) if previous_answers and previous_answers.get("htcondor_default_request_cpus") is not None else None,
+    )
+    htcondor_default_request_memory = prompt_int(
+        "Default HTCondor job memory (MB)",
+        int(defaults["htcondor_default_request_memory"]),
+        int(previous_answers["htcondor_default_request_memory"]) if previous_answers and previous_answers.get("htcondor_default_request_memory") is not None else None,
+    )
     ink_production = prompt_bool("Run FastINK in production mode", bool(defaults["ink_production"]), bool(previous_answers["ink_production"]) if previous_answers and previous_answers.get("ink_production") is not None else None)
     workers = int(defaults["workers"])
     if ink_production:
@@ -419,16 +458,21 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "cron_image": cron_image,
         "rootbrowse_image": rootbrowse_image,
         "xrootd_image": xrootd_image,
+        "htcondor_image": htcondor_image,
         "project_name": project_name,
         "data_root": data_root,
         "enable_nginx": enable_nginx,
         "enable_xrootd": enable_xrootd,
+        "enable_local_htcondor": enable_local_htcondor,
         "host_name": host_name,
+        "htcondor_internal_domain": htcondor_internal_domain,
         "host_port": host_port,
         "rootbrowse_port": rootbrowse_port,
         "xrootd_port": xrootd_port,
         "schedd_host": schedd_host,
         "cm_host": cm_host,
+        "htcondor_default_request_cpus": htcondor_default_request_cpus,
+        "htcondor_default_request_memory": htcondor_default_request_memory,
         "workers": workers,
         "ink_production": ink_production,
         "init_database": init_database,
@@ -503,6 +547,18 @@ def build_or_pull_images(answers: dict[str, object]) -> None:
                 ".",
             ]
         )
+        if answers.get("enable_local_htcondor"):
+            run_command(
+                [
+                    "docker",
+                    "build",
+                    "-f",
+                    "deploy/images/htcondor/Dockerfile",
+                    "-t",
+                    str(answers["htcondor_image"]),
+                    ".",
+                ]
+            )
         if answers.get("enable_xrootd"):
             run_command(["docker", "pull", str(answers["xrootd_image"])])
         return

@@ -8,6 +8,7 @@ Target split:
 - `server/`: main FastINK API image
 - `cron/`: Redis-backed scheduled task image
 - `rootbrowse/`: ROOT browser image
+- `htcondor/`: optional local HTCondor all-in-one image
 - `repos/`: shared RPM repository definitions for image builds that need them
 
 Design rules:
@@ -26,6 +27,37 @@ Plugin support for the server image is runtime-driven:
 The cron image follows the same layering model. It only ships generic jobs by
 default and expects site-specific jobs to be mounted at runtime.
 
+## Local HTCondor AIO Notes
+
+`deploy/images/htcondor/` is intended for local/open-source validation of
+FastINK HTCondor submit flows.
+
+Important runtime assumptions:
+
+- the AIO container consumes the shared `/etc-init` account view
+- it is expected to receive the same extra filesystem mounts as
+  `fastink-server`
+- in generic deploy, that usually means at least:
+
+```text
+/home/:/home/
+```
+
+- it also mounts:
+
+```text
+/cvmfs:/cvmfs:ro
+```
+
+so that CVMFS-backed job runtimes such as `jupyter` and `rootbrowse` can run
+without baking those full software stacks into the AIO image
+
+Current boundary:
+
+- `jupyter` and `rootbrowse` have been validated in local HTCondor AIO using
+  shared filesystem semantics and CVMFS
+- `vscode` still requires `code-server` inside the execute image
+
 ## Release contract
 
 `ink-code/.gitlab-ci.yml` is the publishing pipeline for these images.
@@ -38,12 +70,14 @@ Tagging policy:
   - `fastink-server:dev-local`
   - `fastink-redis-cron:dev-local`
   - `fastink-rootbrowse:dev-local`
+  - `fastink-htcondor:dev-local`
   - downstream `fastink-dev` consumes them from the same machine without pull
 - git tag `<release>`
   - publish `fastink-init:<release>`
   - publish `fastink-server:<release>`
   - publish `fastink-redis-cron:<release>`
   - publish `fastink-rootbrowse:<release>`
+  - publish `fastink-htcondor:<release>`
   - also update `latest`
 
 Consumer contract with `fastink-dev`:
