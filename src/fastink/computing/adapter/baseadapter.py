@@ -2,7 +2,7 @@ import pwd, grp
 from typing import Optional
 from abc import ABC, abstractmethod
 from fastink.common.config import get_config
-from fastink.computing.cluster.cluster import Base_JOB, SubmitMode, SubmitMode
+from fastink.computing.cluster.cluster import Base_JOB, SubmitMode
 from fastink.computing.tools.common.utils import change_uid_to_username
 
 class SchedulerBase(ABC):
@@ -15,15 +15,6 @@ class SchedulerBase(ABC):
         self.XROOTD_PATH = get_config("computing", "xrootd_path")
         self.KRB5_ENABLED = get_config("common", "krb5_enabled")
 
-    
-    def _need_dedup(self, job_data: Base_JOB) -> bool:
-        if job_data.submit_mode is SubmitMode.SYNC:
-            return False
-
-        # async mode
-        interactive_job_types = get_config("computing", "iptables_jobtype") + get_config("computing", "noenv_jobtype")   
-        return job_data.job_type in interactive_job_types
-    
     
     # =========================
     # Unified submit entrypoint (new)
