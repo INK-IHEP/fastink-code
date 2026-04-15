@@ -16,7 +16,23 @@ def xrd_env(krb5ccname:str, krb5_enabled:bool = True):
     if not krb5_enabled or krb5ccname == "" or krb5ccname is None:
         return {"XrdSecPROTOCOL": "unix"}
     else:
-        return {"XrdSecPROTOCOL": "krb5,unix", "KRB5CCNAME": krb5ccname}
+        return {"XrdSecPROTOCOL": "krb5,sss,unix", "KRB5CCNAME": krb5ccname}
+
+def xrd_cmd(
+    base_cmd: List[str],
+    username: str = "",
+    krb5ccname: str = "",
+    krb5_enabled: bool = True,
+) -> List[str]:
+    """Run xrootd client commands as the target Unix user when Kerberos is off.
+
+    The generic open-source deploy uses local Unix identity mapping together with
+    xrootd-multiuser. In that mode, xrd client commands must run as the actual
+    FastINK user instead of root so the server sees the correct account name.
+    """
+    if username and (not krb5_enabled or krb5ccname == "" or krb5ccname is None):
+        return ["sudo", "-E", "-u", username, *base_cmd]
+    return base_cmd
 
 # @async_timer
 async def path_exist(
@@ -26,7 +42,7 @@ async def path_exist(
         _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
         env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         name = unquote_expand_user(dname = name, username = username, url = False)
-        cmd = ["xrdfs", mgm, "stat"]
+        cmd = xrd_cmd(["xrdfs", mgm, "stat"], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         cmd.append(f'''{name}''') if '"' in name else cmd.append(f"""{name}""")
         logger.debug(f"Xrdfs. xrdfs {mgm} stat {name}. CMD: {cmd}")
 
@@ -59,7 +75,7 @@ async def mkdir(
             cmd = f"sudo -E -u {username} mkdir -m {mode} -p".split()
         else :
             mode = mode_map(mode)
-            cmd = ['xrdfs', mgm, 'mkdir', f"-m{mode}",'-p']
+            cmd = xrd_cmd(['xrdfs', mgm, 'mkdir', f"-m{mode}",'-p'], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         dname = unquote_expand_user(dname = dname, username = username, url = False)
         cmd.append(f'''{dname}''') if '"' in dname else cmd.append(f"""{dname}""")
         logger.debug(f"CMD: {cmd}")
@@ -88,7 +104,7 @@ async def chmod(fname:str, username:str, mode:str, mgm:str = mgm_url) -> bool:
     else:
         mode = mode_map(mode)
         fname = unquote_expand_user(dname = fname, username = username, url = False)
-        cmd = f"xrdfs {mgm} chmod {fname} {mode}".split()
+        cmd = xrd_cmd(f"xrdfs {mgm} chmod {fname} {mode}".split(), username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         logger.debug(f"Xrdfs chmod: {cmd}")
     returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 20, decode = True)
     if returncode !=0 or err != "":
@@ -120,7 +136,7 @@ async def list_path(
     if showhidden:
         option = option + " -a"
 
-    cmd = ["xrdfs", mgm, "ls", *option.split()]
+    cmd = xrd_cmd(["xrdfs", mgm, "ls", *option.split()], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
 
     try:
         dname = unquote_expand_user(dname = dname, username = username, url = False)
@@ -268,7 +284,7 @@ async def delete_path(
         status = True
         #### delete files
         for f in files:
-            cmd = ["xrdfs", mgm, "rm"]
+            cmd = xrd_cmd(["xrdfs", mgm, "rm"], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
             cmd.append(f'''{f}''') if '"' in f else cmd.append(f"""{f}""")
             logger.debug(f"Xrd DEL CMD: {cmd}")
 
@@ -282,7 +298,7 @@ async def delete_path(
                 msg = f"Failed to delete {f}."
                 status = False
         for f in dirs:
-            cmd = ["xrdfs", mgm, "rmdir"]
+            cmd = xrd_cmd(["xrdfs", mgm, "rmdir"], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
             cmd.append(f'''{f}''') if '"' in f else cmd.append(f"""{f}""")
             returncode, _, err = await async_exec(cmd = cmd, env = env, timeout = 120, decode = True)
             logger.debug(f"Xrd Del. err:{err}")
@@ -302,7 +318,6 @@ async def upload_file(
     dst: str,
     username: str = "",
     mgm: str = mgm_url,
-    krb5_enabled: bool = True,
     mode: str = ""
 ):
     _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
@@ -312,7 +327,7 @@ async def upload_file(
     cmd = ""
     try:
         logger.info(f'CMD: {cmd} - """{mgm}/{dst}"""')
-        cmd = f"sudo -E -u {username} xrdcp -f --retry 3 -".split() if dst[0:4] == "/afs" else [ 'xrdcp', '-f', '--retry', '3', '-']
+        cmd = f"sudo -E -u {username} xrdcp -f --retry 3 -".split() if dst[0:4] == "/afs" else xrd_cmd(['xrdcp', '-f', '--retry', '3', '-'], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         if dst[0:4] == "/afs":
             subprocess.check_output(
                 f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2
@@ -388,7 +403,7 @@ async def get_file(
         else:
             logger.info(f"Start downloading {fname}.")
 
-        cmd = ["xrdfs", mgm, "ls", "-l"]
+        cmd = xrd_cmd(["xrdfs", mgm, "ls", "-l"], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         cmd.append(f"""{fname}""") if "'" in fname else cmd.append(f'''{fname}''')
         _, ret, err = await async_exec(cmd = cmd, env = env, timeout = 1200, decode = True)
         ret = ret.split()[3]
@@ -398,9 +413,9 @@ async def get_file(
             raise IOError(f"Error. {fname} is too large.")
 
         if "'" in fname:
-            cmd = ["xrdcp", f"""{mgm}/{fname}""", "-"]
+            cmd = xrd_cmd(["xrdcp", f"""{mgm}/{fname}""", "-"], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         else:
-            cmd = ['xrdcp', f'''{mgm}/{fname}''', '-']
+            cmd = xrd_cmd(['xrdcp', f'''{mgm}/{fname}''', '-'], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 1200, decode = False)
         logger.debug(f"I've got {fname}'s contents")
         if returncode == 0:
@@ -442,9 +457,9 @@ async def prepare_zip_file(zipfile:str, TargetPath:str, flist:List[Dict[str,Any]
                     subprocess.check_output(f"sudo -E -u {username} aklog", env=env, shell=True, timeout=2)
                 else:
                     if '"' in fname:
-                        cmd = f"xrdcp -f --retry 3 '''{mgm}/{l['path']}''' - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
+                        cmd = f"sudo -E -u {username} xrdcp -f --retry 3 '''{mgm}/{l['path']}''' - | zip -u {zipfile} - && echo -e '@ -\n@={fname}\n' | zipnote -w {zipfile}"
                     else:
-                        cmd = f'xrdcp -f --retry 3 """{mgm}/{l["path"]}""" - | zip -u {zipfile} - && echo -e \'@ -\n@={fname}\n\' | zipnote -w {zipfile}'
+                        cmd = f'sudo -E -u {username} xrdcp -f --retry 3 """{mgm}/{l["path"]}""" - | zip -u {zipfile} - && echo -e \'@ -\n@={fname}\n\' | zipnote -w {zipfile}'
             else:
                 logger.error(f"Unknown Path Type....")
                 raise ValueError(f"Unknown Path Type {l['type']}...")
@@ -513,7 +528,7 @@ async def cat_file(
         if path_type == PathType.DIR:
             raise TypeError(f"{fname} is a directory.")
 
-        cmd = ["xrdfs", mgm, "cat"]
+        cmd = xrd_cmd(["xrdfs", mgm, "cat"], username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         cmd.append(f"""{fname}""") if "'" in fname else cmd.append(f'''{fname}''')
 
         returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
@@ -546,7 +561,7 @@ async def checksum(
             logger.error(f"Xrd doesn't support {cksname}")
             raise TypeError(f"Xrd doesn't support {cksname}")
         fname = unquote_expand_user(dname = fname, username = username, url = False)
-        cmd = f"xrd{cksname} {mgm} '{fname}".split()
+        cmd = xrd_cmd(f"xrd{cksname} {mgm} '{fname}".split(), username = username, krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
         returncode, ret, err = await async_exec(cmd = cmd, env = env, timeout = 600, decode = True)
         if returncode == 0 and err == '':
             return ret.split()[0]
@@ -595,4 +610,3 @@ async def rename(src: str, dst:str, username:str, mgm: str = mgm_url) -> bool:
 
 if __name__ == "__main__":
     pass
-

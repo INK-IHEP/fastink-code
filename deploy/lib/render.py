@@ -192,13 +192,19 @@ def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
     return "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
 
 
-def default_jobtype_config_block(schedd_host: str, cm_host: str, indent: int = 2) -> str:
+def default_jobtype_config_block(
+    schedd_host: str,
+    cm_host: str,
+    request_cpus: int,
+    request_memory: int,
+    indent: int = 2,
+) -> str:
     jobtypes = ["vscode", "jupyter", "vnc", "rootbrowse"]
     payload = {
         name: {
             "htc": {
-                "RequestMemory": 6000,
-                "RequestCpus": 1,
+                "RequestMemory": request_memory,
+                "RequestCpus": request_cpus,
                 "walltime": "default",
                 "schedd_host": schedd_host,
                 "cm_host": cm_host,
@@ -275,7 +281,7 @@ def build_mapping(
     extra_mount_entries = load_extra_mount_entries(answers.get("extra_mounts_file", ""))
     extra_mounts_block = render_volume_block(extra_mount_entries)
     xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
-    schedd_host = "fastink-htcondor" if enable_local_htcondor else str(answers.get("schedd_host", "localhost"))
+    schedd_host = "schedd@fastink-htcondor" if enable_local_htcondor else str(answers.get("schedd_host", "localhost"))
     cm_host = "fastink-htcondor" if enable_local_htcondor else str(answers.get("cm_host", "localhost"))
     cluster_list = ["htcondor"]
     noenv_jobtype = ["jupyter", "vnc"]
@@ -287,6 +293,12 @@ def build_mapping(
         "Start rootbrowse in screen session",
         "OpenClaw gateway listening on",
     ]
+    htcondor_internal_domain = str(answers.get("htcondor_internal_domain", "local"))
+
+    # Condor config: always generated into .deploy/condor/ink.conf
+    server_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
+    cron_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
+    htcondor_local_conf_host_path = str((deploy_dir / "condor" / "htcondor.local.conf").resolve())
 
     if enable_nginx:
         server_port_block = '    expose:\n      - "8000"'
@@ -389,7 +401,12 @@ def build_mapping(
         "cluster_scripts": yaml_string("/ink/src/fastink/computing/scripts"),
         "ink_dir": yaml_string("/home/{username}"),
         "start_keywords_block": render_yaml_list_block(start_keywords),
-        "jobtype_defaults_block": default_jobtype_config_block(schedd_host, cm_host),
+        "jobtype_defaults_block": default_jobtype_config_block(
+            schedd_host,
+            cm_host,
+            int(answers.get("htcondor_default_request_cpus", 1)),
+            int(answers.get("htcondor_default_request_memory", 6000)),
+        ),
         "app_plugins": yaml_string(""),
         "router_plugins": yaml_string(""),
         "unified_plugin_packages": yaml_string(""),
@@ -397,6 +414,14 @@ def build_mapping(
         "service_node_yaml": yaml_string("fastink-rootbrowse"),
         "enable_local_htcondor": str(enable_local_htcondor).lower(),
         "htcondor_host_name": yaml_string("fastink-htcondor"),
+        "htcondor_host_name_plain": cm_host,
+        "server_condor_conf_host_path": server_condor_conf_host_path,
+        "cron_condor_conf_host_path": cron_condor_conf_host_path,
+        "htcondor_local_conf_host_path": htcondor_local_conf_host_path,
+        "htcondor_schedd_name": "schedd@fastink-htcondor" if enable_local_htcondor else str(answers.get("schedd_host", "localhost")),
+        "htcondor_auth_method": "CLAIMTOBE",
+        "htcondor_fs_domain": htcondor_internal_domain,
+        "htcondor_uid_domain": htcondor_internal_domain,
     }
 
 
@@ -465,6 +490,14 @@ def render_xrootd_conf(mapping: dict[str, str]) -> str:
     return render_template_text(TEMPLATE_ROOT / "base" / "xrootd-proxy.cfg.tpl", mapping)
 
 
+def render_condor_conf(mapping: dict[str, str]) -> str:
+    return render_template_text(TEMPLATE_ROOT / "base" / "ink.condor.conf.tpl", mapping)
+
+
+def render_htcondor_local_conf(mapping: dict[str, str]) -> str:
+    return render_template_text(TEMPLATE_ROOT / "base" / "htcondor.local.conf.tpl", mapping)
+
+
 def render_bundle(
     profile: str,
     answers: dict[str, object],
@@ -495,4 +528,8 @@ def render_bundle(
     if bool(answers.get("enable_xrootd", False)):
         bundle["xrootd/xrootd-proxy.cfg"] = render_xrootd_conf(mapping)
         bundle["xrootd/vo-list.cfg"] = str(mapping.get("xrootd_vo_list_content", ""))
+    # Always generate condor config for container mount
+    bundle["condor/ink.conf"] = render_condor_conf(mapping)
+    if bool(answers.get("enable_local_htcondor", False)):
+        bundle["condor/htcondor.local.conf"] = render_htcondor_local_conf(mapping)
     return bundle

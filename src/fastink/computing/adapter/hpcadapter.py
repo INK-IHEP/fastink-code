@@ -36,6 +36,18 @@ class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
         super().__init__(uid)
         self.CLUSTER_TYPE = "slurm"
+    
+    def _get_interactive_job_types(self) -> List[str]:
+        """Get the list of interactive job types from config."""
+        return list(get_config("jobtype").keys())
+    
+    def _need_dedup(self, job_data: SLURM_JOB) -> bool:
+        if job_data.submit_mode is SubmitMode.SYNC:
+            return False
+
+        # async mode
+        interactive_job_types = self._get_interactive_job_types()
+        return job_data.job_type in interactive_job_types
 
     async def _gen_slurm_submit_cmd(
         self, 
@@ -135,7 +147,8 @@ class HPC_Scheduler(SchedulerBase):
             
         # sbatch job_content or job_script_abs_path or prepared job script
         submit_abs_job_script = ""
-        if jobtype in iptables_jobtype:
+        interactive_job_types = self._get_interactive_job_types()
+        if jobtype in interactive_job_types:
             executable_dir = get_config("computing", "cluster_scripts")
             executable = f"{executable_dir}/{jobtype}/shell.sh"
 
@@ -599,7 +612,7 @@ class HPC_Scheduler(SchedulerBase):
                     output_content, _ = await get_job_output(
                         uid=self.UID,
                         job_id=job_id,
-                        clusterid=self.CLUSTER_TYPE,
+                        cluster_id=self.CLUSTER_TYPE,
                     )
 
                     if any(kw in output_content for kw in start_keywords):

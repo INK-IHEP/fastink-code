@@ -17,10 +17,14 @@ else
     all.export / stage
     all.role server
     xrd.port $$xrdport
+    xrootd.seclib libXrdSec.so
     sec.protocol unix
-    sec.protbind * only unix
+    sec.protocol sss -s /etc/xrootd/sss.keytab -c /etc/xrootd/sss.keytab -r 60 -g -p unix
+    sec.protbind * only unix sss
     acc.audit deny grant
 fi
 
 all.adminpath /var/spool/xrootd
 all.pidpath /run/xrootd
+
+continue /etc/xrootd/config.d/

@@ -343,6 +343,14 @@ def finalize_mount_answers(answers: dict[str, object]) -> dict[str, object]:
     return answers
 
 
+def default_htcondor_internal_domain(host_name: str, fallback: str) -> str:
+    host_name = host_name.strip()
+    if "." not in host_name:
+        return fallback
+    suffix = ".".join(part for part in host_name.split(".")[1:] if part)
+    return suffix or fallback
+
+
 def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dict[str, object]:
     print_step("Choose deployment profile")
     profile = prompt_choice(
@@ -392,16 +400,31 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         else:
             htcondor_image = prompt_text("HTCondor image reference", htcondor_image_default, str(previous_answers["htcondor_image"]) if previous_answers and previous_answers.get("htcondor_image") else None)
     host_name = prompt_text("Public host name", str(defaults["host_name"]), str(previous_answers["host_name"]) if previous_answers and previous_answers.get("host_name") else None)
+    htcondor_internal_domain = prompt_text(
+        "HTCondor internal domain",
+        default_htcondor_internal_domain(str(host_name), str(defaults["htcondor_internal_domain"])),
+        str(previous_answers["htcondor_internal_domain"]) if previous_answers and previous_answers.get("htcondor_internal_domain") else None,
+    )
     host_port_default = 443 if enable_nginx and int(defaults["host_port"]) == 8000 else int(defaults["host_port"])
     host_port = prompt_int("Public HTTPS port" if enable_nginx else "Public port", host_port_default, int(previous_answers["host_port"]) if previous_answers and previous_answers.get("host_port") is not None else None)
     rootbrowse_port = prompt_int("Rootbrowse port", int(defaults["rootbrowse_port"]), int(previous_answers["rootbrowse_port"]) if previous_answers and previous_answers.get("rootbrowse_port") is not None else None)
     xrootd_port = prompt_int("Xrootd port", int(defaults["xrootd_port"]), int(previous_answers["xrootd_port"]) if previous_answers and previous_answers.get("xrootd_port") is not None else None)
     if enable_local_htcondor:
-        schedd_host = "fastink-htcondor"
+        schedd_host = "schedd@fastink-htcondor"
         cm_host = "fastink-htcondor"
     else:
         schedd_host = prompt_text("HTCondor schedd host", str(defaults["schedd_host"]), str(previous_answers["schedd_host"]) if previous_answers and previous_answers.get("schedd_host") else None)
         cm_host = prompt_text("HTCondor collector/CM host", str(defaults["cm_host"]), str(previous_answers["cm_host"]) if previous_answers and previous_answers.get("cm_host") else None)
+    htcondor_default_request_cpus = prompt_int(
+        "Default HTCondor job CPUs",
+        int(defaults["htcondor_default_request_cpus"]),
+        int(previous_answers["htcondor_default_request_cpus"]) if previous_answers and previous_answers.get("htcondor_default_request_cpus") is not None else None,
+    )
+    htcondor_default_request_memory = prompt_int(
+        "Default HTCondor job memory (MB)",
+        int(defaults["htcondor_default_request_memory"]),
+        int(previous_answers["htcondor_default_request_memory"]) if previous_answers and previous_answers.get("htcondor_default_request_memory") is not None else None,
+    )
     ink_production = prompt_bool("Run FastINK in production mode", bool(defaults["ink_production"]), bool(previous_answers["ink_production"]) if previous_answers and previous_answers.get("ink_production") is not None else None)
     workers = int(defaults["workers"])
     if ink_production:
@@ -442,11 +465,14 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "enable_xrootd": enable_xrootd,
         "enable_local_htcondor": enable_local_htcondor,
         "host_name": host_name,
+        "htcondor_internal_domain": htcondor_internal_domain,
         "host_port": host_port,
         "rootbrowse_port": rootbrowse_port,
         "xrootd_port": xrootd_port,
         "schedd_host": schedd_host,
         "cm_host": cm_host,
+        "htcondor_default_request_cpus": htcondor_default_request_cpus,
+        "htcondor_default_request_memory": htcondor_default_request_memory,
         "workers": workers,
         "ink_production": ink_production,
         "init_database": init_database,

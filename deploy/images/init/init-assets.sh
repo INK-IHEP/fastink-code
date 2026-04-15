@@ -220,9 +220,11 @@ if [[ "$FASTINK_ENABLE_XROOTD" == "true" ]]; then
     : > "$KRB5_KEYTAB"
   fi
   if [[ -s "$SSS_KEYTAB" ]]; then
+    chown 379:978 "$SSS_KEYTAB"
     chmod 400 "$SSS_KEYTAB"
   else
     chmod 600 "$SSS_KEYTAB"
   fi
+  chown 379:978 "$KRB5_KEYTAB"
   chmod 600 "$KRB5_KEYTAB"
 fi
