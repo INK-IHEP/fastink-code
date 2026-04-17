@@ -31,6 +31,7 @@ services:
       - ${plugins_dir}:/plugins
       - ${preload_cron_dir}:/opt/preload/cron:ro
       - ${cron_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
+${cron_slurm_mounts_block}
 ${cron_extra_mounts_block}
 
   fastink-rootbrowse:

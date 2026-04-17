@@ -357,6 +357,13 @@ If FastINK needs Slurm access, the host must already provide a working Slurm cli
 
 The official images provide the container-side client packages. Host-side Slurm configuration and authentication are still the user's responsibility.
 
+If you enable `Expose host Slurm client config and munge socket` in the interactive installer, deploy will mount the host:
+
+- `slurm.conf`
+- `/var/run/munge`
+
+into both `fastink-server` and `fastink-redis-cron`, so Slurm-backed runtime and cron jobs can use the same client state.
+
 ## Official Images And yum Repositories
 
 Open-source users should normally use the official images.

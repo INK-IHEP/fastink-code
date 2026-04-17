@@ -3,7 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "enable_local_htcondor", "ink_production", "init_database"}
+BOOL_FIELDS = {
+    "enable_nginx",
+    "enable_xrootd",
+    "enable_local_htcondor",
+    "enable_host_slurm_client",
+    "ink_production",
+    "init_database",
+}
 INT_FIELDS = {
     "host_port",
     "rootbrowse_port",
@@ -54,6 +61,9 @@ COMMON_DEFAULTS = {
     "plugin_pip_packages": "",
     "plugin_editable_dirs": "",
     "extra_mounts_file": "",
+    "enable_host_slurm_client": False,
+    "slurm_conf_host_path": "/etc/slurm/slurm.conf",
+    "munge_socket_dir": "/var/run/munge",
     "server_preload_script_dirs": "/opt/preload/server",
     "server_preload_scripts": "",
     "cron_preload_script_dirs": "/opt/preload/cron",
@@ -67,11 +77,13 @@ PROFILE_DEFAULTS = {
         "enable_nginx": False,
         "enable_xrootd": False,
         "enable_local_htcondor": False,
+        "enable_host_slurm_client": False,
     },
     "full": {
         "enable_nginx": True,
         "enable_xrootd": True,
         "enable_local_htcondor": False,
+        "enable_host_slurm_client": False,
     },
 }
 

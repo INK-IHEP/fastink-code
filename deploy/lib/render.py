@@ -186,6 +186,13 @@ def render_volume_block(entries: list[str], indent: int = 6) -> str:
     return "\n" + "\n".join(f"{prefix}- {entry}" for entry in entries)
 
 
+def render_optional_single_volume_block(entry: Optional[str], indent: int = 6) -> str:
+    if not entry:
+        return ""
+    prefix = " " * indent
+    return f"\n{prefix}- {entry}"
+
+
 def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
     rendered = yaml.safe_dump(values, sort_keys=False, allow_unicode=True).rstrip()
     prefix = " " * indent
@@ -294,6 +301,20 @@ def build_mapping(
         "OpenClaw gateway listening on",
     ]
     htcondor_internal_domain = str(answers.get("htcondor_internal_domain", "local"))
+    enable_host_slurm_client = bool(answers.get("enable_host_slurm_client", False))
+    slurm_conf_host_path = str(answers.get("slurm_conf_host_path", "/etc/slurm/slurm.conf")).strip()
+    munge_socket_dir = str(answers.get("munge_socket_dir", "/var/run/munge")).strip().rstrip("/")
+    server_slurm_mounts_block = ""
+    cron_slurm_mounts_block = ""
+    if enable_host_slurm_client:
+        server_slurm_mounts_block = (
+            render_optional_single_volume_block(f"{munge_socket_dir}:/var/run/munge/")
+            + render_optional_single_volume_block(f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro")
+        )
+        cron_slurm_mounts_block = (
+            render_optional_single_volume_block(f"{munge_socket_dir}:/var/run/munge/")
+            + render_optional_single_volume_block(f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro")
+        )
 
     # Condor config: always generated into .deploy/condor/ink.conf
     server_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
@@ -375,7 +396,9 @@ def build_mapping(
         "plugin_pip_packages": yaml_string(str(answers.get("plugin_pip_packages", ""))),
         "plugin_editable_dirs": yaml_string(str(answers.get("plugin_editable_dirs", ""))),
         "server_extra_mounts_block": extra_mounts_block,
+        "server_slurm_mounts_block": server_slurm_mounts_block,
         "cron_extra_mounts_block": extra_mounts_block,
+        "cron_slurm_mounts_block": cron_slurm_mounts_block,
         "rootbrowse_extra_mounts_block": extra_mounts_block,
         "xrootd_extra_mounts_block": extra_mounts_block,
         "htcondor_extra_mounts_block": extra_mounts_block,

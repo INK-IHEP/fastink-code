@@ -393,6 +393,11 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
     enable_nginx = prompt_bool("Enable nginx HTTPS reverse proxy", bool(defaults["enable_nginx"]), bool(previous_answers["enable_nginx"]) if previous_answers and previous_answers.get("enable_nginx") is not None else None)
     enable_xrootd = prompt_bool("Enable xrootd service container", bool(defaults["enable_xrootd"]), bool(previous_answers["enable_xrootd"]) if previous_answers and previous_answers.get("enable_xrootd") is not None else None)
     enable_local_htcondor = prompt_bool("Enable local HTCondor all-in-one container", bool(defaults["enable_local_htcondor"]), bool(previous_answers["enable_local_htcondor"]) if previous_answers and previous_answers.get("enable_local_htcondor") is not None else None)
+    enable_host_slurm_client = prompt_bool(
+        "Expose host Slurm client config and munge socket",
+        bool(defaults["enable_host_slurm_client"]),
+        bool(previous_answers["enable_host_slurm_client"]) if previous_answers and previous_answers.get("enable_host_slurm_client") is not None else None,
+    )
     htcondor_image = htcondor_image_default
     if enable_local_htcondor:
         if image_source == "build":
@@ -425,6 +430,19 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         int(defaults["htcondor_default_request_memory"]),
         int(previous_answers["htcondor_default_request_memory"]) if previous_answers and previous_answers.get("htcondor_default_request_memory") is not None else None,
     )
+    slurm_conf_host_path = str(defaults["slurm_conf_host_path"])
+    munge_socket_dir = str(defaults["munge_socket_dir"])
+    if enable_host_slurm_client:
+        slurm_conf_host_path = prompt_text(
+            "Host slurm.conf path",
+            str(defaults["slurm_conf_host_path"]),
+            str(previous_answers["slurm_conf_host_path"]) if previous_answers and previous_answers.get("slurm_conf_host_path") else None,
+        )
+        munge_socket_dir = prompt_text(
+            "Host munge socket directory",
+            str(defaults["munge_socket_dir"]),
+            str(previous_answers["munge_socket_dir"]) if previous_answers and previous_answers.get("munge_socket_dir") else None,
+        )
     ink_production = prompt_bool("Run FastINK in production mode", bool(defaults["ink_production"]), bool(previous_answers["ink_production"]) if previous_answers and previous_answers.get("ink_production") is not None else None)
     workers = int(defaults["workers"])
     if ink_production:
@@ -464,6 +482,7 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "enable_nginx": enable_nginx,
         "enable_xrootd": enable_xrootd,
         "enable_local_htcondor": enable_local_htcondor,
+        "enable_host_slurm_client": enable_host_slurm_client,
         "host_name": host_name,
         "htcondor_internal_domain": htcondor_internal_domain,
         "host_port": host_port,
@@ -473,6 +492,8 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "cm_host": cm_host,
         "htcondor_default_request_cpus": htcondor_default_request_cpus,
         "htcondor_default_request_memory": htcondor_default_request_memory,
+        "slurm_conf_host_path": slurm_conf_host_path,
+        "munge_socket_dir": munge_socket_dir,
         "workers": workers,
         "ink_production": ink_production,
         "init_database": init_database,
