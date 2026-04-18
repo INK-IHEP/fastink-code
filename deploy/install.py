@@ -47,7 +47,8 @@ def print_preparation_notes() -> None:
     print(f"- Optional plugin source or packages under: {DEPLOY_DIR / 'plugins'}")
     print(f"- Optional preload scripts under: {DEPLOY_DIR / 'preload'}")
     print("- Optional existing TLS certificate and private key if you do not want a self-signed certificate.")
-    print("- If xrootd is enabled and Kerberos-backed xrootd is needed, prepare a krb5 keytab to place at .deploy/xrootd/krb5.keytab after initialization.")
+    print("- If Kerberos is enabled, prepare a host krb5.conf path to mount into containers.")
+    print("- If both Kerberos and xrootd are enabled, prepare the xrootd service keytab path and xrootd service principal.")
     if (DEPLOY_DIR / "answers.json").exists():
         print("- During the interactive questionnaire, type 'r' to reuse the saved value from .deploy/answers.json.")
 
@@ -210,8 +211,33 @@ def build_xrootd_notes(paths: dict[str, Path]) -> list[str]:
     krb5_keytab = Path(paths["xrootd_krb5_keytab_path"]).resolve()
     return [
         f"xrootd shared-secret keytab: {sss_keytab}",
-        f"If Kerberos-backed xrootd is required, ask your krb5 administrator to place a service keytab at: {krb5_keytab}",
+        f"xrootd krb5 keytab placeholder path (unused unless you copy one there manually): {krb5_keytab}",
     ]
+
+
+def validate_krb5_paths(answers: dict[str, object]) -> list[str]:
+    notes: list[str] = []
+    if not bool(answers.get("enable_krb5")):
+        return notes
+
+    krb5_conf_host_path = Path(str(answers.get("krb5_conf_host_path", "")).strip()).expanduser().resolve()
+    if not krb5_conf_host_path.exists():
+        raise FileNotFoundError(f"Host krb5.conf not found: {krb5_conf_host_path}")
+    notes.append(f"Using host krb5.conf from: {krb5_conf_host_path}")
+
+    if bool(answers.get("enable_xrootd")):
+        keytab_text = str(answers.get("xrootd_krb5_keytab_source_path", "")).strip()
+        if not keytab_text:
+            raise RuntimeError("Kerberos-enabled xrootd requires an xrootd krb5 keytab source path")
+        xrootd_krb5_keytab_source_path = Path(keytab_text).expanduser().resolve()
+        if not xrootd_krb5_keytab_source_path.exists():
+            raise FileNotFoundError(f"xrootd krb5 keytab not found: {xrootd_krb5_keytab_source_path}")
+        notes.append(f"Using xrootd krb5 keytab from: {xrootd_krb5_keytab_source_path}")
+        principal = str(answers.get("xrootd_krb5_principal", "")).strip()
+        if not principal:
+            raise RuntimeError("Kerberos-enabled xrootd requires an xrootd service principal")
+        notes.append(f"Using xrootd krb5 principal: {principal}")
+    return notes
 
 
 def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> None:
@@ -250,7 +276,13 @@ def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> No
 
 
 
-def print_post_install_notes(answers: dict[str, object], paths: dict[str, Path], nginx_notes: list[str], xrootd_notes: list[str]) -> None:
+def print_post_install_notes(
+    answers: dict[str, object],
+    paths: dict[str, Path],
+    nginx_notes: list[str],
+    xrootd_notes: list[str],
+    krb5_notes: list[str],
+) -> None:
     print_step("Post-install notes")
 
     server_private_key = paths.get("server_ssh_private_key_path")
@@ -266,6 +298,9 @@ def print_post_install_notes(answers: dict[str, object], paths: dict[str, Path],
 
     if bool(answers.get("enable_xrootd")):
         for note in xrootd_notes:
+            print(note)
+    if bool(answers.get("enable_krb5")):
+        for note in krb5_notes:
             print(note)
 
     print("If you plan to use Slurm backends, install and configure a Slurm client on the host, keep sbatch/sacct/scontrol/scancel available, and expose the host munge socket plus Slurm config to the deployment.")
@@ -392,6 +427,11 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
     ).resolve()
     enable_nginx = prompt_bool("Enable nginx HTTPS reverse proxy", bool(defaults["enable_nginx"]), bool(previous_answers["enable_nginx"]) if previous_answers and previous_answers.get("enable_nginx") is not None else None)
     enable_xrootd = prompt_bool("Enable xrootd service container", bool(defaults["enable_xrootd"]), bool(previous_answers["enable_xrootd"]) if previous_answers and previous_answers.get("enable_xrootd") is not None else None)
+    enable_krb5 = prompt_bool(
+        "Enable Kerberos",
+        bool(defaults["enable_krb5"]),
+        bool(previous_answers["enable_krb5"]) if previous_answers and previous_answers.get("enable_krb5") is not None else None,
+    )
     enable_local_htcondor = prompt_bool("Enable local HTCondor all-in-one container", bool(defaults["enable_local_htcondor"]), bool(previous_answers["enable_local_htcondor"]) if previous_answers and previous_answers.get("enable_local_htcondor") is not None else None)
     enable_host_slurm_client = prompt_bool(
         "Expose host Slurm client config and munge socket",
@@ -430,6 +470,26 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         int(defaults["htcondor_default_request_memory"]),
         int(previous_answers["htcondor_default_request_memory"]) if previous_answers and previous_answers.get("htcondor_default_request_memory") is not None else None,
     )
+    krb5_conf_host_path = str(defaults["krb5_conf_host_path"])
+    xrootd_krb5_keytab_source_path = ""
+    xrootd_krb5_principal = ""
+    if enable_krb5:
+        krb5_conf_host_path = prompt_text(
+            "Host krb5.conf path",
+            str(defaults["krb5_conf_host_path"]),
+            str(previous_answers["krb5_conf_host_path"]) if previous_answers and previous_answers.get("krb5_conf_host_path") else None,
+        )
+        if enable_xrootd:
+            xrootd_krb5_keytab_source_path = prompt_text(
+                "xrootd krb5 keytab source path",
+                "",
+                str(previous_answers["xrootd_krb5_keytab_source_path"]) if previous_answers and previous_answers.get("xrootd_krb5_keytab_source_path") else None,
+            )
+            xrootd_krb5_principal = prompt_text(
+                "xrootd krb5 service principal",
+                "",
+                str(previous_answers["xrootd_krb5_principal"]) if previous_answers and previous_answers.get("xrootd_krb5_principal") else None,
+            )
     slurm_conf_host_path = str(defaults["slurm_conf_host_path"])
     munge_socket_dir = str(defaults["munge_socket_dir"])
     if enable_host_slurm_client:
@@ -481,6 +541,7 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "data_root": data_root,
         "enable_nginx": enable_nginx,
         "enable_xrootd": enable_xrootd,
+        "enable_krb5": enable_krb5,
         "enable_local_htcondor": enable_local_htcondor,
         "enable_host_slurm_client": enable_host_slurm_client,
         "host_name": host_name,
@@ -492,6 +553,9 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "cm_host": cm_host,
         "htcondor_default_request_cpus": htcondor_default_request_cpus,
         "htcondor_default_request_memory": htcondor_default_request_memory,
+        "krb5_conf_host_path": krb5_conf_host_path,
+        "xrootd_krb5_keytab_source_path": xrootd_krb5_keytab_source_path,
+        "xrootd_krb5_principal": xrootd_krb5_principal,
         "slurm_conf_host_path": slurm_conf_host_path,
         "munge_socket_dir": munge_socket_dir,
         "workers": workers,
@@ -613,6 +677,7 @@ def main() -> None:
         paths = build_paths_from_answers(answers)
         nginx_notes: list[str] = []
         xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
+        krb5_notes = validate_krb5_paths(answers) if bool(answers.get("enable_krb5")) else []
         deploy_stack(answers)
     else:
         print_preparation_notes()
@@ -629,6 +694,7 @@ def main() -> None:
 
         nginx_notes = stage_nginx_tls_material(answers, paths)
         xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
+        krb5_notes = validate_krb5_paths(answers) if bool(answers.get("enable_krb5")) else []
 
         print_step("Render deployment files")
         bundle = render_bundle(
@@ -651,10 +717,10 @@ def main() -> None:
     print_step(f"Wait for health check: {health_url}")
     if wait_for_health(health_url):
         print(f"Deployment completed. Health check passed: {health_url}")
-        print_post_install_notes(answers, paths, nginx_notes, xrootd_notes)
+        print_post_install_notes(answers, paths, nginx_notes, xrootd_notes, krb5_notes)
         return
 
-    print_post_install_notes(answers, paths, nginx_notes, xrootd_notes)
+    print_post_install_notes(answers, paths, nginx_notes, xrootd_notes, krb5_notes)
     print(f"Services started, but health check did not pass within timeout: {health_url}", file=sys.stderr)
     sys.exit(1)
 

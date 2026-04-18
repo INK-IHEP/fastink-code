@@ -52,6 +52,7 @@ services:
       - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${server_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
       - ${preload_server_dir}:/opt/preload/server:ro
+${server_krb5_conf_mount_block}
 ${server_slurm_mounts_block}
 ${server_extra_mounts_block}
 ${server_port_block}

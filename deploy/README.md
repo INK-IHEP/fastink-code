@@ -330,6 +330,8 @@ Rules:
 
 ### 3. xrootd Keytabs
 
+If Kerberos is enabled, deploy mounts the host `krb5.conf` into the relevant containers. The interactive installer asks for the host path and defaults to `/etc/krb5.conf`.
+
 If `xrootd` is enabled, deploy prepares:
 
 - `.deploy/xrootd/sss.keytab`
@@ -342,7 +344,8 @@ Rules:
   - does not require `xrdsssadmin` on the host
 - `krb5.keytab`
   - is never auto-generated
-  - must be provided by a Kerberos administrator
+  - for Kerberos-enabled xrootd, the installer asks for a host source path and mounts that file into `/etc/xrootd/krb5.keytab`
+  - the installer also asks for the xrootd service principal used by the xrootd krb5 config
 
 ### 4. Slurm Host Environment
 
