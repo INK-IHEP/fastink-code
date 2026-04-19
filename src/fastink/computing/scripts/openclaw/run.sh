@@ -27,6 +27,7 @@ OPENCLAW_USER_ROOT=${2}
 OPENCLAW_DIR=${3}
 OPENCLAW_IMAGE=${4}
 OPENCLAW_USER=${5:-${USER:-}}
+OPENCLAW_EXTRA_BINDS_FILE=${6:-}
 APP_LOGIN_INFO="app_login.info"
 LOG_FILE="${APP_PATH}/openclaw-launch.log"
 APP_RUN_FQDN="`/bin/hostname -f 2>/dev/null || /bin/hostname`"
@@ -226,15 +227,32 @@ PY
 }
 
 resolve_extra_readonly_binds() {
-    local group_key
-    group_key=$(basename "$(dirname "${OPENCLAW_USER_ROOT}")")
-    case "${group_key}" in
-        cc|u07)
-            if [ -d /workfs2/cc ]; then
-                printf '%s\n' "/workfs2/cc:/workfs2/cc:ro"
-            fi
-            ;;
-    esac
+    if [ -z "${OPENCLAW_EXTRA_BINDS_FILE}" ] || [ ! -f "${OPENCLAW_EXTRA_BINDS_FILE}" ]; then
+        return 0
+    fi
+
+    OPENCLAW_EXTRA_BINDS_FILE="${OPENCLAW_EXTRA_BINDS_FILE}" python3 - <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+metadata_path = Path(os.environ["OPENCLAW_EXTRA_BINDS_FILE"])
+try:
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"error=failed to parse bind metadata: {exc}", file=sys.stderr)
+    raise SystemExit(0)
+
+binds = payload.get("readonly_binds", [])
+if not isinstance(binds, list):
+    print("error=readonly_binds is not a list", file=sys.stderr)
+    raise SystemExit(0)
+
+for bind_entry in binds:
+    if isinstance(bind_entry, str) and bind_entry:
+        print(bind_entry)
+PY
 }
 
 run_openclaw_command() {
@@ -320,6 +338,10 @@ if [ ! -f "${OPENCLAW_IMAGE}" ]; then
     exit 1
 fi
 
+if [ -n "${OPENCLAW_EXTRA_BINDS_FILE}" ] && [ ! -f "${OPENCLAW_EXTRA_BINDS_FILE}" ]; then
+    log "openclaw extra binds metadata file does not exist: ${OPENCLAW_EXTRA_BINDS_FILE}"
+fi
+
 if ! command -v "${APPTAINER_BIN}" >/dev/null 2>&1; then
     log "apptainer command not found in PATH"
     exit 1
@@ -346,6 +368,7 @@ log "app_port=${APP_PORT}"
 log "openclaw_user=${OPENCLAW_USER}"
 log "openclaw_dir=${OPENCLAW_DIR}"
 log "openclaw_image=${OPENCLAW_IMAGE}"
+log "openclaw_extra_binds_file=${OPENCLAW_EXTRA_BINDS_FILE:-missing}"
 log "hostname_fqdn=${APP_RUN_FQDN}"
 log "base_path=${APP_BASE_PATH}"
 log "auth_mode=token"
