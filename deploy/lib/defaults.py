@@ -8,6 +8,7 @@ BOOL_FIELDS = {
     "enable_xrootd",
     "enable_local_htcondor",
     "enable_host_slurm_client",
+    "enable_krb5",
     "ink_production",
     "init_database",
 }
@@ -62,6 +63,10 @@ COMMON_DEFAULTS = {
     "plugin_editable_dirs": "",
     "extra_mounts_file": "",
     "enable_host_slurm_client": False,
+    "enable_krb5": False,
+    "krb5_conf_host_path": "/etc/krb5.conf",
+    "xrootd_krb5_keytab_source_path": "",
+    "xrootd_krb5_principal": "",
     "slurm_conf_host_path": "/etc/slurm/slurm.conf",
     "munge_socket_dir": "/var/run/munge",
     "server_preload_script_dirs": "/opt/preload/server",
@@ -78,12 +83,14 @@ PROFILE_DEFAULTS = {
         "enable_xrootd": False,
         "enable_local_htcondor": False,
         "enable_host_slurm_client": False,
+        "enable_krb5": False,
     },
     "full": {
         "enable_nginx": True,
         "enable_xrootd": True,
         "enable_local_htcondor": False,
         "enable_host_slurm_client": False,
+        "enable_krb5": False,
     },
 }
 
