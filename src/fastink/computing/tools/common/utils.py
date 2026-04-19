@@ -16,6 +16,29 @@ from fastink.computing.tools.db.db_tools import *
 from fastink.computing.tools.gateway.gateway_utils import *
 from fastink.computing.htc.htc_check_job import *
 
+EXPERIMENT_GROUP_MAPPING = {
+    # direct mappings
+    "alicpt": "AliCPT",
+    "cms": "CMS",
+    "dyw": "DYW",
+    "gecam": "GECAM",
+    "hxmt": "HXMT",
+    "lhcb": "LHCB",
+    "panda": "Panda",
+    "higgs": "CEPC",
+    "u07": "CC",
+    "comet": "COMET",
+    "csns": "CSNS",
+    "ucas": "OTHERS",
+    "heps": "HEPS",
+    # grouped mappings
+    **{g: "ATLAS" for g in ("atlas", "combination")},
+    **{g: "BES" for g in ("dqarun", "offlinerun", "physics")},
+    **{g: "JUNO" for g in ("juno", "dqmtest", "dqmjuno", "junospecial", "junodc", "junogns")},
+    **{g: "LHAASO" for g in ("lhaaso", "lhaasorun")},
+    **{g: "HERD" for g in ("herd", "herdrun")},
+}
+
 
 def parse_info(info, key):
     try:
@@ -345,37 +368,119 @@ def delete_iptables(uid, jobId, gateway_port, clusterid):
 
 
 def get_user_exp_group(uid):
-
     # 查询用户信息 → 主组 GID
     gid = pwd.getpwuid(uid).pw_gid
 
     # 查询组信息 → 组名
     group_name = grp.getgrgid(gid).gr_name
+    return map_group_to_experiment(group_name), group_name
 
-    mapping = {
-        # 单键直接映射
-        'alicpt': 'AliCPT',
-        'cms': 'CMS',
-        'dyw': 'DYW',
-        'gecam': 'GECAM',
-        'hxmt': 'HXMT',
-        'lhcb': 'LHCB',
-        'panda': 'Panda',
-        'higgs': 'CEPC',
-        'u07': 'CC',
-        'comet': 'COMET',
-        'csns': 'CSNS',
-        'ucas': 'OTHERS',
-        'heps': 'HEPS',
-        # 多键映射同一值
-        **{g: 'ATLAS' for g in ('atlas', 'combination')},
-        **{g: 'BES' for g in ('dqarun', 'offlinerun', 'physics')},
-        **{g: 'JUNO' for g in ('juno', 'dqmtest', 'dqmjuno', 'junospecial', 'junodc', 'junogns')},
-        **{g: 'LHAASO' for g in ('lhaaso', 'lhaasorun')},
-        **{g: 'HERD' for g in ('herd', 'herdrun')},
+
+def map_group_to_experiment(group_name: str) -> Optional[str]:
+    if not group_name:
+        return None
+    return EXPERIMENT_GROUP_MAPPING.get(group_name.lower())
+
+
+def get_all_user_groups(username: str, uid: int) -> list[str]:
+    primary_gid = pwd.getpwuid(uid).pw_gid
+    group_ids = os.getgrouplist(username, primary_gid)
+    groups = []
+    for gid in group_ids:
+        try:
+            groups.append(grp.getgrgid(gid).gr_name)
+        except KeyError:
+            continue
+    deduped = []
+    for group_name in groups:
+        if group_name not in deduped:
+            deduped.append(group_name)
+    return deduped
+
+
+def resolve_user_experiments(username: str, uid: int) -> tuple[list[str], list[str]]:
+    groups = get_all_user_groups(username, uid)
+    experiments = []
+    for group_name in groups:
+        experiment = map_group_to_experiment(group_name)
+        if experiment and experiment not in experiments:
+            experiments.append(experiment)
+    return groups, experiments
+
+
+def load_openclaw_experiment_bind_map() -> dict[str, list[str]]:
+    bind_map_file = Path(
+        get_config(
+            "service",
+            "openclaw_exp_bind_map_file",
+            fallback="/afs/ihep.ac.cn/soft/common/sysgroup/exp_file.json",
+        )
+    )
+    if not bind_map_file.is_file():
+        logger.warning(f"OpenClaw bind map file not found: {bind_map_file}")
+        return {}
+
+    try:
+        payload = json.loads(bind_map_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning(f"Failed to parse OpenClaw bind map file {bind_map_file}: {exc}")
+        return {}
+
+    if not isinstance(payload, dict):
+        logger.warning(f"OpenClaw bind map file is not a JSON object: {bind_map_file}")
+        return {}
+
+    normalized = {}
+    for experiment, mounts in payload.items():
+        if not isinstance(experiment, str) or not isinstance(mounts, list):
+            continue
+        normalized[experiment] = [str(item) for item in mounts if isinstance(item, str)]
+    return normalized
+
+
+def resolve_openclaw_extra_readonly_binds(username: str, uid: int) -> dict:
+    groups, experiments = resolve_user_experiments(username, uid)
+    bind_map = load_openclaw_experiment_bind_map()
+    readonly_binds = []
+    seen_mount_paths = set()
+
+    for experiment in experiments:
+        for mount_path in bind_map.get(experiment, []):
+            if not mount_path or mount_path in seen_mount_paths:
+                continue
+            if not os.path.isdir(mount_path):
+                logger.info(
+                    f"Skip non-existing OpenClaw bind path for experiment {experiment}: {mount_path}"
+                )
+                continue
+            seen_mount_paths.add(mount_path)
+            readonly_binds.append(f"{mount_path}:{mount_path}:ro")
+
+    return {
+        "resolved_groups": groups,
+        "resolved_experiments": experiments,
+        "readonly_binds": readonly_binds,
     }
 
-    return mapping.get(group_name), group_name
+
+async def write_openclaw_bind_metadata(username: str, uid: int, job_dir: str) -> str:
+    bind_metadata = resolve_openclaw_extra_readonly_binds(username=username, uid=uid)
+    metadata_path = f"{job_dir}/openclaw-extra-binds.json"
+    payload = (json.dumps(bind_metadata, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    await common.upload_file(
+        src_data=payload,
+        dst=metadata_path,
+        username=username,
+        mgm=get_config("computing", "xrootd_path"),
+        mode="600",
+    )
+    logger.info(
+        "OpenClaw extra readonly binds metadata prepared: "
+        f"groups={bind_metadata['resolved_groups']} "
+        f"experiments={bind_metadata['resolved_experiments']} "
+        f"binds={bind_metadata['readonly_binds']}"
+    )
+    return metadata_path
 
 
 def get_user_exp_group_dir(uid: int) -> str:
@@ -457,9 +562,11 @@ async def generate_condor_submit(
     if jobtype == "npu":
         arguments = (arguments or "") + jobdir
     elif jobtype == "openclaw":
+        await write_openclaw_bind_metadata(username=username, uid=uid, job_dir=jobdir)
         arguments = build_openclaw_arguments(
             username=username,
             uid=uid,
+            job_dir=jobdir,
             arguments=arguments,
         )
     
@@ -566,6 +673,7 @@ def get_parent_dir(path_str: str) -> str:
 def build_openclaw_arguments(
     username: str,
     uid: int,
+    job_dir: str,
     arguments: Optional[str] = None,
 ) -> str:
     group_dir = get_user_exp_group_dir(uid)
@@ -590,11 +698,13 @@ def build_openclaw_arguments(
         group_dir=group_dir,
         username=username,
     )
+    extra_binds_file = f"{job_dir}/openclaw-extra-binds.json"
     openclaw_args = [
         quote(openclaw_user_root),
         quote(openclaw_dir),
         quote(openclaw_image),
         quote(username),
+        quote(extra_binds_file),
     ]
     if arguments:
         openclaw_args.append(arguments)
@@ -715,9 +825,11 @@ async def generate_condor_sync_submit(
         if job_type == "npu":
             arguments = (arguments or "") + job_dir
         elif job_type == "openclaw":
+            await write_openclaw_bind_metadata(username=username, uid=uid, job_dir=job_dir)
             arguments = build_openclaw_arguments(
                 username=username,
                 uid=uid,
+                job_dir=job_dir,
                 arguments=arguments,
             )
         
