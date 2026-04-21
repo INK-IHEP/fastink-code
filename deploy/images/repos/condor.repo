@@ -1,0 +1,6 @@
+[condor]
+name=condor
+baseurl=http://202.122.33.67/yum/condor/repo/24.0/el9/x86_64/release
+enabled=1
+gpgcheck=0
+priority=20
