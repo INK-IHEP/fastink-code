@@ -40,6 +40,9 @@ services:
       INK_PRODUCTION: ${ink_production}
       WORKERS: ${workers}
       INIT_DATABASE_ON_START: ${init_database}
+      SOURCE_COMMIT_SHA: ${source_commit_sha}
+      SOURCE_COMMIT_DATE: ${source_commit_date}
+      SOURCE_COMMIT_TAG: ${source_commit_tag}
       PLUGIN_PIP_PACKAGES: ${plugin_pip_packages}
       PLUGIN_EDITABLE_DIRS: ${plugin_editable_dirs}
       PRELOAD_SCRIPT_DIRS: ${server_preload_script_dirs}

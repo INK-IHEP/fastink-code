@@ -78,6 +78,15 @@ The flow is:
 8. Run the one-shot `fastink-init` container to generate deployment assets such as SSH keys, self-signed TLS certificates, and `sss.keytab`.
 9. Run `docker compose up -d` and wait for the health check.
 
+At render time, shared deploy also reads the checked-out FastINK source tree and injects:
+
+- `SOURCE_COMMIT_SHA`
+- `SOURCE_COMMIT_DATE`
+- `SOURCE_COMMIT_TAG`
+
+into the runtime container environment. This keeps the `/version` router aligned
+with the exact `fastink-code` checkout used to render the deployment.
+
 `--reuse` skips steps 2 through 8. It reuses the existing `.deploy/answers.json` and `.deploy/docker-compose.yml`, then runs `docker compose up -d` again with the saved project name.
 
 ## Preparation Notes Before Starting The CLI

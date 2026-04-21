@@ -19,6 +19,9 @@ services:
       MySQL_PASSWORD: ${db_password_yaml}
       MySQL_DATABASE: ${db_name_yaml}
       INK_CONFIG_FILE: /ink/config.yml
+      SOURCE_COMMIT_SHA: ${source_commit_sha}
+      SOURCE_COMMIT_DATE: ${source_commit_date}
+      SOURCE_COMMIT_TAG: ${source_commit_tag}
       FASTINK_CRON_BASE_DIR: /opt/fastink-cron
       FASTINK_CRON_CONFIG: /opt/fastink-cron/cron.ini
       PLUGIN_PIP_PACKAGES: ${plugin_pip_packages}

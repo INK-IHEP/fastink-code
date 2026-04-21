@@ -10,6 +10,7 @@ import yaml
 
 DEPLOY_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_ROOT = DEPLOY_ROOT / "templates"
+SOURCE_ROOT = DEPLOY_ROOT.parent
 
 
 def ensure_ssh_key_pair(private_key_path: Path, public_key_path: Path) -> None:
@@ -123,6 +124,41 @@ def profile_chain(profile: str) -> list[str]:
 
 def yaml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
+
+
+def git_output(*args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(SOURCE_ROOT), *args],
+        encoding="utf-8",
+        stderr=subprocess.DEVNULL,
+    ).strip()
+
+
+def source_version_env() -> dict[str, str]:
+    env = {
+        "source_commit_sha": "unknown",
+        "source_commit_date": "unknown",
+        "source_commit_tag": "",
+    }
+    if not (SOURCE_ROOT / ".git").exists():
+        return env
+
+    try:
+        env["source_commit_sha"] = git_output("rev-parse", "--short", "HEAD")
+    except Exception:
+        pass
+
+    try:
+        env["source_commit_date"] = git_output("log", "-1", "--format=%cs")
+    except Exception:
+        pass
+
+    try:
+        env["source_commit_tag"] = git_output("describe", "--tags", "--exact-match", "HEAD")
+    except Exception:
+        pass
+
+    return env
 
 
 def load_extra_mount_entries(path_value: object) -> list[str]:
@@ -271,6 +307,7 @@ def build_mapping(
     paths: dict[str, Path],
     deploy_dir: Path,
 ) -> dict[str, str]:
+    version_env = source_version_env()
     config_path = deploy_dir / "config.yml"
     nginx_conf_path = deploy_dir / "nginx" / "default.conf"
     xrootd_conf_path = deploy_dir / "xrootd" / "xrootd-proxy.cfg"
@@ -409,6 +446,9 @@ def build_mapping(
         "cron_preload_scripts": yaml_string(str(answers["cron_preload_scripts"])),
         "rootbrowse_preload_script_dirs": yaml_string(str(answers["rootbrowse_preload_script_dirs"])),
         "rootbrowse_preload_scripts": yaml_string(str(answers["rootbrowse_preload_scripts"])),
+        "source_commit_sha": yaml_string(version_env["source_commit_sha"]),
+        "source_commit_date": yaml_string(version_env["source_commit_date"]),
+        "source_commit_tag": yaml_string(version_env["source_commit_tag"]),
         "plugin_pip_packages": yaml_string(str(answers.get("plugin_pip_packages", ""))),
         "plugin_editable_dirs": yaml_string(str(answers.get("plugin_editable_dirs", ""))),
         "server_extra_mounts_block": extra_mounts_block,
