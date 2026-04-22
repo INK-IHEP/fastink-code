@@ -32,6 +32,7 @@ services:
       - ${config_path}:/ink/config.yml:ro
       - ${etc_init_dir}:/etc-init
       - ${plugins_dir}:/plugins
+      - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${preload_cron_dir}:/opt/preload/cron:ro
       - ${cron_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
 ${cron_krb5_conf_mount_block}
