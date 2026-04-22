@@ -36,10 +36,10 @@ DEFAULT_OPENCLAW_TEMPLATES = {
         "model_id": "hepai/deepseek-v3.2",
     },
     "Deepseek": {
-        "base_url": "https://api.deepseek.com/v1",
+        "base_url": "https://api.deepseek.com",
         "api_key": "",
         "api_name": "openai-completions",
-        "model_id": "deepseek/deepseek-chat",
+        "model_id": "deepseek-chat",
     },
     "Qwen coding plan": {
         "base_url": "https://coding.dashscope.aliyuncs.com/v1",
@@ -513,6 +513,21 @@ def _validate_experiment_data_models(target_config: dict) -> None:
         )
 
 
+def _ensure_default_allowed_origins(control_ui: dict) -> list[str]:
+    existing_allowed_origins = control_ui.get("allowedOrigins", [])
+    if isinstance(existing_allowed_origins, str):
+        existing_allowed_origins = [existing_allowed_origins]
+    elif not isinstance(existing_allowed_origins, list):
+        existing_allowed_origins = []
+
+    allowed_origins = []
+    for origin in existing_allowed_origins + DEFAULT_ALLOWED_ORIGINS:
+        if origin and origin not in allowed_origins:
+            allowed_origins.append(origin)
+    control_ui["allowedOrigins"] = allowed_origins
+    return allowed_origins
+
+
 def _build_updated_openclaw_config(
     username: str,
     target_config: dict,
@@ -561,12 +576,7 @@ def _build_updated_openclaw_config(
     if initialize_target:
         gateway["port"] = _get_initial_gateway_port(username)
     control_ui = gateway.setdefault("controlUi", {})
-    existing_allowed_origins = control_ui.get("allowedOrigins", [])
-    allowed_origins = []
-    for origin in existing_allowed_origins + DEFAULT_ALLOWED_ORIGINS:
-        if origin and origin not in allowed_origins:
-            allowed_origins.append(origin)
-    control_ui["allowedOrigins"] = allowed_origins
+    _ensure_default_allowed_origins(control_ui)
     control_ui["dangerouslyDisableDeviceAuth"] = True
 
     auth = updated_config.setdefault("gateway", {}).setdefault("auth", {})
