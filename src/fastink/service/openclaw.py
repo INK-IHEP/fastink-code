@@ -24,6 +24,8 @@ from fastink.service.openclaw_schema import OpenClawSyncRequest
 DEFAULT_PROVIDER_KEY = "custom"
 DEFAULT_ALLOWED_ORIGINS = [
     "https://ink-dev.ihep.ac.cn",
+    "https://ink.ihep.ac.cn",
+    "https://fastink.ihep.ac.cn",
     "https://fastink-test.ihep.ac.cn",
 ]
 DEFAULT_OPENCLAW_TEMPLATES = {
