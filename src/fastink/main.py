@@ -42,6 +42,7 @@ plugin_manager.register_plugin_hooks()
 from fastink.routers.v2 import auth_manager as auth_manager_v2
 from fastink.routers.v2 import compute_resources as compute_resources_v2
 from fastink.routers.v2 import app_manager as app_manager_v2
+from fastink.routers.v2 import assistant_manager as assistant_manager_v2
 from fastink.routers.v2 import fs_manager as fs_manager_v2
 from fastink.routers.v2 import get_ccs_info as get_ccs_info_v2
 from fastink.routers.v2 import service_manager as service_manager_v2
@@ -51,6 +52,7 @@ from fastink.routers.v2 import share_manager as share_manager_v2
 app.include_router(auth_manager_v2.router, prefix="/api/v2/auth")
 app.include_router(compute_resources_v2.router, prefix="/api/v2/cr")
 app.include_router(app_manager_v2.router, prefix="/api/v2/app")
+app.include_router(assistant_manager_v2.router, prefix="/api/v2")
 app.include_router(fs_manager_v2.router, prefix="/api/v2/fs")
 app.include_router(get_ccs_info_v2.router, prefix="/api/v2")
 app.include_router(service_manager_v2.router, prefix="/api/v2")
