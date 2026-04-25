@@ -24,8 +24,12 @@ This directory is responsible for three things:
   - `base/`: common templates
   - `profiles/`: `quickstart` and `custom` profile overlays
   - `extras/`: optional capabilities such as `nginx`, `xrootd`, and local `htcondor`
-- `install.py`
-  Interactive CLI for open-source users.
+- `fastinkctl.py`
+  CLI command dispatcher (root level).
+- `cmd/`
+  Subcommand implementations: `deploy.py`, `destroy.py`, `down.py`, `status.py`.
+- `bin/fastinkctl`
+  Entry point bash wrapper (`../fastinkctl.py`).
 - `render_profile.py`
   Non-interactive render entrypoint for CI and site overlays.
 - `check_host.py`
@@ -36,7 +40,7 @@ This directory is responsible for three things:
 Run from the `fastink-code/` root directory:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy
 ```
 
 ### Quickstart (zero-input)
@@ -44,7 +48,7 @@ cd fastink-code && PYTHONPATH=. python3 deploy/install.py
 One command, zero interaction — deploys a complete FastINK stack with xrootd and HTCondor:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile quickstart --yes
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy --profile quickstart --yes
 ```
 
 Without `--yes`, it prints a summary and asks for a single confirmation before proceeding.
@@ -52,7 +56,7 @@ Without `--yes`, it prints a summary and asks for a single confirmation before p
 Add overrides on top of quickstart defaults:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile quickstart \
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy --profile quickstart \
   --set host_port=9090 \
   --set enable_nginx=true
 ```
@@ -62,7 +66,7 @@ cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile quickstart \
 Walk through every option interactively with pre-filled default values:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile custom
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy --profile custom
 ```
 
 ### Scripted (from answers file)
@@ -70,7 +74,7 @@ cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile custom
 Load answers from a JSON file, optionally overridden with `--set`:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py \
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy \
   --answers-file ci-answers.json \
   --set host_name=myhost.example.com
 ```
@@ -80,7 +84,7 @@ cd fastink-code && PYTHONPATH=. python3 deploy/install.py \
 Generate `.deploy/` files without building images or starting containers:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py \
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy \
   --answers-file ci-answers.json --render-only
 ```
 
@@ -89,13 +93,13 @@ cd fastink-code && PYTHONPATH=. python3 deploy/install.py \
 Re-render from an existing `.deploy/answers.json` and restart services:
 
 ```bash
-cd fastink-code && PYTHONPATH=. python3 deploy/install.py --reuse
+cd fastink-code && PYTHONPATH=. python3 deploy/bin/fastinkctl deploy --reuse
 ```
 
 ### CLI Reference
 
 ```
-python deploy/install.py --help
+python deploy/bin/fastinkctl deploy --help
 ```
 
 | Flag | Description |
@@ -118,7 +122,7 @@ The deployment flow is:
 
 ## Preparation Notes Before Starting The CLI
 
-Before running `python deploy/install.py`, users may want to prepare some optional inputs in advance.
+Before running `python deploy/bin/fastinkctl deploy`, users may want to prepare some optional inputs in advance.
 
 Typical optional inputs include:
 
@@ -457,7 +461,7 @@ By change type:
 - host prechecks and `/cvmfs` warmup: `lib/host_runtime.py`
 - render and merge behavior: `lib/render.py`
 - official image contents: `images/`
-- interactive install UX: `install.py`
+- interactive install UX: `cmd/deploy.py`
 - CI / site render entrypoint: `render_profile.py`
 
 The rule is simple:

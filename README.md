@@ -29,7 +29,7 @@ python -m uvicorn fastink.main:app --reload --host 0.0.0.0 --port 8001 --log-con
 Use the interactive deploy CLI:
 
 ```bash
-python deploy/install.py
+python deploy/bin/fastinkctl deploy
 ```
 
 This writes a durable `.deploy/` directory containing rendered compose, config,
