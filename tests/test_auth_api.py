@@ -23,11 +23,6 @@ except Exception:
     KRB5_AVAILABLE = False
 
 
-def _skipif_krb5_unavailable():
-    """Return True if krb5-dependent tests should be skipped."""
-    return not KRB5_AVAILABLE
-
-
 class TestTokenAPI:
 
     def test_create_token(self):
