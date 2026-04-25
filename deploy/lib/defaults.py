@@ -78,16 +78,16 @@ COMMON_DEFAULTS = {
 }
 
 PROFILE_DEFAULTS = {
-    "minimal": {
+    "quickstart": {
         "enable_nginx": False,
-        "enable_xrootd": False,
-        "enable_local_htcondor": False,
+        "enable_xrootd": True,
+        "enable_local_htcondor": True,
         "enable_host_slurm_client": False,
         "enable_krb5": False,
     },
-    "full": {
-        "enable_nginx": True,
-        "enable_xrootd": True,
+    "custom": {
+        "enable_nginx": False,
+        "enable_xrootd": False,
         "enable_local_htcondor": False,
         "enable_host_slurm_client": False,
         "enable_krb5": False,
@@ -121,7 +121,7 @@ def build_public_base_url(host_name: str, host_port: int, *, enable_nginx: bool 
 
 
 
-def default_answers(profile: str = "minimal", deploy_dir: Path | None = None) -> dict[str, Any]:
+def default_answers(profile: str = "quickstart", deploy_dir: Path | None = None) -> dict[str, Any]:
     defaults: dict[str, Any] = dict(COMMON_DEFAULTS)
     defaults["profile"] = profile
     defaults.update(profile_defaults(profile))
@@ -138,7 +138,7 @@ def normalize_answers(
     profile: str | None = None,
     deploy_dir: Path | None = None,
 ) -> dict[str, Any]:
-    resolved_profile = profile or str(answers.get("profile", "minimal"))
+    resolved_profile = profile or str(answers.get("profile", "quickstart"))
     normalized = default_answers(resolved_profile, deploy_dir)
 
     image_source = str(answers.get("image_source", normalized["image_source"]))

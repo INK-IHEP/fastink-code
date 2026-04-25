@@ -117,8 +117,8 @@ def ensure_rootbrowse_ssh_material(paths: dict[str, Path]) -> None:
 
 
 def profile_chain(profile: str) -> list[str]:
-    if profile == "full":
-        return ["minimal", "full"]
+    if profile == "custom":
+        return ["quickstart", "custom"]
     return [profile]
 
 

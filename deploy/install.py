@@ -145,12 +145,40 @@ def check_prerequisites() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Interactive installer for the generic FastINK deployment bundle."
+        description="FastINK deployment installer.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=["quickstart", "custom"],
+        help="Deployment profile: quickstart (zero-input, batteries-included) or custom (interactive full configuration).",
+    )
+    parser.add_argument(
+        "--answers-file",
+        type=Path,
+        help="Load answers from a JSON file instead of asking interactively.",
+    )
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Override a single answer (repeatable). Use together with --profile or --answers-file.",
+    )
+    parser.add_argument(
+        "--render-only",
+        action="store_true",
+        help="Generate .deploy/ files and stop (skip image build, init container, and container start).",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the confirmation prompt (for non-interactive scripted runs).",
     )
     parser.add_argument(
         "--reuse",
         action="store_true",
-        help="Reuse the existing .deploy answers and docker-compose files, then start services without rerunning the interactive questionnaire.",
+        help="Re-render from .deploy/answers.json and start services without questionnaire.",
     )
     return parser.parse_args()
 
@@ -333,7 +361,7 @@ def load_saved_answers() -> dict[str, object]:
         print(f"Failed to parse saved answers file {answers_path}: {exc}", file=sys.stderr)
         sys.exit(1)
     finalize_mount_answers(answers)
-    profile = str(answers.get("profile") or "minimal")
+    profile = str(answers.get("profile") or "quickstart")
     return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
 
 
@@ -346,7 +374,7 @@ def try_load_saved_answers() -> Optional[dict[str, object]]:
     except json.JSONDecodeError:
         return None
     finalize_mount_answers(answers)
-    profile = str(answers.get("profile") or "minimal")
+    profile = str(answers.get("profile") or "quickstart")
     return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
 
 
@@ -386,15 +414,71 @@ def default_htcondor_internal_domain(host_name: str, fallback: str) -> str:
     return suffix or fallback
 
 
-def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dict[str, object]:
-    print_step("Choose deployment profile")
-    profile = prompt_choice(
-        "Deployment profile",
-        ["minimal", "full"],
-        "minimal",
-        str(previous_answers["profile"]) if previous_answers and previous_answers.get("profile") else None,
-    )
-    defaults = default_answers(profile, DEPLOY_DIR)
+def build_quickstart_answers(defaults: dict[str, object]) -> dict[str, object]:
+    print_step("Quickstart profile")
+    print("Zero-input deployment with sensible defaults:")
+    print(f"  Project:        {defaults['project_name']}")
+    print(f"  Host:           {defaults['host_name']}:{defaults['host_port']}")
+    print(f"  Data directory: {defaults['data_root']}")
+    print(f"  Images:         pull (official)")
+    print(f"  Services:       db, redis, server, cron, rootbrowse, xrootd, htcondor")
+    print(f"  Extra services: nginx (off), krb5 (off), host slurm (off)")
+    print()
+
+    answers = {
+        "profile": "quickstart",
+        "image_source": "pull",
+        "server_image": str(defaults["server_image"]),
+        "cron_image": str(defaults["cron_image"]),
+        "rootbrowse_image": str(defaults["rootbrowse_image"]),
+        "xrootd_image": str(defaults["xrootd_image"]),
+        "htcondor_image": str(defaults["htcondor_image"]),
+        "project_name": str(defaults["project_name"]),
+        "data_root": defaults["data_root"],
+        "enable_nginx": False,
+        "enable_xrootd": True,
+        "enable_local_htcondor": True,
+        "enable_host_slurm_client": False,
+        "enable_krb5": False,
+        "host_name": str(defaults["host_name"]),
+        "htcondor_internal_domain": str(defaults["htcondor_internal_domain"]),
+        "host_port": int(defaults["host_port"]),
+        "rootbrowse_port": int(defaults["rootbrowse_port"]),
+        "xrootd_port": int(defaults["xrootd_port"]),
+        "schedd_host": "schedd@fastink-htcondor",
+        "cm_host": "fastink-htcondor",
+        "htcondor_default_request_cpus": int(defaults["htcondor_default_request_cpus"]),
+        "htcondor_default_request_memory": int(defaults["htcondor_default_request_memory"]),
+        "krb5_conf_host_path": str(defaults["krb5_conf_host_path"]),
+        "xrootd_krb5_keytab_source_path": "",
+        "xrootd_krb5_principal": "",
+        "slurm_conf_host_path": str(defaults["slurm_conf_host_path"]),
+        "munge_socket_dir": str(defaults["munge_socket_dir"]),
+        "workers": 1,
+        "ink_production": False,
+        "init_database": True,
+        "db_name": str(defaults["db_name"]),
+        "db_user": str(defaults["db_user"]),
+        "db_root_password": secrets.token_urlsafe(18),
+        "db_password": secrets.token_urlsafe(18),
+        "redis_password": secrets.token_urlsafe(18),
+        "plugin_pip_packages": "",
+        "plugin_editable_dirs": "",
+        "extra_mounts_file": str(ensure_default_extra_mounts_file().resolve()),
+        "server_preload_script_dirs": str(defaults["server_preload_script_dirs"]),
+        "server_preload_scripts": str(defaults["server_preload_scripts"]),
+        "cron_preload_script_dirs": str(defaults["cron_preload_script_dirs"]),
+        "cron_preload_scripts": str(defaults["cron_preload_scripts"]),
+        "rootbrowse_preload_script_dirs": str(defaults["rootbrowse_preload_script_dirs"]),
+        "rootbrowse_preload_scripts": str(defaults["rootbrowse_preload_scripts"]),
+        "nginx_cert_source_path": "",
+        "nginx_key_source_path": "",
+    }
+    return normalize_answers(answers, profile="quickstart", deploy_dir=DEPLOY_DIR)
+
+
+def collect_answers_custom(previous_answers: Optional[dict[str, object]] = None) -> dict[str, object]:
+    defaults = default_answers("custom", DEPLOY_DIR)
 
     print_step("Choose image source")
     image_source = prompt_choice(
@@ -530,7 +614,7 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
     redis_password = prompt_secret("Redis password", secrets.token_urlsafe(18), str(previous_answers["redis_password"]) if previous_answers and previous_answers.get("redis_password") else None)
 
     answers = {
-        "profile": profile,
+        "profile": "custom",
         "image_source": image_source,
         "server_image": server_image,
         "cron_image": cron_image,
@@ -579,7 +663,33 @@ def collect_answers(previous_answers: Optional[dict[str, object]] = None) -> dic
         "nginx_key_source_path": nginx_key_source_path,
     }
     finalize_mount_answers(answers)
+    return normalize_answers(answers, profile="custom", deploy_dir=DEPLOY_DIR)
+
+
+def load_answers_from_file(path: Path) -> dict[str, object]:
+    if not path.exists():
+        print(f"Answers file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        answers = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"Failed to parse answers file {path}: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finalize_mount_answers(answers)
+    profile = str(answers.get("profile", "quickstart"))
     return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
+
+
+def apply_overrides(answers: dict[str, object], overrides: list[str]) -> dict[str, object]:
+    for override in overrides:
+        if "=" not in override:
+            print(f"Invalid --set override: {override} (expected KEY=VALUE)", file=sys.stderr)
+            sys.exit(1)
+        key, value = override.split("=", 1)
+        from lib.defaults import parse_override_value
+        answers[key] = parse_override_value(key, value)
+        print(f"  [override] {key} = {answers[key]}")
+    return answers
 
 
 def build_or_pull_images(answers: dict[str, object]) -> None:
@@ -671,15 +781,18 @@ def deploy_stack(answers: dict[str, object]) -> None:
 def main() -> None:
     args = parse_args()
     check_prerequisites()
-    if args.reuse:
+
+    # ---- Determine answers ----
+    if args.answers_file:
+        print_step("Load answers from file")
+        answers = load_answers_from_file(args.answers_file.resolve())
+        answers = apply_overrides(answers, args.overrides)
+    elif args.reuse:
         print_step("Reuse existing deployment")
         answers = load_saved_answers()
-        paths = build_paths_from_answers(answers)
-        nginx_notes: list[str] = []
-        xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
-        krb5_notes = validate_krb5_paths(answers) if bool(answers.get("enable_krb5")) else []
-        deploy_stack(answers)
+        answers = apply_overrides(answers, args.overrides)
     else:
+        # Interactive path
         print_preparation_notes()
         previous_answers = try_load_saved_answers()
 
@@ -689,29 +802,59 @@ def main() -> None:
                 print("Aborted.")
                 sys.exit(0)
 
-        answers = collect_answers(previous_answers=previous_answers)
-        paths = build_paths_from_answers(answers)
+        profile = args.profile
+        if profile is None:
+            print_step("Choose deployment profile")
+            profile = prompt_choice(
+                "Deployment profile",
+                ["quickstart", "custom"],
+                "quickstart",
+                str(previous_answers["profile"]) if previous_answers and previous_answers.get("profile") else None,
+            )
 
-        nginx_notes = stage_nginx_tls_material(answers, paths)
-        xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
-        krb5_notes = validate_krb5_paths(answers) if bool(answers.get("enable_krb5")) else []
+        if profile == "quickstart":
+            defaults = default_answers("quickstart", DEPLOY_DIR)
+            answers = build_quickstart_answers(defaults)
+            answers = apply_overrides(answers, args.overrides)
+            if not args.yes:
+                confirm = input("Proceed with this configuration? [Y/n]: ").strip().lower()
+                if confirm in {"n", "no"}:
+                    print("Aborted.")
+                    sys.exit(0)
+        else:
+            answers = collect_answers_custom(previous_answers=previous_answers)
+            answers = apply_overrides(answers, args.overrides)
 
-        print_step("Render deployment files")
-        bundle = render_bundle(
-            str(answers["profile"]),
-            answers,
-            paths,
-            DEPLOY_DIR,
-            initialize_host_assets=False,
-        )
-        for relative_path, content in bundle.items():
-            write_file(DEPLOY_DIR / relative_path, content)
-        write_file(DEPLOY_DIR / "answers.json", json.dumps(answers, indent=2, default=str))
+    # ---- Render ----
+    paths = build_paths_from_answers(answers)
 
-        build_or_pull_images(answers)
-        run_init_container(answers, paths)
-        deploy_stack(answers)
+    nginx_notes = stage_nginx_tls_material(answers, paths)
+    xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
+    krb5_notes = validate_krb5_paths(answers) if bool(answers.get("enable_krb5")) else []
 
+    print_step("Render deployment files")
+    bundle = render_bundle(
+        str(answers["profile"]),
+        answers,
+        paths,
+        DEPLOY_DIR,
+        initialize_host_assets=False,
+    )
+    for relative_path, content in bundle.items():
+        write_file(DEPLOY_DIR / relative_path, content)
+    write_file(DEPLOY_DIR / "answers.json", json.dumps(answers, indent=2, default=str))
+
+    if args.render_only:
+        print_step("Render complete")
+        print(f"Deployment files written to: {DEPLOY_DIR}")
+        return
+
+    # ---- Build and deploy ----
+    build_or_pull_images(answers)
+    run_init_container(answers, paths)
+    deploy_stack(answers)
+
+    # ---- Health check ----
     public_base_url = str(answers["public_base_url"])
     health_url = f"{public_base_url}/health"
     print_step(f"Wait for health check: {health_url}")

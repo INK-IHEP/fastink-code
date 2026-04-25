@@ -1,6 +1,6 @@
 # FastINK Deploy
 
-`ink-code/deploy/` is the shared deployment layer for FastINK.
+`fastink-code/deploy/` is the shared deployment layer for FastINK.
 
 It serves two kinds of users:
 
@@ -22,7 +22,7 @@ This directory is responsible for three things:
 - `templates/`
   Layered templates.
   - `base/`: common templates
-  - `profiles/`: `minimal` and `full` profile overlays
+  - `profiles/`: `quickstart` and `custom` profile overlays
   - `extras/`: optional capabilities such as `nginx`, `xrootd`, and local `htcondor`
 - `install.py`
   Interactive CLI for open-source users.
@@ -33,61 +33,88 @@ This directory is responsible for three things:
 
 ## Open-Source Deployment Flow
 
-Run from the `ink-code/` root directory:
+Run from the `fastink-code/` root directory:
 
 ```bash
-python deploy/install.py
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py
 ```
 
-or:
+### Quickstart (zero-input)
+
+One command, zero interaction — deploys a complete FastINK stack with xrootd and HTCondor:
 
 ```bash
-./deploy/bin/fastink-deploy
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile quickstart --yes
 ```
 
-To reuse an existing `.deploy/` directory without rerunning the questionnaire:
+Without `--yes`, it prints a summary and asks for a single confirmation before proceeding.
+
+Add overrides on top of quickstart defaults:
 
 ```bash
-python deploy/install.py --reuse
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile quickstart \
+  --set host_port=9090 \
+  --set enable_nginx=true
 ```
 
-To see the CLI help:
+### Custom (interactive full configuration)
+
+Walk through every option interactively with pre-filled default values:
 
 ```bash
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py --profile custom
+```
+
+### Scripted (from answers file)
+
+Load answers from a JSON file, optionally overridden with `--set`:
+
+```bash
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py \
+  --answers-file ci-answers.json \
+  --set host_name=myhost.example.com
+```
+
+### Render-only (CI / inspection)
+
+Generate `.deploy/` files without building images or starting containers:
+
+```bash
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py \
+  --answers-file ci-answers.json --render-only
+```
+
+### Reuse saved configuration
+
+Re-render from an existing `.deploy/answers.json` and restart services:
+
+```bash
+cd fastink-code && PYTHONPATH=. python3 deploy/install.py --reuse
+```
+
+### CLI Reference
+
+```
 python deploy/install.py --help
 ```
 
-The flow is:
+| Flag | Description |
+|------|-------------|
+| `--profile {quickstart,custom}` | Select profile (skip interactive profile prompt) |
+| `--answers-file PATH` | Load answers from JSON file (skip interactive entirely) |
+| `--set KEY=VALUE` | Override a single answer (repeatable) |
+| `--render-only` | Generate files only, skip build/deploy |
+| `--yes` | Skip confirmation prompt (for scripting) |
+| `--reuse` | Re-render from `.deploy/answers.json` and restart |
 
-1. Run host prechecks.
-   - check `docker`
-   - check `docker compose`
-   - check `/cvmfs`
-   - warm the `/cvmfs` paths that FastINK actually needs
-2. Choose a profile.
-   - `minimal`: the FastINK core deployment
-   - `full`: `minimal` plus more optional infrastructure enabled by default
-3. Choose an image source.
-   - default is `pull`, which uses the official images
-   - `build` is still available if the user wants to build locally from `deploy/images/`
-4. Fill the interactive runtime parameters.
-   - when local HTCondor is enabled, the questionnaire also asks for an internal HTCondor domain used for shared-filesystem semantics
-5. Generate the persistent `.deploy/` directory.
-6. Render `config.yml`, `docker-compose.yml`, `.env`, keys, and runtime directories.
-7. Run `docker build` or `docker pull` for the official images, including the one-shot `fastink-init` image.
-8. Run the one-shot `fastink-init` container to generate deployment assets such as SSH keys, self-signed TLS certificates, and `sss.keytab`.
-9. Run `docker compose up -d` and wait for the health check.
+The deployment flow is:
 
-At render time, shared deploy also reads the checked-out FastINK source tree and injects:
-
-- `SOURCE_COMMIT_SHA`
-- `SOURCE_COMMIT_DATE`
-- `SOURCE_COMMIT_TAG`
-
-into the runtime container environment. This keeps the `/version` router aligned
-with the exact `fastink-code` checkout used to render the deployment.
-
-`--reuse` skips steps 2 through 8. It reuses the existing `.deploy/answers.json` and `.deploy/docker-compose.yml`, then runs `docker compose up -d` again with the saved project name.
+1. Determine answers (profile default, answers file, or interactive questionnaire).
+2. Print preparation notes for optional inputs (extra mounts, plugins, TLS certs, etc.).
+3. Render `config.yml`, `docker-compose.yml`, `.env`, keys, xrootd, nginx, and condor assets into `.deploy/`.
+4. Run `docker build` or `docker pull` for the required images, including `fastink-init`.
+5. Run the one-shot `fastink-init` container to generate SSH keys, TLS certificates, and `sss.keytab`.
+6. Run `docker compose up -d` and wait for the health check.
 
 ## Preparation Notes Before Starting The CLI
 
@@ -168,27 +195,31 @@ Current behavior:
 
 This mechanism is intentionally simpler than asking users to edit raw compose YAML during the interactive flow.
 
-At the moment, the interactive installer does not provide a dedicated `--set key=value` or "edit one saved parameter" mode. If a user wants to change one parameter only, the current choices are:
-
-- rerun `python deploy/install.py` and answer the questionnaire again
-- edit the generated files under `.deploy/` manually
-- use `python deploy/install.py --reuse` only when the existing `.deploy/` configuration should be reused as-is
-
 ## Profiles And Service Layers
 
-The current profile meaning is:
+### `quickstart` — zero-input, batteries-included
 
-- `minimal`
-  - `fastink-db`
-  - `fastink-redis`
-  - `fastink-server`
-  - `fastink-redis-cron`
-  - `fastink-rootbrowse`
-- `full`
-  - inherits the complete `minimal` stack
-  - then enables more optional infrastructure by default
+Intended for first-time users and local testing. One command deploys a fully working FastINK.
 
-Current optional extras:
+Services:
+
+- `fastink-db` (MariaDB)
+- `fastink-redis`
+- `fastink-server` (FastAPI backend)
+- `fastink-redis-cron` (scheduled tasks)
+- `fastink-rootbrowse` (ROOT file browser)
+- `fastink-xrootd` (storage backend)
+- `fastink-htcondor` (job scheduler, AIO pool)
+
+All defaults are auto-applied: official images via `pull`, passwords auto-generated, `extra-mounts.txt` auto-created with `/home/:/home/`. No interactive questions asked (single confirmation unless `--yes`).
+
+### `custom` — interactive full configuration
+
+Every option is exposed as an interactive prompt with a pre-filled default. The user decides which components to enable and what values to use.
+
+Profile chain: `custom` inherits from `quickstart` overlays, then applies its own.
+
+### Optional service layers (available in `custom` profile or via `--set`)
 
 - `enable_nginx`
   - adds `fastink-nginx`
@@ -199,6 +230,10 @@ Current optional extras:
   - adds `fastink-htcondor`
   - starts a single-container HTCondor all-in-one pool for local/open-source testing
   - automatically points `schedd_host` to `schedd@fastink-htcondor` and `cm_host` to `fastink-htcondor`
+- `enable_krb5`
+  - mounts host `krb5.conf` into containers
+- `enable_host_slurm_client`
+  - mounts host Slurm config and munge socket into containers
 
 ## Local HTCondor
 
@@ -394,7 +429,7 @@ Typical usage:
 
 ```bash
 python deploy/render_profile.py \
-  --profile full \
+  --profile custom \
   --answers-file /path/to/render.answers.json \
   --output-dir /path/to/output \
   --config-overlay /path/to/site-config.yml
@@ -415,7 +450,7 @@ Its responsibilities are:
 By change type:
 
 - public service topology and common compose structure: `templates/base/`
-- `minimal` / `full` semantics: `templates/profiles/`
+- `quickstart` / `custom` semantics: `templates/profiles/`
 - optional capabilities such as `nginx` or `xrootd`: `templates/extras/`
 - default values and profile defaults: `lib/defaults.py`
 - runtime directory planning: `lib/paths.py`
@@ -427,5 +462,5 @@ By change type:
 
 The rule is simple:
 
-- generic deployment semantics stay in `ink-code/deploy`
+- generic deployment semantics stay in `fastink-code/deploy`
 - site-specific differences should stay in overlay repositories such as `fastink-dev`
