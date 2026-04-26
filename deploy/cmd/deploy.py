@@ -128,7 +128,7 @@ def build_xrootd_notes(paths: dict[str, Path]) -> list[str]:
     ]
 
 
-def validate_krb5_paths(answers: dict[str, object]) -> list[str]:
+def validate_krb5_paths(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
     notes: list[str] = []
     if not bool(answers.get("enable_krb5")):
         return notes
@@ -145,7 +145,15 @@ def validate_krb5_paths(answers: dict[str, object]) -> list[str]:
         xrootd_krb5_keytab_source_path = Path(keytab_text).expanduser().resolve()
         if not xrootd_krb5_keytab_source_path.exists():
             raise FileNotFoundError(f"xrootd krb5 keytab not found: {xrootd_krb5_keytab_source_path}")
-        notes.append(f"Using xrootd krb5 keytab from: {xrootd_krb5_keytab_source_path}")
+
+        # Copy keytab into .deploy/ so we can set permissions without touching the original
+        keytab_target = paths["xrootd_krb5_keytab_path"]
+        keytab_target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(xrootd_krb5_keytab_source_path, keytab_target)
+        keytab_target.chmod(0o600)
+        answers["xrootd_krb5_keytab_source_path"] = str(keytab_target)
+        notes.append(f"xrootd krb5 keytab copied to: {keytab_target} (permissions set to 0600)")
+
         principal = str(answers.get("xrootd_krb5_principal", "")).strip()
         if not principal:
             raise RuntimeError("Kerberos-enabled xrootd requires an xrootd service principal")
@@ -646,7 +654,7 @@ def main() -> None:
 
     nginx_notes = stage_nginx_tls_material(answers, paths)
     xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
-    krb5_notes = validate_krb5_paths(answers) if bool(answers.get("enable_krb5")) else []
+    krb5_notes = validate_krb5_paths(answers, paths) if bool(answers.get("enable_krb5")) else []
 
     cli_ui.step("Render deployment files")
     bundle = render_bundle(
