@@ -20,7 +20,7 @@ def write_file(path: Path, content: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render FastINK deploy templates without interaction.")
-    parser.add_argument("--profile", choices=["minimal", "full"], required=True)
+    parser.add_argument("--profile", choices=["quickstart", "custom"], required=True)
     parser.add_argument("--answers-file", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--data-root", type=Path)

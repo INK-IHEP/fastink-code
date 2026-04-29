@@ -19,6 +19,9 @@ services:
       MySQL_PASSWORD: ${db_password_yaml}
       MySQL_DATABASE: ${db_name_yaml}
       INK_CONFIG_FILE: /ink/config.yml
+      SOURCE_COMMIT_SHA: ${source_commit_sha}
+      SOURCE_COMMIT_DATE: ${source_commit_date}
+      SOURCE_COMMIT_TAG: ${source_commit_tag}
       FASTINK_CRON_BASE_DIR: /opt/fastink-cron
       FASTINK_CRON_CONFIG: /opt/fastink-cron/cron.ini
       PLUGIN_PIP_PACKAGES: ${plugin_pip_packages}
@@ -29,8 +32,11 @@ services:
       - ${config_path}:/ink/config.yml:ro
       - ${etc_init_dir}:/etc-init
       - ${plugins_dir}:/plugins
+      - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${preload_cron_dir}:/opt/preload/cron:ro
       - ${cron_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
+${cron_krb5_conf_mount_block}
+${cron_slurm_mounts_block}
 ${cron_extra_mounts_block}
 
   fastink-rootbrowse:

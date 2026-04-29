@@ -40,6 +40,9 @@ services:
       INK_PRODUCTION: ${ink_production}
       WORKERS: ${workers}
       INIT_DATABASE_ON_START: ${init_database}
+      SOURCE_COMMIT_SHA: ${source_commit_sha}
+      SOURCE_COMMIT_DATE: ${source_commit_date}
+      SOURCE_COMMIT_TAG: ${source_commit_tag}
       PLUGIN_PIP_PACKAGES: ${plugin_pip_packages}
       PLUGIN_EDITABLE_DIRS: ${plugin_editable_dirs}
       PRELOAD_SCRIPT_DIRS: ${server_preload_script_dirs}
@@ -52,6 +55,8 @@ services:
       - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${server_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
       - ${preload_server_dir}:/opt/preload/server:ro
+${server_krb5_conf_mount_block}
+${server_slurm_mounts_block}
 ${server_extra_mounts_block}
 ${server_port_block}
     healthcheck:

@@ -295,7 +295,7 @@ def query_last_time_data(data_type, index="aligcs_monitor",size=10000, use_scrol
         print(f"[query_last_time_data] Exception: {e}, data_type: {data_type}")
         return None
 
-def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, daq_end_time=None, size=10000, use_scroll=False):
+def query_data_by_time(data_type, index="aligcs_monitor", daq_start_time=None, daq_end_time=None, size=100000, use_scroll=False):
     """
     按指定时间范围查询数据，如果没有指定时间范围则查询24小时前至当前时间的数据
 

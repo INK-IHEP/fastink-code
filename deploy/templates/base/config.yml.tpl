@@ -18,7 +18,7 @@ redis:
   password: ${redis_password_yaml}
 
 auth:
-  type: password
+  type: ${auth_type}
   issuer: ""
   client_id: null
   client_secret: ""

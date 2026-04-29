@@ -42,6 +42,7 @@ WORKDIR /ink
 COPY README.md setup.py /ink/
 COPY bin /ink/bin
 COPY src /ink/src
+COPY tests /ink/tests
 COPY tools /ink/tools
 
 RUN pip3.12 install --upgrade pip && \

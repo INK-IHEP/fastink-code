@@ -3,7 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-BOOL_FIELDS = {"enable_nginx", "enable_xrootd", "enable_local_htcondor", "ink_production", "init_database"}
+BOOL_FIELDS = {
+    "enable_nginx",
+    "enable_xrootd",
+    "enable_local_htcondor",
+    "enable_host_slurm_client",
+    "enable_krb5",
+    "ink_production",
+    "init_database",
+}
 INT_FIELDS = {
     "host_port",
     "rootbrowse_port",
@@ -54,6 +62,13 @@ COMMON_DEFAULTS = {
     "plugin_pip_packages": "",
     "plugin_editable_dirs": "",
     "extra_mounts_file": "",
+    "enable_host_slurm_client": False,
+    "enable_krb5": False,
+    "krb5_conf_host_path": "/etc/krb5.conf",
+    "xrootd_krb5_keytab_source_path": "",
+    "xrootd_krb5_principal": "",
+    "slurm_conf_host_path": "/etc/slurm/slurm.conf",
+    "munge_socket_dir": "/var/run/munge",
     "server_preload_script_dirs": "/opt/preload/server",
     "server_preload_scripts": "",
     "cron_preload_script_dirs": "/opt/preload/cron",
@@ -63,15 +78,19 @@ COMMON_DEFAULTS = {
 }
 
 PROFILE_DEFAULTS = {
-    "minimal": {
+    "quickstart": {
+        "enable_nginx": False,
+        "enable_xrootd": True,
+        "enable_local_htcondor": True,
+        "enable_host_slurm_client": False,
+        "enable_krb5": False,
+    },
+    "custom": {
         "enable_nginx": False,
         "enable_xrootd": False,
         "enable_local_htcondor": False,
-    },
-    "full": {
-        "enable_nginx": True,
-        "enable_xrootd": True,
-        "enable_local_htcondor": False,
+        "enable_host_slurm_client": False,
+        "enable_krb5": False,
     },
 }
 
@@ -102,7 +121,7 @@ def build_public_base_url(host_name: str, host_port: int, *, enable_nginx: bool 
 
 
 
-def default_answers(profile: str = "minimal", deploy_dir: Path | None = None) -> dict[str, Any]:
+def default_answers(profile: str = "quickstart", deploy_dir: Path | None = None) -> dict[str, Any]:
     defaults: dict[str, Any] = dict(COMMON_DEFAULTS)
     defaults["profile"] = profile
     defaults.update(profile_defaults(profile))
@@ -119,7 +138,7 @@ def normalize_answers(
     profile: str | None = None,
     deploy_dir: Path | None = None,
 ) -> dict[str, Any]:
-    resolved_profile = profile or str(answers.get("profile", "minimal"))
+    resolved_profile = profile or str(answers.get("profile", "quickstart"))
     normalized = default_answers(resolved_profile, deploy_dir)
 
     image_source = str(answers.get("image_source", normalized["image_source"]))

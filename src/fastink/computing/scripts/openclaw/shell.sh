@@ -25,6 +25,7 @@ OPENCLAW_USER_ROOT=${1:-}
 OPENCLAW_DIR=${2:-}
 OPENCLAW_IMAGE=${3:-}
 OPENCLAW_USER=${4:-${USER:-}}
+OPENCLAW_EXTRA_BINDS_FILE=${5:-}
 
 touch "${LOG_FILE}"
 # Keep a dedicated launch log while preserving stdout/stderr for the scheduler
@@ -36,6 +37,7 @@ log "uid=${UID:-unknown} user=${USER:-unknown} openclaw_user=${OPENCLAW_USER}"
 log "openclaw_user_root=${OPENCLAW_USER_ROOT:-missing}"
 log "openclaw_dir=${OPENCLAW_DIR:-missing}"
 log "openclaw_image=${OPENCLAW_IMAGE:-missing}"
+log "openclaw_extra_binds_file=${OPENCLAW_EXTRA_BINDS_FILE:-missing}"
 
 if [ -z "${OPENCLAW_USER_ROOT}" ] || [ -z "${OPENCLAW_DIR}" ] || [ -z "${OPENCLAW_IMAGE}" ]; then
     log "missing required runtime arguments"
@@ -57,4 +59,4 @@ else
 fi
 
 log "handoff to run.sh"
-"${APP_PATH}/run.sh" "${APP_PATH}" "${OPENCLAW_USER_ROOT}" "${OPENCLAW_DIR}" "${OPENCLAW_IMAGE}" "${OPENCLAW_USER}"
+"${APP_PATH}/run.sh" "${APP_PATH}" "${OPENCLAW_USER_ROOT}" "${OPENCLAW_DIR}" "${OPENCLAW_IMAGE}" "${OPENCLAW_USER}" "${OPENCLAW_EXTRA_BINDS_FILE}"

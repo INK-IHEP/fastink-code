@@ -10,6 +10,7 @@ import yaml
 
 DEPLOY_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_ROOT = DEPLOY_ROOT / "templates"
+SOURCE_ROOT = DEPLOY_ROOT.parent
 
 
 def ensure_ssh_key_pair(private_key_path: Path, public_key_path: Path) -> None:
@@ -116,13 +117,48 @@ def ensure_rootbrowse_ssh_material(paths: dict[str, Path]) -> None:
 
 
 def profile_chain(profile: str) -> list[str]:
-    if profile == "full":
-        return ["minimal", "full"]
+    if profile == "custom":
+        return ["quickstart", "custom"]
     return [profile]
 
 
 def yaml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
+
+
+def git_output(*args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(SOURCE_ROOT), *args],
+        encoding="utf-8",
+        stderr=subprocess.DEVNULL,
+    ).strip()
+
+
+def source_version_env() -> dict[str, str]:
+    env = {
+        "source_commit_sha": "unknown",
+        "source_commit_date": "unknown",
+        "source_commit_tag": "",
+    }
+    if not (SOURCE_ROOT / ".git").exists():
+        return env
+
+    try:
+        env["source_commit_sha"] = git_output("rev-parse", "--short", "HEAD")
+    except Exception:
+        pass
+
+    try:
+        env["source_commit_date"] = git_output("log", "-1", "--format=%cs")
+    except Exception:
+        pass
+
+    try:
+        env["source_commit_tag"] = git_output("describe", "--tags", "--exact-match", "HEAD")
+    except Exception:
+        pass
+
+    return env
 
 
 def load_extra_mount_entries(path_value: object) -> list[str]:
@@ -184,6 +220,13 @@ def render_volume_block(entries: list[str], indent: int = 6) -> str:
         return ""
     prefix = " " * indent
     return "\n" + "\n".join(f"{prefix}- {entry}" for entry in entries)
+
+
+def render_optional_single_volume_block(entry: Optional[str], indent: int = 6) -> str:
+    if not entry:
+        return ""
+    prefix = " " * indent
+    return f"\n{prefix}- {entry}"
 
 
 def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
@@ -264,6 +307,7 @@ def build_mapping(
     paths: dict[str, Path],
     deploy_dir: Path,
 ) -> dict[str, str]:
+    version_env = source_version_env()
     config_path = deploy_dir / "config.yml"
     nginx_conf_path = deploy_dir / "nginx" / "default.conf"
     xrootd_conf_path = deploy_dir / "xrootd" / "xrootd-proxy.cfg"
@@ -277,6 +321,7 @@ def build_mapping(
     )
     enable_nginx = bool(answers["enable_nginx"])
     enable_xrootd = bool(answers.get("enable_xrootd", False))
+    enable_krb5 = bool(answers.get("enable_krb5", False))
     enable_local_htcondor = bool(answers.get("enable_local_htcondor", False))
     extra_mount_entries = load_extra_mount_entries(answers.get("extra_mounts_file", ""))
     extra_mounts_block = render_volume_block(extra_mount_entries)
@@ -294,6 +339,30 @@ def build_mapping(
         "OpenClaw gateway listening on",
     ]
     htcondor_internal_domain = str(answers.get("htcondor_internal_domain", "local"))
+    krb5_conf_host_path = str(answers.get("krb5_conf_host_path", "/etc/krb5.conf")).strip()
+    xrootd_krb5_keytab_source_path = str(answers.get("xrootd_krb5_keytab_source_path", "")).strip()
+    xrootd_krb5_principal = str(answers.get("xrootd_krb5_principal", "")).strip()
+    enable_host_slurm_client = bool(answers.get("enable_host_slurm_client", False))
+    slurm_conf_host_path = str(answers.get("slurm_conf_host_path", "/etc/slurm/slurm.conf")).strip()
+    munge_socket_dir = str(answers.get("munge_socket_dir", "/var/run/munge")).strip().rstrip("/")
+    server_slurm_mounts_block = ""
+    cron_slurm_mounts_block = ""
+    if enable_host_slurm_client:
+        server_slurm_mounts_block = (
+            render_optional_single_volume_block(f"{munge_socket_dir}:/var/run/munge/")
+            + render_optional_single_volume_block(f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro")
+        )
+        cron_slurm_mounts_block = (
+            render_optional_single_volume_block(f"{munge_socket_dir}:/var/run/munge/")
+            + render_optional_single_volume_block(f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro")
+        )
+    common_krb5_mount_block = ""
+    xrootd_krb5_conf_mount_block = ""
+    htcondor_krb5_conf_mount_block = ""
+    if enable_krb5:
+        common_krb5_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
+        xrootd_krb5_conf_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
+        htcondor_krb5_conf_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
 
     # Condor config: always generated into .deploy/condor/ink.conf
     server_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
@@ -345,7 +414,11 @@ def build_mapping(
         "xrootd_data_dir": str(paths["xrootd_data_dir"].resolve()),
         "xrootd_sss_keytab_host_path": str(paths.get("xrootd_sss_keytab_path", paths["xrootd_data_dir"] / "sss.keytab").resolve()),
         "xrootd_sss_keytab_container_path": "/etc/xrootd/sss.keytab",
-        "xrootd_krb5_keytab_host_path": str(paths.get("xrootd_krb5_keytab_path", paths["xrootd_data_dir"] / "krb5.keytab").resolve()),
+        "xrootd_krb5_keytab_host_path": str(
+            Path(xrootd_krb5_keytab_source_path).expanduser().resolve()
+            if enable_krb5 and xrootd_krb5_keytab_source_path
+            else paths.get("xrootd_krb5_keytab_path", paths["xrootd_data_dir"] / "krb5.keytab").resolve()
+        ),
         "xrootd_krb5_keytab_container_path": "/etc/xrootd/krb5.keytab",
         "xrootd_vo_list_host_path": str(paths.get("xrootd_vo_list_path", paths["xrootd_data_dir"] / "vo-list.cfg").resolve()),
         "xrootd_vo_list_container_path": "/etc/xrootd/vo-list.cfg",
@@ -358,6 +431,7 @@ def build_mapping(
         "init_database": str(bool(answers["init_database"])).lower(),
         "enable_nginx": str(enable_nginx).lower(),
         "enable_xrootd": str(enable_xrootd).lower(),
+        "enable_krb5": str(enable_krb5).lower(),
         "host_name": yaml_string(str(answers["host_name"])),
         "host_port": str(answers["host_port"]),
         "rootbrowse_port": str(answers["rootbrowse_port"]),
@@ -372,14 +446,23 @@ def build_mapping(
         "cron_preload_scripts": yaml_string(str(answers["cron_preload_scripts"])),
         "rootbrowse_preload_script_dirs": yaml_string(str(answers["rootbrowse_preload_script_dirs"])),
         "rootbrowse_preload_scripts": yaml_string(str(answers["rootbrowse_preload_scripts"])),
+        "source_commit_sha": yaml_string(version_env["source_commit_sha"]),
+        "source_commit_date": yaml_string(version_env["source_commit_date"]),
+        "source_commit_tag": yaml_string(version_env["source_commit_tag"]),
         "plugin_pip_packages": yaml_string(str(answers.get("plugin_pip_packages", ""))),
         "plugin_editable_dirs": yaml_string(str(answers.get("plugin_editable_dirs", ""))),
         "server_extra_mounts_block": extra_mounts_block,
+        "server_krb5_conf_mount_block": common_krb5_mount_block,
+        "server_slurm_mounts_block": server_slurm_mounts_block,
         "cron_extra_mounts_block": extra_mounts_block,
+        "cron_krb5_conf_mount_block": common_krb5_mount_block,
+        "cron_slurm_mounts_block": cron_slurm_mounts_block,
         "rootbrowse_extra_mounts_block": extra_mounts_block,
         "xrootd_extra_mounts_block": extra_mounts_block,
         "htcondor_extra_mounts_block": extra_mounts_block,
-        "krb5_enabled": str(False).lower(),
+        "htcondor_krb5_conf_mount_block": htcondor_krb5_conf_mount_block,
+        "xrootd_krb5_conf_mount_block": xrootd_krb5_conf_mount_block,
+        "krb5_enabled": str(enable_krb5).lower(),
         "security_access": str(False).lower(),
         "ip_whitelist_access": str(False).lower(),
         "db_name_yaml": yaml_string(str(answers["db_name"])),
@@ -410,6 +493,7 @@ def build_mapping(
         "app_plugins": yaml_string(""),
         "router_plugins": yaml_string(""),
         "unified_plugin_packages": yaml_string(""),
+        "auth_type": yaml_string("krb5" if enable_krb5 else "password"),
         "service_port": str(2000),
         "service_node_yaml": yaml_string("fastink-rootbrowse"),
         "enable_local_htcondor": str(enable_local_htcondor).lower(),
@@ -422,6 +506,7 @@ def build_mapping(
         "htcondor_auth_method": "CLAIMTOBE",
         "htcondor_fs_domain": htcondor_internal_domain,
         "htcondor_uid_domain": htcondor_internal_domain,
+        "xrootd_krb5_principal": xrootd_krb5_principal,
     }
 
 
@@ -487,7 +572,8 @@ def render_nginx_conf(mapping: dict[str, str]) -> str:
 
 
 def render_xrootd_conf(mapping: dict[str, str]) -> str:
-    return render_template_text(TEMPLATE_ROOT / "base" / "xrootd-proxy.cfg.tpl", mapping)
+    template_name = "xrootd-proxy-krb5.cfg.tpl" if mapping.get("enable_krb5") == "true" else "xrootd-proxy.cfg.tpl"
+    return render_template_text(TEMPLATE_ROOT / "base" / template_name, mapping)
 
 
 def render_condor_conf(mapping: dict[str, str]) -> str:

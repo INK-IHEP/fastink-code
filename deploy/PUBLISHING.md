@@ -99,7 +99,7 @@ Official images stay clean. Site-specific behavior must be layered at runtime:
 
 ## Render contract
 
-Public users interact with `deploy/install.py`, which persists a `.deploy/`
+Public users interact with `deploy/bin/fastinkctl`, which persists a `.deploy/`
 directory as durable deployment state.
 
 IHEP automation does not maintain `.deploy/`. Instead, `fastink-dev` uses:

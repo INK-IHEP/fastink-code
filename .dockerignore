@@ -7,5 +7,5 @@ __pycache__/
 build/
 dist/
 src/fastink.egg-info/
-tests/
+tests/__pycache__/
 src/fastink/misc/openapi_schema.json
