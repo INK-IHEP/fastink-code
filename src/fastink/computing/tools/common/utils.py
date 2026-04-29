@@ -714,6 +714,7 @@ async def generate_condor_sync_submit(
 
         if job_type == "npu":
             arguments = (arguments or "") + job_dir
+            
         elif job_type == "openclaw":
             arguments = build_openclaw_arguments(
                 username=username,
@@ -782,9 +783,13 @@ async def sub_command(command, timeoutsec, errinfo, tminfo):
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
 
     except asyncio.TimeoutError as e:
-        process.kill()
-        stdout, stderr = await process.communicate()
-        raise Exception(f"{tminfo} {e}. stderr={stderr.decode(errors='ignore')[:500]}")
+        # process.kill()
+        # stdout, stderr = await process.communicate()                                                           
+        process.kill()                                                                                                                                     
+        process.stdout.close()                                                                                                                             
+        process.stderr.close()                                                                                                                             
+        await process.wait()                                                                                                                               
+        raise Exception(f"{tminfo} {e}.")
 
     if process.returncode != 0:
         error_msg = stderr.decode(errors="ignore").strip()
