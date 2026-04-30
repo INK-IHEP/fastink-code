@@ -195,8 +195,12 @@ def _map_slurm_status_to_internal(db_status: str, slurm_state: str) -> str:
     if slurm_state == "RUNNING":
         return "RUNNING"
 
-    if slurm_state in ("COMPLETED", "FAILED") or slurm_state.startswith("CANCELLED"):
+    if slurm_state in ("COMPLETED", "FAILED"):
         return slurm_state
+
+    if slurm_state.startswith("CANCELLED"):
+        # sacct may return "CANCELLED by <uid>"; keep internal status normalized.
+        return "CANCELLED"
 
     return db_status
 

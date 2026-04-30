@@ -16,6 +16,20 @@ from fastink.computing.tools.common.utils import change_username_to_uid, connect
 
 router = APIRouter()
 
+
+def _normalize_and_filter_jobs(joblist: list[dict]) -> list[dict]:
+    normalized = []
+
+    for job in joblist:
+        raw_status = str(job.get("jobStatus", "") or "")
+        if raw_status.startswith("CANCELLED"):
+            # Frontend requirement: do not return cancelled jobs.
+            continue
+
+        normalized.append(job)
+
+    return normalized
+
 @router.get("/get_joboutput")
 async def check_common_job(
     username: str = Depends(get_username),
@@ -351,6 +365,8 @@ async def query_common_job(
         else:
             adapter = get_scheduler(cluster_id, username)
             joblist = await adapter.query_job(job_type) or []
+
+        joblist = _normalize_and_filter_jobs(joblist)
 
         start_idx = max(0, (page - 1) * limit)
         end_idx = start_idx + max(0, limit)
