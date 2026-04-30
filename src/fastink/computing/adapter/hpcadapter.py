@@ -637,10 +637,16 @@ class HPC_Scheduler(SchedulerBase):
                             self.UID, job_id, start_time, self.CLUSTER_TYPE
                         )
 
-            elif slurm_state in ("COMPLETED", "FAILED") or slurm_state.startswith(
-                "CANCELLED"
-            ):
+            elif slurm_state in ("COMPLETED", "FAILED"):
                 job_status = slurm_state
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state.startswith("CANCELLED"):
+                # sacct may return values like "CANCELLED by 0"; normalize for API/DB.
+                job_status = "CANCELLED"
                 if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
                     update_end_time(
                         self.UID, job_id, end_time, self.CLUSTER_TYPE
@@ -653,6 +659,10 @@ class HPC_Scheduler(SchedulerBase):
                 update_job_status(
                     self.UID, job_id, job_status, self.CLUSTER_TYPE
                 )
+
+            # Frontend no longer expects cancelled jobs in the query list.
+            if job_status == "CANCELLED":
+                continue
 
             # --------------------------------------
             # NEW: resolve submit_uuid via Redis mapping
