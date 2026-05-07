@@ -396,10 +396,10 @@ async def delete_common_job(
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
 ):
     try:
-        if not job_id:
+        if not job_id and not submit_uuid:
             return {
-                "status": InkStatus.SUCCESS,
-                "msg": f"Delete successfully.",
+                "status": InkStatus.BAD_REQUEST,
+                "msg": "Delete job failed: either job_id or submit_uuid is required.",
                 "data": {}
             }
 
@@ -409,9 +409,16 @@ async def delete_common_job(
             submit_uuid=submit_uuid
         )
 
+        if job_id:
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": f"Delete job {job_id} successfully.",
+                "data": {}
+            }
+
         return {
             "status": InkStatus.SUCCESS,
-            "msg": f"Delete job {job_id} successfully.",
+            "msg": f"Delete job {submit_uuid} successfully.",
             "data": {}
         }
 

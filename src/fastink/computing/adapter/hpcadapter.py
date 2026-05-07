@@ -305,6 +305,8 @@ class HPC_Scheduler(SchedulerBase):
 
             # Status marker
             "job_status": "SUBMITTING",
+            "submit_mode": "ASYNC",
+            "async_submit_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             # Retry policy
             "retry_count": 0,
             "max_retries": int(get_config("crond", "async_submit_retries", fallback=3)),
@@ -376,6 +378,23 @@ class HPC_Scheduler(SchedulerBase):
         job_type = job.get("job_type")
         submit_uuid = job.get("submit_uuid")
 
+        cancel_key = f"cancelled_submit_uuid:{cluster}:{submit_uuid}"
+
+        # If user already cancelled this async request, do not submit to Slurm.
+        if submit_uuid and await r.get(cancel_key):
+            await self._remove_job_from_queue_by_uuid(
+                f"{cluster}_submitting_jobs:{username}", submit_uuid
+            )
+            logger.info(
+                f"submit_job_from_queue: submit_uuid={submit_uuid} already cancelled, skip submission"
+            )
+            return {
+                "cluster": cluster,
+                "submit_uuid": submit_uuid,
+                "job_status": "CANCELLED",
+                "job_id": None,
+            }
+
         try:
             # --------------------------------------------------
             # 1. Prepare job runtime
@@ -405,6 +424,21 @@ class HPC_Scheduler(SchedulerBase):
                 error_file=job.get("error_file"),
                 job_content=job.get("job_script"),
             )
+
+            # Re-check cancellation right before sbatch to avoid submit-after-cancel race.
+            if submit_uuid and await r.get(cancel_key):
+                await self._remove_job_from_queue_by_uuid(
+                    f"{cluster}_submitting_jobs:{username}", submit_uuid
+                )
+                logger.info(
+                    f"submit_job_from_queue: submit_uuid={submit_uuid} cancelled before sbatch, skip"
+                )
+                return {
+                    "cluster": cluster,
+                    "submit_uuid": submit_uuid,
+                    "job_status": "CANCELLED",
+                    "job_id": None,
+                }
 
             # --------------------------------------------------
             # 3. Execute sbatch
@@ -467,6 +501,7 @@ class HPC_Scheduler(SchedulerBase):
 
                 "job_status": "SUBMITTED",
                 "submit_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "submit_mode": "ASYNC",
             }
             for k in ("cpu", "mem", "gpu_num", "partition", "qos"):
                 if k in job:
@@ -668,6 +703,9 @@ class HPC_Scheduler(SchedulerBase):
             # NEW: resolve submit_uuid via Redis mapping
             # --------------------------------------
             submit_uuid = ""
+            job_async_submit_time = ""
+            submit_mode = "SYNC"
+
             uuid_val = await r.get(
                 f"job_id_to_submit_uuid:{self.CLUSTER_TYPE}:{job_id}"
             )
@@ -678,11 +716,24 @@ class HPC_Scheduler(SchedulerBase):
             else:
                 submit_uuid = uuid_val
 
+            if submit_uuid:
+                submit_mode = "ASYNC"
+                async_job_key = f"cluster_jobs:{self.CLUSTER_TYPE}:{self.USERNAME}:{job_id}"
+                async_submit_val = await r.hget(async_job_key, "submit_time")
+                if async_submit_val is None:
+                    job_async_submit_time = ""
+                elif isinstance(async_submit_val, bytes):
+                    job_async_submit_time = async_submit_val.decode()
+                else:
+                    job_async_submit_time = str(async_submit_val)
+
             job_list.append(
                 {
                     "clusterId": self.CLUSTER_TYPE,
                     "jobId": job_id,
                     "submitUuid": submit_uuid,   # NEW
+                    "jobAsyncSubmitTime": job_async_submit_time,
+                    "submitMode": submit_mode,
                     "jobPartition": partition,
                     "jobType": job_type,
                     "jobSubmitTime": submit_time,
@@ -717,6 +768,8 @@ class HPC_Scheduler(SchedulerBase):
                     "clusterId": self.CLUSTER_TYPE,
                     "jobId": "",
                     "submitUuid": job.get("submit_uuid"),  # NEW
+                    "jobAsyncSubmitTime": job.get("async_submit_time", ""),
+                    "submitMode": job.get("submit_mode", "ASYNC"),
                     "jobType": job_type,
                     "jobSubmitTime": "",
                     "jobStatus": "SUBMITTING",
@@ -818,6 +871,14 @@ class HPC_Scheduler(SchedulerBase):
         cluster = self.CLUSTER_TYPE
         username = self.USERNAME
 
+        if submit_uuid:
+            # Mark cancellation first to block retry requeue / late submission race.
+            await r.set(
+                f"cancelled_submit_uuid:{cluster}:{submit_uuid}",
+                "1",
+                ex=86400,
+            )
+
         resolved_job_id = None
 
         # ==================================================
@@ -864,6 +925,14 @@ class HPC_Scheduler(SchedulerBase):
                 )
             except Exception:
                 pass
+
+            if submit_uuid:
+                await self._remove_job_from_queue_by_uuid(
+                    f"submitting_jobs:{cluster}", submit_uuid
+                )
+                await self._remove_job_from_queue_by_uuid(
+                    f"{cluster}_submitting_jobs:{username}", submit_uuid
+                )
 
             return {
                 "cluster": cluster,
