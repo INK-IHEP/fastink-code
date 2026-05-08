@@ -1,3 +1,4 @@
+import signal
 import asyncio, json
 import importlib, grp
 import pwd, os, base64
@@ -824,6 +825,7 @@ async def generate_condor_sync_submit(
 
         if job_type == "npu":
             arguments = (arguments or "") + job_dir
+            
         elif job_type == "openclaw":
             await write_openclaw_bind_metadata(username=username, uid=uid, job_dir=job_dir)
             arguments = build_openclaw_arguments(
@@ -873,7 +875,7 @@ async def generate_condor_sync_submit(
 async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, timeout: int = 30):
 
     ccache_path = f"{job_dir}/krb5cc_{uid}"
-    check_command = f"su - {username} -c 'export KRB5CCNAME={ccache_path} && klist'"
+    check_command = f"timeout -s 9 -k 10 10  su - {username} -c 'export KRB5CCNAME={ccache_path} && klist'"
     try:
         stdout = await sub_command(check_command, timeout, "KRB5 Ticket Check Failed", "Klist check timeout")        
         ticket_info = stdout.decode(errors="ignore").strip()
@@ -882,21 +884,50 @@ async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, time
         logger.error(f"HTC-ASYNC-LOG: Kerberos ticket is INVALID for {username}. Error: {e}")
 
 
+# async def sub_command(command, timeoutsec, errinfo, tminfo):
+#     process = await asyncio.create_subprocess_shell(
+#         command,
+#         stdout=asyncio.subprocess.PIPE,
+#         stderr=asyncio.subprocess.PIPE,
+#         # create_subprocess_shell 本身就用 shell 了，这里不要再传 shell=True
+#     )
+
+#     try:
+#         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
+
+#     except asyncio.TimeoutError as e:
+#         process.kill()
+#         stdout, stderr = await process.communicate()                                                           
+#         # process.kill()                                                                                                                                     
+#         # process.stdout.close()                                                                                                                             
+#         # process.stderr.close()                                                                                                                             
+#         # await process.wait()                                                                                                                               
+#         raise Exception(f"{tminfo} {e}.")
+
+#     if process.returncode != 0:
+#         error_msg = stderr.decode(errors="ignore").strip()
+#         raise Exception(f"{errinfo} {error_msg}")
+
+#     return stdout
+
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     process = await asyncio.create_subprocess_shell(
         command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        # create_subprocess_shell 本身就用 shell 了，这里不要再传 shell=True
+        preexec_fn=os.setsid,
     )
 
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
 
     except asyncio.TimeoutError as e:
-        process.kill()
-        stdout, stderr = await process.communicate()
-        raise Exception(f"{tminfo} {e}. stderr={stderr.decode(errors='ignore')[:500]}")
+        pgid = os.getpgid(process.pid)
+        os.killpg(pgid, signal.SIGKILL)
+        process.stdout.close()
+        process.stderr.close()
+        await process.wait()
+        raise Exception(f"{tminfo} {e}.")
 
     if process.returncode != 0:
         error_msg = stderr.decode(errors="ignore").strip()
