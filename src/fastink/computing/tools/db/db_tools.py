@@ -209,6 +209,36 @@ def find_completed_jobs(uid, jobtype, *, session:Session):
 
 
 @read_session
+def find_active_jobs(uid, jobtype, *, session:Session):
+    """
+    Find active jobs by excluding terminal states.
+    """
+
+    job_list = {}
+    stmt = select(models.JobInfo)
+
+    if uid:
+        stmt = stmt.where(models.JobInfo.uid == uid)
+    if jobtype:
+        if jobtype == 'all':
+            stmt = stmt.where(models.JobInfo.clusterid == 'htcondor')
+        else:
+            stmt = stmt.where(models.JobInfo.job_type == jobtype)
+
+    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "FAILED", "CANCELLED", "CANCELED"]))
+
+    try:
+        results = session.execute(stmt).scalars()
+    except Exception as e:
+        raise Exception(f"ERR : {e} in find active jobs for user({uid})")
+
+    for result in results:
+        job_list[result.jobid] = [result.job_type, result.iptable_status, result.iptable_clean]
+
+    return job_list
+
+
+@read_session
 def needto_change_status_jobs(*, session:Session):
     
     job_list = {}
