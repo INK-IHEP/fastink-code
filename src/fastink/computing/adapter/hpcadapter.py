@@ -252,6 +252,7 @@ class HPC_Scheduler(SchedulerBase):
         # 1. Prevent duplicate submissions (same job_type)
         # --------------------------------------------------
         if self._need_dedup(job_data):
+            # Check 1: job already in Redis submitting queue
             raw_jobs = await r.lrange(user_queue, 0, -1)
 
             for raw in raw_jobs:
@@ -267,6 +268,20 @@ class HPC_Scheduler(SchedulerBase):
                         "job_id": None,
                         "error": f"job_type '{job_data.job_type}' already in submitting queue"
                     }
+
+            # Check 2: job of the same type already active in the database
+            active_jobs = find_completed_jobs(self.UID, job_data.job_type)
+            if active_jobs:
+                logger.debug(
+                    f"SLURM-ASYNC: job {job_data.job_type} already running in cluster, jobids: {list(active_jobs.keys())}"
+                )
+                return {
+                    "cluster": cluster,
+                    "submit_uuid": submit_uuid,
+                    "job_status": "DUPLICATE",
+                    "job_id": None,
+                    "error": f"job_type '{job_data.job_type}' already running in cluster"
+                }
 
         # --------------------------------------------------
         # 2. Build Redis job payload

@@ -279,7 +279,14 @@ async def create_normal_job(
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
         jobid = await adapter.submit_job(jobclass)
-        
+
+        if isinstance(jobid, dict) and jobid.get("job_status") == "DUPLICATE":
+            return {
+                "status": InkStatus.DUPLICATE_JOB,
+                "msg": jobid.get("error", "Duplicate interactive job type."),
+                "data": {}
+            }
+
         return {
             "status": InkStatus.SUCCESS,
             "msg": f"Create job successfully.",
@@ -304,6 +311,13 @@ async def create_common_job(
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
         result = await adapter.submit_job(jobclass)
+
+        if isinstance(result, dict) and result.get("job_status") == "DUPLICATE":
+            return {
+                "status": InkStatus.DUPLICATE_JOB,
+                "msg": result.get("error", "Duplicate interactive job type."),
+                "data": {}
+            }
 
         if jobclass.submit_mode == SubmitMode.SYNC:
             return {
