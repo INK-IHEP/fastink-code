@@ -17,13 +17,13 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent          # deploy/cmd/
-_DEPLOY_ROOT = _HERE.parent                       # deploy/
-_REPO_ROOT = _DEPLOY_ROOT.parent                  # fastink-code/
-_DEPLOY_DIR = _REPO_ROOT / ".deploy"
+_HERE = Path(__file__).resolve().parent
+if str(_HERE.parent) not in sys.path:
+    sys.path.insert(0, str(_HERE.parent))
 
-if str(_DEPLOY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_DEPLOY_ROOT))
+from lib.deploy_io import resolve_deploy_paths
+
+_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
 
 from lib import cli_ui
 from cmd.deploy import deploy_stack, load_deploy_answers, wait_for_health

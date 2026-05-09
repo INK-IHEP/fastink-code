@@ -18,15 +18,16 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent          # deploy/cmd/
-_DEPLOY_ROOT = _HERE.parent                       # deploy/
-_REPO_ROOT = _DEPLOY_ROOT.parent                  # fastink-code/
-_DEPLOY_DIR = _REPO_ROOT / ".deploy"
+_HERE = Path(__file__).resolve().parent
+if str(_HERE.parent) not in sys.path:
+    sys.path.insert(0, str(_HERE.parent))
 
-if str(_DEPLOY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_DEPLOY_ROOT))
+from lib.deploy_io import resolve_deploy_paths
+
+_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
 
 from lib import cli_ui
+from lib.compose import compose_down
 from cmd.deploy import load_deploy_answers
 
 
@@ -79,11 +80,9 @@ def main() -> None:
     if not args.yes:
         remove_volumes = cli_ui.confirm_prompt("Remove named volumes (database and redis data)", False)
 
-    cmd = ["docker", "compose", "-p", project_name, "-f", str(compose_file), "down"]
-    if remove_volumes and compose_file.exists():
-        cmd.append("-v")
     if compose_file.exists():
-        run_cmd(cmd)
+        cli_ui.info(f"+ docker compose -p {project_name} -f {compose_file} down" + (" -v" if remove_volumes else ""))
+        compose_down(project_name, compose_file, remove_volumes=remove_volumes)
     else:
         cli_ui.warning(f"Compose file not found: {compose_file} — skipping docker compose down")
     cli_ui.success("Containers stopped" + (" and volumes removed" if remove_volumes else ""))
@@ -110,8 +109,6 @@ def main() -> None:
     if not args.keep_dot_deploy:
         if args.keep_answers:
             # Preserve answers.json, delete everything else
-            answers_data = _DEPLOY_DIR / "answers.json"
-            answers_content = answers_data.read_text(encoding="utf-8") if answers_data.exists() else None
             for item in _DEPLOY_DIR.iterdir():
                 if item.name == "answers.json":
                     continue

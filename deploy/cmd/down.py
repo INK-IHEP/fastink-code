@@ -14,20 +14,20 @@ Options:
 """
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent          # deploy/cmd/
-_DEPLOY_ROOT = _HERE.parent                       # deploy/
-_REPO_ROOT = _DEPLOY_ROOT.parent                  # fastink-code/
-_DEPLOY_DIR = _REPO_ROOT / ".deploy"
+_HERE = Path(__file__).resolve().parent
+if str(_HERE.parent) not in sys.path:
+    sys.path.insert(0, str(_HERE.parent))
 
-if str(_DEPLOY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_DEPLOY_ROOT))
+from lib.deploy_io import resolve_deploy_paths
+
+_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
 
 from lib import cli_ui
+from lib.compose import compose_down
 from cmd.deploy import load_deploy_answers
 
 
@@ -55,9 +55,8 @@ def main() -> None:
         cli_ui.error(f"Compose file not found: {compose_file}")
         sys.exit(1)
 
-    cmd = ["docker", "compose", "-p", project_name, "-f", str(compose_file), "down"]
-    if args.v:
-        cmd.append("-v")
+    remove_volumes = bool(args.v)
+    if remove_volumes:
         action = "Stop containers and remove volumes"
     else:
         action = "Stop containers (data preserved)"
@@ -71,11 +70,11 @@ def main() -> None:
             cli_ui.warning("Aborted.")
             return
 
-    cli_ui.info(f"+ {' '.join(cmd)}")
-    result = subprocess.run(cmd, check=False)
-    if result.returncode == 0:
+    cli_ui.info(f"+ docker compose -p {project_name} -f {compose_file} down" + (" -v" if remove_volumes else ""))
+    rc = compose_down(project_name, compose_file, remove_volumes=remove_volumes)
+    if rc == 0:
         cli_ui.success("Containers stopped" + (" and volumes removed" if args.v else ""))
         cli_ui.info("Run 'fastinkctl up' to start again.")
     else:
-        cli_ui.error(f"docker compose failed with exit code {result.returncode}")
+        cli_ui.error(f"docker compose failed with exit code {rc}")
         sys.exit(1)

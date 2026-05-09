@@ -13,6 +13,16 @@ from typing import Optional
 
 _DEPS_DIR: Optional[Path] = None
 _HAS_DEPS = False
+_console = None  # Lazy singleton for rich Console
+
+
+def _get_console():
+    """Return the module-level Console singleton, creating it on first call."""
+    global _console
+    if _console is None:
+        from rich.console import Console
+        _console = Console()
+    return _console
 
 
 def _check_importable() -> bool:
@@ -101,11 +111,10 @@ def cleanup_deps(deploy_dir: Path) -> None:
 def banner() -> None:
     """Print a welcome banner."""
     if _HAS_DEPS:
-        from rich.console import Console
         from rich.text import Text
         from rich.style import Style
 
-        console = Console()
+        console = _get_console()
         width = 60
         rule = Text("━" * width, style=Style(color="bright_blue", bold=True))
 
@@ -136,9 +145,8 @@ def step(title: str) -> None:
     """Section header."""
     if _HAS_DEPS:
         from rich.panel import Panel
-        from rich.console import Console
 
-        Console().print(Panel(f"[bold blue]{title}[/bold blue]"))
+        _get_console().print(Panel(f"[bold blue]{title}[/bold blue]"))
     else:
         print(f"\n==> {title}")
 
@@ -146,9 +154,8 @@ def step(title: str) -> None:
 def info(msg: str) -> None:
     """Info-level message."""
     if _HAS_DEPS:
-        from rich.console import Console
 
-        Console().print(f"  [cyan]•[/cyan] {msg}")
+        _get_console().print(f"  [cyan]•[/cyan] {msg}")
     else:
         print(f"  {msg}")
 
@@ -156,9 +163,8 @@ def info(msg: str) -> None:
 def success(msg: str) -> None:
     """Success message."""
     if _HAS_DEPS:
-        from rich.console import Console
 
-        Console().print(f"  [bold green]✓[/bold green] {msg}")
+        _get_console().print(f"  [bold green]✓[/bold green] {msg}")
     else:
         print(f"  ✓ {msg}")
 
@@ -166,9 +172,8 @@ def success(msg: str) -> None:
 def warning(msg: str) -> None:
     """Warning message."""
     if _HAS_DEPS:
-        from rich.console import Console
 
-        Console().print(f"  [bold yellow]⚠[/bold yellow] {msg}")
+        _get_console().print(f"  [bold yellow]⚠[/bold yellow] {msg}")
     else:
         print(f"  ! {msg}")
 
@@ -176,9 +181,8 @@ def warning(msg: str) -> None:
 def error(msg: str) -> None:
     """Error message."""
     if _HAS_DEPS:
-        from rich.console import Console
 
-        Console().print(f"  [bold red]✗[/bold red] {msg}")
+        _get_console().print(f"  [bold red]✗[/bold red] {msg}")
     else:
         print(f"  ✗ {msg}")
 
@@ -191,7 +195,6 @@ def error(msg: str) -> None:
 def summary_table(items: list[tuple[str, str]], title: str = "") -> None:
     """Show a key-value table."""
     if _HAS_DEPS:
-        from rich.console import Console
         from rich.table import Table
 
         table = Table(
@@ -204,7 +207,7 @@ def summary_table(items: list[tuple[str, str]], title: str = "") -> None:
         table.add_column("Value", style="white")
         for key, value in items:
             table.add_row(key, str(value))
-        Console().print(table)
+        _get_console().print(table)
     else:
         if title:
             print(f"\n  {title}")
@@ -240,14 +243,13 @@ class _NullProgress:
 def spinner(message: str = "Working"):
     """Return a context manager that shows a spinner while active."""
     if _HAS_DEPS:
-        from rich.console import Console
         from rich.progress import Progress, SpinnerColumn, TextColumn
 
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             transient=False,
-            console=Console(),
+            console=_get_console(),
         )
         progress.add_task(description=message, total=None)
         progress.start()
@@ -264,7 +266,6 @@ def progress_bar(description: str = "Progress", total: int = 1):
     step forward and progress.stop() when done.
     """
     if _HAS_DEPS:
-        from rich.console import Console
         from rich.progress import (
             BarColumn,
             Progress,
@@ -276,7 +277,7 @@ def progress_bar(description: str = "Progress", total: int = 1):
             TextColumn("[bold blue]{task.description}"),
             BarColumn(),
             TextColumn("{task.completed}/{task.total}"),
-            console=Console(),
+            console=_get_console(),
         )
         tid = p.add_task(description, total=total)
         p.start()

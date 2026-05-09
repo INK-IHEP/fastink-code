@@ -7,6 +7,8 @@ from typing import Optional
 
 import yaml
 
+from lib.types import get_bool, get_str, get_int
+
 
 DEPLOY_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_ROOT = DEPLOY_ROOT / "templates"
@@ -88,7 +90,7 @@ def ensure_self_signed_certificate(cert_path: Path, key_path: Path, host_name: s
 
 
 def ensure_nginx_tls_material(answers: dict[str, object], paths: dict[str, Path]) -> None:
-    if not bool(answers.get("enable_nginx")):
+    if not get_bool(answers, "enable_nginx"):
         return
     cert_path = Path(paths["nginx_cert_path"]).resolve()
     key_path = Path(paths["nginx_key_path"]).resolve()
@@ -218,15 +220,17 @@ def build_xrootd_vo_entries(extra_mount_entries: list[str]) -> list[str]:
 def render_volume_block(entries: list[str], indent: int = 6) -> str:
     if not entries:
         return ""
+    rendered = yaml.safe_dump(entries, default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()
     prefix = " " * indent
-    return "\n" + "\n".join(f"{prefix}- {entry}" for entry in entries)
+    return "\n" + "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
 
 
 def render_optional_single_volume_block(entry: Optional[str], indent: int = 6) -> str:
     if not entry:
         return ""
+    rendered = yaml.safe_dump([entry], default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()
     prefix = " " * indent
-    return f"\n{prefix}- {entry}"
+    return "\n" + "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
 
 
 def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
@@ -301,50 +305,141 @@ def dump_yaml(data: dict) -> str:
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 
-def build_mapping(
-    profile: str,
+# ---------------------------------------------------------------------------
+# Domain sub-functions that build groups of template variables.
+# Each returns a flat dict; build_mapping() composes them via dict.update().
+# ---------------------------------------------------------------------------
+
+def _build_network_mapping(
     answers: dict[str, object],
     paths: dict[str, Path],
     deploy_dir: Path,
+    enable_nginx: bool,
+    server_port_block: str,
 ) -> dict[str, str]:
-    version_env = source_version_env()
-    config_path = deploy_dir / "config.yml"
+    """Network-related template variables (nginx, ports, host)."""
     nginx_conf_path = deploy_dir / "nginx" / "default.conf"
+    return {
+        "enable_nginx": str(enable_nginx).lower(),
+        "host_name": yaml_string(get_str(answers, "host_name")),
+        "host_port": get_str(answers, "host_port"),
+        "rootbrowse_port": get_str(answers, "rootbrowse_port"),
+        "public_base_url": get_str(answers, "public_base_url"),
+        "public_base_url_yaml": yaml_string(get_str(answers, "public_base_url")),
+        "host_name_yaml": yaml_string(get_str(answers, "host_name")),
+        "nginx_conf_path": str(nginx_conf_path.resolve()),
+        "nginx_cert_host_path": str(Path(paths.get("nginx_cert_path", deploy_dir / "nginx" / "cert.pem")).resolve()),
+        "nginx_key_host_path": str(Path(paths.get("nginx_key_path", deploy_dir / "nginx" / "key.pem")).resolve()),
+        "nginx_cert_container_path": "/etc/nginx/ssl/cert.pem",
+        "nginx_key_container_path": "/etc/nginx/ssl/key.pem",
+        "server_port_block": server_port_block,
+        "rootbrowse_container_port": "2000",
+    }
+
+
+def _build_storage_mapping(
+    answers: dict[str, object],
+    paths: dict[str, Path],
+    deploy_dir: Path,
+    enable_xrootd: bool,
+    xrootd_vo_entries: list[str],
+) -> dict[str, str]:
+    """Storage-related template variables (xrootd, filesystem backend, data dirs)."""
     xrootd_conf_path = deploy_dir / "xrootd" / "xrootd-proxy.cfg"
-    rootbrowse_keys_host_path = paths.get(
-        "rootbrowse_authorized_keys_path",
-        paths["keys_dir"] / "rootbrowse_authorized_keys",
-    )
-    server_ssh_private_key_path = paths.get(
-        "server_ssh_private_key_path",
-        paths["keys_dir"] / "ssh-client" / "id_rsa",
-    )
-    enable_nginx = bool(answers["enable_nginx"])
-    enable_xrootd = bool(answers.get("enable_xrootd", False))
-    enable_krb5 = bool(answers.get("enable_krb5", False))
-    enable_local_htcondor = bool(answers.get("enable_local_htcondor", False))
-    extra_mount_entries = load_extra_mount_entries(answers.get("extra_mounts_file", ""))
-    extra_mounts_block = render_volume_block(extra_mount_entries)
-    xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
-    schedd_host = "schedd@fastink-htcondor" if enable_local_htcondor else str(answers.get("schedd_host", "localhost"))
-    cm_host = "fastink-htcondor" if enable_local_htcondor else str(answers.get("cm_host", "localhost"))
-    cluster_list = ["htcondor"]
-    noenv_jobtype = ["jupyter", "vnc"]
-    start_keywords = [
-        "jupyterlab | extension was successfully loaded.",
-        "Session server listening on",
-        "Starting noVNC proxy on",
-        "SSH server starting",
-        "Start rootbrowse in screen session",
-        "OpenClaw gateway listening on",
-    ]
-    htcondor_internal_domain = str(answers.get("htcondor_internal_domain", "local"))
-    krb5_conf_host_path = str(answers.get("krb5_conf_host_path", "/etc/krb5.conf")).strip()
-    xrootd_krb5_keytab_source_path = str(answers.get("xrootd_krb5_keytab_source_path", "")).strip()
-    xrootd_krb5_principal = str(answers.get("xrootd_krb5_principal", "")).strip()
-    enable_host_slurm_client = bool(answers.get("enable_host_slurm_client", False))
-    slurm_conf_host_path = str(answers.get("slurm_conf_host_path", "/etc/slurm/slurm.conf")).strip()
-    munge_socket_dir = str(answers.get("munge_socket_dir", "/var/run/munge")).strip().rstrip("/")
+    return {
+        "enable_xrootd": str(enable_xrootd).lower(),
+        "xrootd_image_raw": get_str(answers, "xrootd_image", "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3"),
+        "xrootd_image": yaml_string(get_str(answers, "xrootd_image", "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3")),
+        "xrootd_conf_path": str(xrootd_conf_path.resolve()),
+        "xrootd_data_dir": str(paths["xrootd_data_dir"].resolve()),
+        "xrootd_sss_keytab_host_path": str(paths.get("xrootd_sss_keytab_path", paths["xrootd_data_dir"] / "sss.keytab").resolve()),
+        "xrootd_sss_keytab_container_path": "/etc/xrootd/sss.keytab",
+        "xrootd_vo_list_host_path": str(paths.get("xrootd_vo_list_path", paths["xrootd_data_dir"] / "vo-list.cfg").resolve()),
+        "xrootd_vo_list_container_path": "/etc/xrootd/vo-list.cfg",
+        "xrootd_vo_list_content": "\n".join(xrootd_vo_entries) + ("\n" if xrootd_vo_entries else ""),
+        "xrootd_port": get_str(answers, "xrootd_port", "1094"),
+        "xrd_host": yaml_string("root://fastink-xrootd:1098" if enable_xrootd else "root://127.0.0.1:1094"),
+        "fs_backend": yaml_string("xrootd"),
+        "max_file_size": str(2147483648),
+        "data_root": str(paths["data_root"]),
+        "db_data_dir": str(paths["db_data_dir"].resolve()),
+        "redis_data_dir": str(paths["redis_data_dir"].resolve()),
+    }
+
+
+def _build_auth_mapping(
+    answers: dict[str, object],
+    enable_krb5: bool,
+) -> dict[str, str]:
+    """Auth-related template variables (krb5, access control)."""
+    return {
+        "enable_krb5": str(enable_krb5).lower(),
+        "krb5_enabled": str(enable_krb5).lower(),
+        "auth_type": yaml_string("krb5" if enable_krb5 else "password"),
+        "security_access": str(False).lower(),
+        "ip_whitelist_access": str(False).lower(),
+    }
+
+
+def _build_computing_mapping(
+    answers: dict[str, object],
+    deploy_dir: Path,
+    schedd_host: str,
+    cm_host: str,
+    enable_local_htcondor: bool,
+    htcondor_internal_domain: str,
+    cluster_list: list[str],
+    noenv_jobtype: list[str],
+    start_keywords: list[str],
+) -> dict[str, str]:
+    """Computing-related template variables (HTCondor, cluster, job types)."""
+    server_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
+    cron_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
+    htcondor_local_conf_host_path = str((deploy_dir / "condor" / "htcondor.local.conf").resolve())
+    return {
+        "schedd_host": yaml_string(schedd_host),
+        "cm_host": yaml_string(cm_host),
+        "htcondor_host_name": yaml_string("fastink-htcondor"),
+        "htcondor_host_name_plain": cm_host,
+        "htcondor_schedd_name": "schedd@fastink-htcondor" if enable_local_htcondor else get_str(answers, "schedd_host", "localhost"),
+        "htcondor_auth_method": "CLAIMTOBE",
+        "htcondor_fs_domain": htcondor_internal_domain,
+        "htcondor_uid_domain": htcondor_internal_domain,
+        "enable_local_htcondor": str(enable_local_htcondor).lower(),
+        "cluster_list_block": render_yaml_list_block(cluster_list),
+        "noenv_jobtype_block": render_yaml_list_block(noenv_jobtype),
+        "start_keywords_block": render_yaml_list_block(start_keywords),
+        "jobtype_defaults_block": default_jobtype_config_block(
+            schedd_host,
+            cm_host,
+            get_int(answers, "htcondor_default_request_cpus", 1),
+            get_int(answers, "htcondor_default_request_memory", 6000),
+        ),
+        "site": yaml_string("generic"),
+        "cluster_scripts": yaml_string("/ink/src/fastink/computing/scripts"),
+        "ink_dir": yaml_string("/home/{username}"),
+        "gateway_node": yaml_string("localhost"),
+        "service_port": str(2000),
+        "service_node_yaml": yaml_string("fastink-rootbrowse"),
+        "server_condor_conf_host_path": server_condor_conf_host_path,
+        "cron_condor_conf_host_path": cron_condor_conf_host_path,
+        "htcondor_local_conf_host_path": htcondor_local_conf_host_path,
+    }
+
+
+def _build_mount_mapping(
+    answers: dict[str, object],
+    paths: dict[str, Path],
+    extra_mounts_block: str,
+    enable_krb5: bool,
+    krb5_conf_host_path: str,
+    enable_host_slurm_client: bool,
+    slurm_conf_host_path: str,
+    munge_socket_dir: str,
+    xrootd_krb5_keytab_source_path: str,
+    xrootd_krb5_principal: str,
+) -> dict[str, str]:
+    """Mount-related template variables (extra volumes, krb5, slurm, xrootd keytab)."""
     server_slurm_mounts_block = ""
     cron_slurm_mounts_block = ""
     if enable_host_slurm_client:
@@ -363,94 +458,7 @@ def build_mapping(
         common_krb5_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
         xrootd_krb5_conf_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
         htcondor_krb5_conf_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
-
-    # Condor config: always generated into .deploy/condor/ink.conf
-    server_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
-    cron_condor_conf_host_path = str((deploy_dir / "condor" / "ink.conf").resolve())
-    htcondor_local_conf_host_path = str((deploy_dir / "condor" / "htcondor.local.conf").resolve())
-
-    if enable_nginx:
-        server_port_block = '    expose:\n      - "8000"'
-    else:
-        server_port_block = f'    ports:\n      - "{answers["host_port"]}:8000"'
-
     return {
-        "profile": profile,
-        "image_source": str(answers["image_source"]),
-        "server_image_raw": str(answers["server_image"]),
-        "cron_image_raw": str(answers["cron_image"]),
-        "rootbrowse_image_raw": str(answers["rootbrowse_image"]),
-        "htcondor_image_raw": str(answers.get("htcondor_image", "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest")),
-        "server_image": yaml_string(str(answers["server_image"])),
-        "cron_image": yaml_string(str(answers["cron_image"])),
-        "rootbrowse_image": yaml_string(str(answers["rootbrowse_image"])),
-        "htcondor_image": yaml_string(str(answers.get("htcondor_image", "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest"))),
-        "project_name": str(answers["project_name"]),
-        "public_base_url": str(answers["public_base_url"]),
-        "db_name": str(answers["db_name"]),
-        "db_user": str(answers["db_user"]),
-        "db_password": str(answers["db_password"]),
-        "db_root_password": str(answers["db_root_password"]),
-        "redis_password": str(answers["redis_password"]),
-        "data_root": str(paths["data_root"]),
-        "config_path": str(config_path.resolve()),
-        "db_data_dir": str(paths["db_data_dir"].resolve()),
-        "redis_data_dir": str(paths["redis_data_dir"].resolve()),
-        "etc_init_dir": str(paths["etc_init_dir"].resolve()),
-        "tmp_dir": str(paths["tmp_dir"].resolve()),
-        "plugins_dir": str(paths["plugins_dir"].resolve()),
-        "keys_dir": str(paths["keys_dir"].resolve()),
-        "server_ssh_dir_host_path": str(Path(server_ssh_private_key_path).resolve().parent),
-        "server_ssh_dir_container_path": "/root/.ssh",
-        "preload_server_dir": str(paths["preload_server_dir"].resolve()),
-        "preload_cron_dir": str(paths["preload_cron_dir"].resolve()),
-        "preload_rootbrowse_dir": str(paths["preload_rootbrowse_dir"].resolve()),
-        "nginx_conf_path": str(nginx_conf_path.resolve()),
-        "nginx_cert_host_path": str(Path(paths.get("nginx_cert_path", deploy_dir / "nginx" / "cert.pem")).resolve()),
-        "nginx_key_host_path": str(Path(paths.get("nginx_key_path", deploy_dir / "nginx" / "key.pem")).resolve()),
-        "nginx_cert_container_path": "/etc/nginx/ssl/cert.pem",
-        "nginx_key_container_path": "/etc/nginx/ssl/key.pem",
-        "xrootd_conf_path": str(xrootd_conf_path.resolve()),
-        "xrootd_data_dir": str(paths["xrootd_data_dir"].resolve()),
-        "xrootd_sss_keytab_host_path": str(paths.get("xrootd_sss_keytab_path", paths["xrootd_data_dir"] / "sss.keytab").resolve()),
-        "xrootd_sss_keytab_container_path": "/etc/xrootd/sss.keytab",
-        "xrootd_krb5_keytab_host_path": str(
-            Path(xrootd_krb5_keytab_source_path).expanduser().resolve()
-            if enable_krb5 and xrootd_krb5_keytab_source_path
-            else paths.get("xrootd_krb5_keytab_path", paths["xrootd_data_dir"] / "krb5.keytab").resolve()
-        ),
-        "xrootd_krb5_keytab_container_path": "/etc/xrootd/krb5.keytab",
-        "xrootd_vo_list_host_path": str(paths.get("xrootd_vo_list_path", paths["xrootd_data_dir"] / "vo-list.cfg").resolve()),
-        "xrootd_vo_list_container_path": "/etc/xrootd/vo-list.cfg",
-        "xrootd_vo_list_content": "\n".join(xrootd_vo_entries) + ("\n" if xrootd_vo_entries else ""),
-        "rootbrowse_authorized_keys_host_path": str(rootbrowse_keys_host_path.resolve()),
-        "rootbrowse_authorized_keys_container_path": "/run/fastink/rootbrowse_authorized_keys",
-        "timezone": yaml_string("Asia/Shanghai"),
-        "workers": str(answers["workers"]),
-        "ink_production": str(bool(answers["ink_production"])).lower(),
-        "init_database": str(bool(answers["init_database"])).lower(),
-        "enable_nginx": str(enable_nginx).lower(),
-        "enable_xrootd": str(enable_xrootd).lower(),
-        "enable_krb5": str(enable_krb5).lower(),
-        "host_name": yaml_string(str(answers["host_name"])),
-        "host_port": str(answers["host_port"]),
-        "rootbrowse_port": str(answers["rootbrowse_port"]),
-        "xrootd_port": str(answers.get("xrootd_port", 1094)),
-        "xrootd_image_raw": str(answers.get("xrootd_image", "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3")),
-        "xrootd_image": yaml_string(str(answers.get("xrootd_image", "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3"))),
-        "rootbrowse_container_port": "2000",
-        "server_port_block": server_port_block,
-        "server_preload_script_dirs": yaml_string(str(answers["server_preload_script_dirs"])),
-        "server_preload_scripts": yaml_string(str(answers["server_preload_scripts"])),
-        "cron_preload_script_dirs": yaml_string(str(answers["cron_preload_script_dirs"])),
-        "cron_preload_scripts": yaml_string(str(answers["cron_preload_scripts"])),
-        "rootbrowse_preload_script_dirs": yaml_string(str(answers["rootbrowse_preload_script_dirs"])),
-        "rootbrowse_preload_scripts": yaml_string(str(answers["rootbrowse_preload_scripts"])),
-        "source_commit_sha": yaml_string(version_env["source_commit_sha"]),
-        "source_commit_date": yaml_string(version_env["source_commit_date"]),
-        "source_commit_tag": yaml_string(version_env["source_commit_tag"]),
-        "plugin_pip_packages": yaml_string(str(answers.get("plugin_pip_packages", ""))),
-        "plugin_editable_dirs": yaml_string(str(answers.get("plugin_editable_dirs", ""))),
         "server_extra_mounts_block": extra_mounts_block,
         "server_krb5_conf_mount_block": common_krb5_mount_block,
         "server_slurm_mounts_block": server_slurm_mounts_block,
@@ -462,52 +470,153 @@ def build_mapping(
         "htcondor_extra_mounts_block": extra_mounts_block,
         "htcondor_krb5_conf_mount_block": htcondor_krb5_conf_mount_block,
         "xrootd_krb5_conf_mount_block": xrootd_krb5_conf_mount_block,
-        "krb5_enabled": str(enable_krb5).lower(),
-        "security_access": str(False).lower(),
-        "ip_whitelist_access": str(False).lower(),
-        "db_name_yaml": yaml_string(str(answers["db_name"])),
-        "db_user_yaml": yaml_string(str(answers["db_user"])),
-        "db_password_yaml": yaml_string(str(answers["db_password"])),
-        "redis_password_yaml": yaml_string(str(answers["redis_password"])),
-        "public_base_url_yaml": yaml_string(str(answers["public_base_url"])),
-        "host_name_yaml": yaml_string(str(answers["host_name"])),
-        "fs_backend": yaml_string("xrootd"),
-        "xrd_host": yaml_string("root://fastink-xrootd:1098" if enable_xrootd else "root://127.0.0.1:1094"),
-        "max_file_size": str(2147483648),
-        "site": yaml_string("generic"),
-        "cluster_list_block": render_yaml_list_block(cluster_list),
-        "noenv_jobtype_block": render_yaml_list_block(noenv_jobtype),
-        "schedd_host": yaml_string(schedd_host),
-        "cm_host": yaml_string(cm_host),
-        "xrootd_path": yaml_string("root://fastink-xrootd:1098/" if enable_xrootd else "root://127.0.0.1:1094/"),
-        "gateway_node": yaml_string("localhost"),
-        "cluster_scripts": yaml_string("/ink/src/fastink/computing/scripts"),
-        "ink_dir": yaml_string("/home/{username}"),
-        "start_keywords_block": render_yaml_list_block(start_keywords),
-        "jobtype_defaults_block": default_jobtype_config_block(
-            schedd_host,
-            cm_host,
-            int(answers.get("htcondor_default_request_cpus", 1)),
-            int(answers.get("htcondor_default_request_memory", 6000)),
+        "xrootd_krb5_keytab_host_path": str(
+            Path(xrootd_krb5_keytab_source_path).expanduser().resolve()
+            if enable_krb5 and xrootd_krb5_keytab_source_path
+            else paths.get("xrootd_krb5_keytab_path", paths["xrootd_data_dir"] / "krb5.keytab").resolve()
         ),
+        "xrootd_krb5_keytab_container_path": "/etc/xrootd/krb5.keytab",
+        "xrootd_krb5_principal": xrootd_krb5_principal,
+    }
+
+
+# ---------------------------------------------------------------------------
+# build_mapping – public composition function
+# ---------------------------------------------------------------------------
+
+def build_mapping(
+    profile: str,
+    answers: dict[str, object],
+    paths: dict[str, Path],
+    deploy_dir: Path,
+) -> dict[str, str]:
+    """Compose the full template-variable mapping from domain sub-functions.
+
+    The function computes shared values once, then delegates each logical
+    group of keys to a dedicated ``_build_*_mapping`` helper.  Remaining
+    general-purpose keys are added directly.
+    """
+    version_env = source_version_env()
+    config_path = deploy_dir / "config.yml"
+
+    # ---- shared booleans ----
+    enable_nginx = get_bool(answers, "enable_nginx")
+    enable_xrootd = get_bool(answers, "enable_xrootd")
+    enable_krb5 = get_bool(answers, "enable_krb5")
+    enable_local_htcondor = get_bool(answers, "enable_local_htcondor")
+
+    # ---- extra mounts ----
+    extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
+    extra_mounts_block = render_volume_block(extra_mount_entries)
+    xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
+
+    # ---- computing defaults ----
+    schedd_host = "schedd@fastink-htcondor" if enable_local_htcondor else get_str(answers, "schedd_host", "localhost")
+    cm_host = "fastink-htcondor" if enable_local_htcondor else get_str(answers, "cm_host", "localhost")
+    cluster_list = ["htcondor"]
+    noenv_jobtype = ["jupyter", "vnc"]
+    start_keywords = [
+        "jupyterlab | extension was successfully loaded.",
+        "Session server listening on",
+        "Starting noVNC proxy on",
+        "SSH server starting",
+        "Start rootbrowse in screen session",
+        "OpenClaw gateway listening on",
+    ]
+    htcondor_internal_domain = get_str(answers, "htcondor_internal_domain", "local")
+
+    # ---- krb5 / slurm paths ----
+    krb5_conf_host_path = get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf").strip()
+    xrootd_krb5_keytab_source_path = get_str(answers, "xrootd_krb5_keytab_source_path").strip()
+    xrootd_krb5_principal = get_str(answers, "xrootd_krb5_principal").strip()
+    enable_host_slurm_client = get_bool(answers, "enable_host_slurm_client")
+    slurm_conf_host_path = get_str(answers, "slurm_conf_host_path", "/etc/slurm/slurm.conf").strip()
+    munge_socket_dir = get_str(answers, "munge_socket_dir", "/var/run/munge").strip().rstrip("/")
+
+    # ---- server port ----
+    if enable_nginx:
+        server_port_block = '    expose:\n      - "8000"'
+    else:
+        server_port_block = f'    ports:\n      - "{answers["host_port"]}:8000"'
+
+    # ---- compose mapping from sub-functions ----
+    mapping: dict[str, str] = {}
+    mapping.update(_build_network_mapping(answers, paths, deploy_dir, enable_nginx, server_port_block))
+    mapping.update(_build_storage_mapping(answers, paths, deploy_dir, enable_xrootd, xrootd_vo_entries))
+    mapping.update(_build_auth_mapping(answers, enable_krb5))
+    mapping.update(_build_computing_mapping(
+        answers, deploy_dir, schedd_host, cm_host, enable_local_htcondor,
+        htcondor_internal_domain, cluster_list, noenv_jobtype, start_keywords,
+    ))
+    mapping.update(_build_mount_mapping(
+        answers, paths, extra_mounts_block, enable_krb5, krb5_conf_host_path,
+        enable_host_slurm_client, slurm_conf_host_path, munge_socket_dir,
+        xrootd_krb5_keytab_source_path, xrootd_krb5_principal,
+    ))
+
+    # ---- general / remaining keys ----
+    rootbrowse_keys_host_path = paths.get(
+        "rootbrowse_authorized_keys_path",
+        paths["keys_dir"] / "rootbrowse_authorized_keys",
+    )
+    server_ssh_private_key_path = paths.get(
+        "server_ssh_private_key_path",
+        paths["keys_dir"] / "ssh-client" / "id_rsa",
+    )
+
+    mapping.update({
+        "profile": profile,
+        "image_source": get_str(answers, "image_source"),
+        "server_image_raw": get_str(answers, "server_image"),
+        "cron_image_raw": get_str(answers, "cron_image"),
+        "rootbrowse_image_raw": get_str(answers, "rootbrowse_image"),
+        "htcondor_image_raw": get_str(answers, "htcondor_image", "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest"),
+        "server_image": yaml_string(get_str(answers, "server_image")),
+        "cron_image": yaml_string(get_str(answers, "cron_image")),
+        "rootbrowse_image": yaml_string(get_str(answers, "rootbrowse_image")),
+        "htcondor_image": yaml_string(get_str(answers, "htcondor_image", "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest")),
+        "project_name": get_str(answers, "project_name"),
+        "db_name": get_str(answers, "db_name"),
+        "db_user": get_str(answers, "db_user"),
+        "db_password": get_str(answers, "db_password"),
+        "db_root_password": get_str(answers, "db_root_password"),
+        "redis_password": get_str(answers, "redis_password"),
+        "config_path": str(config_path.resolve()),
+        "etc_init_dir": str(paths["etc_init_dir"].resolve()),
+        "tmp_dir": str(paths["tmp_dir"].resolve()),
+        "plugins_dir": str(paths["plugins_dir"].resolve()),
+        "keys_dir": str(paths["keys_dir"].resolve()),
+        "server_ssh_dir_host_path": str(Path(server_ssh_private_key_path).resolve().parent),
+        "server_ssh_dir_container_path": "/root/.ssh",
+        "preload_server_dir": str(paths["preload_server_dir"].resolve()),
+        "preload_cron_dir": str(paths["preload_cron_dir"].resolve()),
+        "preload_rootbrowse_dir": str(paths["preload_rootbrowse_dir"].resolve()),
+        "rootbrowse_authorized_keys_host_path": str(rootbrowse_keys_host_path.resolve()),
+        "rootbrowse_authorized_keys_container_path": "/run/fastink/rootbrowse_authorized_keys",
+        "timezone": yaml_string("Asia/Shanghai"),
+        "workers": get_str(answers, "workers"),
+        "ink_production": str(get_bool(answers, "ink_production")).lower(),
+        "init_database": str(get_bool(answers, "init_database")).lower(),
+        "server_preload_script_dirs": yaml_string(get_str(answers, "server_preload_script_dirs")),
+        "server_preload_scripts": yaml_string(get_str(answers, "server_preload_scripts")),
+        "cron_preload_script_dirs": yaml_string(get_str(answers, "cron_preload_script_dirs")),
+        "cron_preload_scripts": yaml_string(get_str(answers, "cron_preload_scripts")),
+        "rootbrowse_preload_script_dirs": yaml_string(get_str(answers, "rootbrowse_preload_script_dirs")),
+        "rootbrowse_preload_scripts": yaml_string(get_str(answers, "rootbrowse_preload_scripts")),
+        "source_commit_sha": yaml_string(version_env["source_commit_sha"]),
+        "source_commit_date": yaml_string(version_env["source_commit_date"]),
+        "source_commit_tag": yaml_string(version_env["source_commit_tag"]),
+        "plugin_pip_packages": yaml_string(get_str(answers, "plugin_pip_packages")),
+        "plugin_editable_dirs": yaml_string(get_str(answers, "plugin_editable_dirs")),
+        "db_name_yaml": yaml_string(get_str(answers, "db_name")),
+        "db_user_yaml": yaml_string(get_str(answers, "db_user")),
+        "db_password_yaml": yaml_string(get_str(answers, "db_password")),
+        "redis_password_yaml": yaml_string(get_str(answers, "redis_password")),
         "app_plugins": yaml_string(""),
         "router_plugins": yaml_string(""),
         "unified_plugin_packages": yaml_string(""),
-        "auth_type": yaml_string("krb5" if enable_krb5 else "password"),
-        "service_port": str(2000),
-        "service_node_yaml": yaml_string("fastink-rootbrowse"),
-        "enable_local_htcondor": str(enable_local_htcondor).lower(),
-        "htcondor_host_name": yaml_string("fastink-htcondor"),
-        "htcondor_host_name_plain": cm_host,
-        "server_condor_conf_host_path": server_condor_conf_host_path,
-        "cron_condor_conf_host_path": cron_condor_conf_host_path,
-        "htcondor_local_conf_host_path": htcondor_local_conf_host_path,
-        "htcondor_schedd_name": "schedd@fastink-htcondor" if enable_local_htcondor else str(answers.get("schedd_host", "localhost")),
-        "htcondor_auth_method": "CLAIMTOBE",
-        "htcondor_fs_domain": htcondor_internal_domain,
-        "htcondor_uid_domain": htcondor_internal_domain,
-        "xrootd_krb5_principal": xrootd_krb5_principal,
-    }
+    })
+    return mapping
 
 
 def render_config(
@@ -604,18 +713,18 @@ def render_bundle(
         "docker-compose.yml": render_compose(
             profile,
             mapping,
-            bool(answers["enable_nginx"]),
-            bool(answers.get("enable_xrootd", False)),
+            get_bool(answers, "enable_nginx"),
+            get_bool(answers, "enable_xrootd"),
             extra_overlays=compose_overlay_paths,
         ),
     }
-    if bool(answers["enable_nginx"]):
+    if get_bool(answers, "enable_nginx"):
         bundle["nginx/default.conf"] = render_nginx_conf(mapping)
-    if bool(answers.get("enable_xrootd", False)):
+    if get_bool(answers, "enable_xrootd"):
         bundle["xrootd/xrootd-proxy.cfg"] = render_xrootd_conf(mapping)
         bundle["xrootd/vo-list.cfg"] = str(mapping.get("xrootd_vo_list_content", ""))
     # Always generate condor config for container mount
     bundle["condor/ink.conf"] = render_condor_conf(mapping)
-    if bool(answers.get("enable_local_htcondor", False)):
+    if get_bool(answers, "enable_local_htcondor"):
         bundle["condor/htcondor.local.conf"] = render_htcondor_local_conf(mapping)
     return bundle

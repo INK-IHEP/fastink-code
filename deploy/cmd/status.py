@@ -6,41 +6,20 @@ Usage:
 """
 
 import argparse
-import json
-import subprocess
 import sys
 from pathlib import Path
 
-_HERE = Path(__file__).resolve().parent          # deploy/cmd/
-_DEPLOY_ROOT = _HERE.parent                       # deploy/
-_REPO_ROOT = _DEPLOY_ROOT.parent                  # fastink-code/
-_DEPLOY_DIR = _REPO_ROOT / ".deploy"
+_HERE = Path(__file__).resolve().parent
+if str(_HERE.parent) not in sys.path:
+    sys.path.insert(0, str(_HERE.parent))
 
-if str(_DEPLOY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_DEPLOY_ROOT))
+from lib.deploy_io import resolve_deploy_paths
+
+_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
 
 from lib import cli_ui
-
-
-def _compose_ps(project_name: str, compose_file: Path) -> list[dict]:
-    """Run docker compose ps --format json and return parsed output."""
-    try:
-        result = subprocess.run(
-            ["docker", "compose", "-p", project_name, "-f", str(compose_file), "ps", "--format", "json"],
-            capture_output=True, text=True, check=False,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            return []
-        # docker compose ps --format json may output one JSON object per line
-        containers: list[dict] = []
-        for line in result.stdout.strip().splitlines():
-            try:
-                containers.append(json.loads(line))
-            except json.JSONDecodeError:
-                pass
-        return containers
-    except FileNotFoundError:
-        return []
+from lib.compose import compose_ps
+from cmd.deploy import load_deploy_answers
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,7 +44,7 @@ def main() -> None:
         cli_ui.info(f"Directory: {_DEPLOY_DIR}")
         return
 
-    answers = json.loads(answers_path.read_text(encoding="utf-8"))
+    answers = load_deploy_answers()
     project_name = str(answers.get("project_name", "fastink"))
     compose_file = _DEPLOY_DIR / "docker-compose.yml"
     profile = str(answers.get("profile", "unknown"))
@@ -77,7 +56,7 @@ def main() -> None:
         if val:
             images[key] = str(val)
 
-    containers = _compose_ps(project_name, compose_file) if compose_file.exists() else []
+    containers = compose_ps(project_name, compose_file) if compose_file.exists() else []
 
     cli_ui.step("Deployment status")
     cli_ui.summary_table([

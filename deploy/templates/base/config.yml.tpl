@@ -54,7 +54,6 @@ ${cluster_list_block}
 ${noenv_jobtype_block}
   schedd_host: ${schedd_host}
   cm_host: ${cm_host}
-  xrootd_path: ${xrootd_path}
   gateway_node: ${gateway_node}
   cluster_scripts: ${cluster_scripts}
   nginx_node: ${public_base_url_yaml}

@@ -15,7 +15,7 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
     user_home_dir = os.path.expanduser(f'~{username}')
     job_dir = f"{user_home_dir}/.ink/Jobs/{jobtype}-{time_stamp}"
     token_filename = ""
-    xrootd_path = get_config("computing", "xrootd_path")
+    xrootd_path = get_config("storage", "xrd_host")
     
     is_exist, _ = await common.path_exist(name=job_dir, krb5ccname=token_filename, username=username, mgm=xrootd_path)
     if not is_exist:

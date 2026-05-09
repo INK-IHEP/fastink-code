@@ -82,7 +82,7 @@ async def read_file(uid, file_path: str) -> str:
     file_content = ""
     username = change_uid_to_username(uid)
     krb5_enabled = get_config("common", "krb5_enabled")
-    xrootd_path = get_config("computing", "xrootd_path")
+    xrootd_path = get_config("storage", "xrd_host")
     file_content = await common.cat_file(fname=file_path, username=username, mgm=xrootd_path, krb5_enabled=krb5_enabled)
 
     return file_content
@@ -472,7 +472,7 @@ async def write_openclaw_bind_metadata(username: str, uid: int, job_dir: str) ->
         src_data=payload,
         dst=metadata_path,
         username=username,
-        mgm=get_config("computing", "xrootd_path"),
+        mgm=get_config("storage", "xrd_host"),
         mode="600",
     )
     logger.info(
@@ -494,7 +494,7 @@ def get_user_exp_group_dir(uid: int) -> str:
 
 async def init_job_dir(username: str, job_type: str):
     
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     time_stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     user_home_dir = os.path.expanduser(f'~{username}')
     uid = change_username_to_uid(username)
@@ -542,7 +542,7 @@ async def generate_condor_submit(
     extra_param = default_job_config.get("extra_param")
     job_cpus = default_job_config.get("RequestCpus", cpu)
     job_mem = default_job_config.get("RequestMemory", mem)
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     uid = change_username_to_uid(username)
     
     workernode = default_job_config.get("workernode", request_wn)
@@ -714,7 +714,7 @@ def build_openclaw_arguments(
 
 async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
     
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     uid = change_username_to_uid(username)
 
     def build_default_job_dir() -> str:
@@ -768,7 +768,7 @@ async def generate_condor_sync_submit(
     arguments: Optional[str] = None
 ):
 
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     uid = change_username_to_uid(username)
     groupname = grp.getgrgid(pwd.getpwuid(uid).pw_gid).gr_name
 

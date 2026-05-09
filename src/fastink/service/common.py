@@ -95,7 +95,7 @@ async def create_krb5_file(username: str):
 
     time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    xrootd_path = get_config("computing", "xrootd_path")
+    xrootd_path = get_config("storage", "xrd_host")
     user_group = query_pwd_group(username)
     ink_dir = get_config("service", "ink_dir")
     logger.info(f"ink_dir : {ink_dir}")

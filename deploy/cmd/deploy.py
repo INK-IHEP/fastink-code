@@ -12,22 +12,24 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
-# Path setup: add deploy/ root to sys.path so lib/* and cmd/* can be imported.
-_HERE = Path(__file__).resolve().parent          # deploy/cmd/
-_DEPLOY_ROOT = _HERE.parent                       # deploy/
-if str(_DEPLOY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_DEPLOY_ROOT))
+_HERE = Path(__file__).resolve().parent
+if str(_HERE.parent) not in sys.path:
+    sys.path.insert(0, str(_HERE.parent))
+
+from lib.deploy_io import resolve_deploy_paths
+
+_DEPLOY_PATHS = resolve_deploy_paths()
 
 from lib import cli_ui
 from lib.defaults import default_answers, default_image_answers, normalize_answers, parse_override_value, required_images
+from lib.types import get_bool
 from lib.host_runtime import check_host_prerequisites
 from lib.paths import build_runtime_paths
 from lib.render import render_bundle
 
 
-DEPLOY_ROOT = _DEPLOY_ROOT
-REPO_ROOT = DEPLOY_ROOT.parent
-DEPLOY_DIR = REPO_ROOT / ".deploy"
+REPO_ROOT = _DEPLOY_PATHS.repo_root
+DEPLOY_DIR = _DEPLOY_PATHS.deploy_dir
 REUSE_PREVIOUS = "__FASTINK_REUSE_PREVIOUS__"
 
 
@@ -86,7 +88,7 @@ def annotate_runtime_asset_paths(paths: dict[str, Path]) -> None:
 
 def stage_nginx_tls_material(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
     notes: list[str] = []
-    if not bool(answers.get("enable_nginx")):
+    if not get_bool(answers, "enable_nginx"):
         return notes
 
     cert_source = str(answers.pop("nginx_cert_source_path", "") or "").strip()
@@ -130,7 +132,7 @@ def build_xrootd_notes(paths: dict[str, Path]) -> list[str]:
 
 def validate_krb5_paths(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
     notes: list[str] = []
-    if not bool(answers.get("enable_krb5")):
+    if not get_bool(answers, "enable_krb5"):
         return notes
 
     krb5_conf_host_path = Path(str(answers.get("krb5_conf_host_path", "")).strip()).expanduser().resolve()
@@ -138,7 +140,7 @@ def validate_krb5_paths(answers: dict[str, object], paths: dict[str, Path]) -> l
         raise FileNotFoundError(f"Host krb5.conf not found: {krb5_conf_host_path}")
     notes.append(f"Using host krb5.conf from: {krb5_conf_host_path}")
 
-    if bool(answers.get("enable_xrootd")):
+    if get_bool(answers, "enable_xrootd"):
         keytab_text = str(answers.get("xrootd_krb5_keytab_source_path", "")).strip()
         if not keytab_text:
             raise RuntimeError("Kerberos-enabled xrootd requires an xrootd krb5 keytab source path")
@@ -188,9 +190,9 @@ def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> No
         "-v",
         f"{paths['keys_dir'].resolve()}:/work/keys",
     ]
-    if bool(answers.get("enable_nginx")):
+    if get_bool(answers, "enable_nginx"):
         cmd.extend(["-v", f"{paths['nginx_dir'].resolve()}:/work/nginx"])
-    if bool(answers.get("enable_xrootd")):
+    if get_bool(answers, "enable_xrootd"):
         cmd.extend(["-v", f"{paths['xrootd_dir'].resolve()}:/work/xrootd"])
     cmd.append(str(answers["init_image"]))
     run_command(cmd)
@@ -212,14 +214,14 @@ def print_post_install_notes(
         cli_ui.info(f"SSH public key to distribute to condor/slurm/login nodes: {server_public_key}")
         cli_ui.info("Install that public key into the remote runtime account's authorized_keys before using remote compute backends.")
 
-    if bool(answers.get("enable_nginx")):
+    if get_bool(answers, "enable_nginx"):
         for note in nginx_notes:
             cli_ui.info(note)
 
-    if bool(answers.get("enable_xrootd")):
+    if get_bool(answers, "enable_xrootd"):
         for note in xrootd_notes:
             cli_ui.info(note)
-    if bool(answers.get("enable_krb5")):
+    if get_bool(answers, "enable_krb5"):
         for note in krb5_notes:
             cli_ui.info(note)
 
@@ -261,39 +263,23 @@ def load_deploy_answers() -> dict[str, object]:
 
 
 def load_saved_answers() -> dict[str, object]:
-    answers_path = DEPLOY_DIR / "answers.json"
-    if not answers_path.exists():
-        cli_ui.error(f"Saved answers file not found: {answers_path}")
-        sys.exit(1)
-    try:
-        answers = json.loads(answers_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        cli_ui.error(f"Failed to parse saved answers file {answers_path}: {exc}")
-        sys.exit(1)
-    finalize_mount_answers(answers)
-    profile = str(answers.get("profile") or "quickstart")
-    return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
+    return load_answers_from_file(DEPLOY_DIR / "answers.json")
 
 
 def try_load_saved_answers() -> Optional[dict[str, object]]:
-    answers_path = DEPLOY_DIR / "answers.json"
-    if not answers_path.exists():
-        return None
+    """Load saved answers, returning None instead of exiting on error."""
     try:
-        answers = json.loads(answers_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        return load_saved_answers()
+    except SystemExit:
         return None
-    finalize_mount_answers(answers)
-    profile = str(answers.get("profile") or "quickstart")
-    return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
 
 
 def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
     _, paths = build_runtime_paths(
         output_dir=DEPLOY_DIR,
         data_root=Path(answers["data_root"]),
-        enable_nginx=bool(answers["enable_nginx"]),
-        enable_xrootd=bool(answers.get("enable_xrootd", False)),
+        enable_nginx=get_bool(answers, "enable_nginx"),
+        enable_xrootd=get_bool(answers, "enable_xrootd"),
         db_data_dir=Path(answers["data_root"]) / "db",
         redis_data_dir=Path(answers["data_root"]) / "redis",
         etc_init_dir=Path(answers["data_root"]) / "etc-init",
@@ -310,7 +296,7 @@ def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
 
 def finalize_mount_answers(answers: dict[str, object]) -> dict[str, object]:
     if (
-        bool(answers.get("enable_xrootd")) or bool(answers.get("enable_local_htcondor"))
+        get_bool(answers, "enable_xrootd") or get_bool(answers, "enable_local_htcondor")
     ) and not str(answers.get("extra_mounts_file") or "").strip():
         answers["extra_mounts_file"] = str(ensure_default_extra_mounts_file().resolve())
     return answers
@@ -653,8 +639,8 @@ def main() -> None:
     paths = build_paths_from_answers(answers)
 
     nginx_notes = stage_nginx_tls_material(answers, paths)
-    xrootd_notes = build_xrootd_notes(paths) if bool(answers.get("enable_xrootd")) else []
-    krb5_notes = validate_krb5_paths(answers, paths) if bool(answers.get("enable_krb5")) else []
+    xrootd_notes = build_xrootd_notes(paths) if get_bool(answers, "enable_xrootd") else []
+    krb5_notes = validate_krb5_paths(answers, paths) if get_bool(answers, "enable_krb5") else []
 
     cli_ui.step("Render deployment files")
     bundle = render_bundle(
@@ -760,18 +746,15 @@ def build_or_pull_images(answers: dict[str, object]) -> None:
 
 def deploy_stack(answers: dict[str, object]) -> None:
     cli_ui.step("Start services with docker compose")
-    run_command(
-        [
-            "docker",
-            "compose",
-            "-p",
-            str(answers["project_name"]),
-            "-f",
-            str((DEPLOY_DIR / "docker-compose.yml").resolve()),
-            "up",
-            "-d",
-        ]
-    )
+    from lib.compose import compose_up
+
+    project_name = str(answers["project_name"])
+    compose_file = (DEPLOY_DIR / "docker-compose.yml").resolve()
+    cli_ui.info(f"+ docker compose -p {project_name} -f {compose_file} up -d")
+    rc = compose_up(project_name, compose_file)
+    if rc != 0:
+        cli_ui.error(f"docker compose up failed with exit code {rc}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
