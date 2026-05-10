@@ -240,6 +240,7 @@ async def delete_path(
     _, _, krb5ccname = get_krb5cc(uid = None, name = username, krb5 = krb5_enabled)
     env = xrd_env(krb5ccname = krb5ccname, krb5_enabled = krb5_enabled)
     try:
+        logger.debug(f"Check if {username}'s {name} exists")
         is_exist, path_type = await path_exist(name, username, mgm)
         if not is_exist:
             logger.error(f"PATH {name} doesn't exist.")
@@ -248,6 +249,7 @@ async def delete_path(
         logger.error(f"Token for {username} expired...")
         raise e
     except Exception as e:
+        logger.error(f"Unknown Error for {username}'s {name}. {str(e)}")
         raise e
 
     files = []
