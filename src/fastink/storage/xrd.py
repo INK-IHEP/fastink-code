@@ -270,7 +270,7 @@ async def delete_path(
         return status
 
     if path_type == PathType.DIR:
-        raw_files = await list_path(name, long=True, recursive=True, mgm=mgm)
+        raw_files = await list_path(dname = work_directory, username = username, long=True, recursive=True, showhidden = True, mgm = mgm)
         for f in raw_files:
             if f["type"] == "directory":
                 dirs.append(f["path"])
