@@ -51,4 +51,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n")
+        from lib import cli_ui
+
+        cli_ui.warning("Aborted.")
+        sys.exit(1)

@@ -292,6 +292,13 @@ def progress_bar(description: str = "Progress", total: int = 1):
 # ---------------------------------------------------------------------------
 
 
+def _abort():
+    """Exit immediately when the user cancels a prompt (Ctrl+C)."""
+    print("\n")
+    warning("Aborted.")
+    sys.exit(1)
+
+
 def confirm_prompt(
     text: str,
     default: bool = True,
@@ -309,7 +316,7 @@ def confirm_prompt(
         default_choice = "Yes" if effective_default else "No"
         result = questionary.select(text, choices=choices, default=default_choice).ask()
         if result is None:
-            return effective_default
+            _abort()
         if result.startswith("Use saved"):
             return reuse_value
         return result == "Yes"
@@ -341,6 +348,8 @@ def text_prompt(
         import questionary
 
         result = questionary.text(text, default=effective_default).ask()
+        if result is None:
+            _abort()
         return result.strip() if result else effective_default
     # Basic fallback
     suffix_parts: list[str] = []
@@ -366,6 +375,8 @@ def secret_prompt(
         import questionary
 
         result = questionary.password(text, default=effective_default).ask()
+        if result is None:
+            _abort()
         return result if result else effective_default
     # Basic fallback
     from getpass import getpass
@@ -398,7 +409,9 @@ def int_prompt(
                 default=str(effective_default),
                 validate=lambda v: v.isdigit() or (v == ""),
             ).ask()
-            if not result:
+            if result is None:
+                _abort()
+            if result == "":
                 return effective_default
             try:
                 return int(result)
@@ -429,6 +442,8 @@ def choice_prompt(
             choices=options,
             default=effective_default or options[0],
         ).ask()
+        if result is None:
+            _abort()
         return result or effective_default or options[0]
     # Basic fallback
     options_display = "/".join(options)
