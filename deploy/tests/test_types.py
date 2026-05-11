@@ -1,4 +1,4 @@
-"""类型安全访问函数测试：get_bool, get_str, get_int."""
+"""Type-safe accessor tests: get_bool, get_str, get_int."""
 import pytest
 from deploy.lib.types import get_bool, get_str, get_int
 

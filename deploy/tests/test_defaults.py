@@ -1,7 +1,7 @@
-"""默认值和答案规范化测试：default_answers, default_image_answers, parse_override_value。
+"""Default values and answer normalization tests: default_answers, default_image_answers, parse_override_value.
 
-注意：parse_override_value 只对 BOOL_FIELDS/INT_FIELDS 中的 key
-做类型推断，其他 key 原样返回字符串。
+Note: parse_override_value only applies type inference for keys in
+BOOL_FIELDS/INT_FIELDS; other keys are returned as strings.
 """
 import pytest
 from deploy.lib.defaults import default_answers, default_image_answers, parse_override_value
@@ -21,10 +21,10 @@ class TestDefaultImageAnswers:
 
     def test_build_returns_local_tags(self) -> None:
         images = default_image_answers("build")
-        # build 模式返回本地构建的 :local 镜像名
+        # build mode returns locally built :local image tags
         assert images["server_image"] == "fastink-server:local"
         assert images["cron_image"] == "fastink-redis-cron:local"
-        # xrootd 不在 build 列表中，使用默认 pull 镜像
+        # xrootd is not in the build list, falls back to the default pull image
         assert images["xrootd_image"] == "dockerhub.ihep.ac.cn/ink/xrootd-multiuser:5.9.0-3"
 
     def test_unknown_raises(self) -> None:
@@ -34,12 +34,12 @@ class TestDefaultImageAnswers:
 
 class TestParseOverrideValue:
     @pytest.mark.parametrize(["key", "raw", "expected"], [
-        ("enable_nginx", "true", True),      # BOOL_FIELDS →
+        ("enable_nginx", "true", True),      # BOOL_FIELDS
         ("enable_krb5", "false", False),     # BOOL_FIELDS
-        ("host_port", "8080", 8080),         # INT_FIELDS → int
-        ("workers", "4", 4),                 # INT_FIELDS → int
-        ("profile", "custom", "custom"),    # 普通字段 → str
-        ("db_name", "mydb", "mydb"),        # 普通字段 → str
+        ("host_port", "8080", 8080),         # INT_FIELDS
+        ("workers", "4", 4),                 # INT_FIELDS
+        ("profile", "custom", "custom"),    # plain field → str
+        ("db_name", "mydb", "mydb"),        # plain field → str
     ])
     def test_type_inference(self, key: str, raw: str, expected: object) -> None:
         assert parse_override_value(key, raw) == expected

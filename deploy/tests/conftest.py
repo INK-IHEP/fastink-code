@@ -1,19 +1,20 @@
-"""Deploy 子系统共享测试 fixtures。
+"""Shared test fixtures for the deploy subsystem.
 
-添加 deploy/ 到 sys.path 的同时保护 stdlib cmd/ 模块不被遮蔽。
+Adds deploy/ to sys.path while protecting the stdlib cmd/ module
+from being shadowed.
 """
 import sys
 from pathlib import Path
 
-# 在插入 deploy/ 到 sys.path 之前预加载 stdlib cmd
+# Preload stdlib cmd before deploy/ is inserted into sys.path
 import cmd as _stdlib_cmd  # noqa: E402
 
 _DEPLOY_ROOT = Path(__file__).resolve().parent.parent
 if str(_DEPLOY_ROOT) not in sys.path:
     sys.path.insert(0, str(_DEPLOY_ROOT))
 
-# stdlib cmd 必须保留在 sys.modules 中，否则 pdb 会因找到 deploy/cmd/
-# （没有 cmd.Cmd）而崩溃
+# stdlib cmd must stay in sys.modules, otherwise pdb will pick up
+# deploy/cmd/ (which has no cmd.Cmd) and crash
 sys.modules["cmd"] = _stdlib_cmd
 
 import pytest  # noqa: E402

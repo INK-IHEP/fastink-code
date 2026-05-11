@@ -1,6 +1,6 @@
-"""fastinkctl CLI 入口测试：命令分发、参数传递、错误处理。
+"""fastinkctl CLI entrypoint tests: command dispatch, arg passthrough, error handling.
 
-所有测试都以模拟子模块方式运行，不会实际执行 deploy/destroy 等命令。
+All tests mock subcommand modules so they never run actual deploy/destroy logic.
 """
 
 import subprocess
@@ -18,7 +18,7 @@ _FASTINKCTL = _DEPLOY_ROOT / "fastinkctl.py"
 
 @pytest.fixture
 def mock_subcommand():
-    """Mock importlib.import_module 使所有子命令返回一个假的 main。"""
+    """Mock importlib.import_module so every subcommand returns a fake main."""
     with patch("fastinkctl.importlib.import_module") as mi:
         mod = Mock()
         mod.main = Mock()
@@ -27,7 +27,7 @@ def mock_subcommand():
 
 
 class TestCommandDispatch:
-    """验证命令名到模块的分发逻辑。"""
+    """Verify command name to module dispatch logic."""
 
     @pytest.mark.parametrize(["argv", "expected_module"], [
         ([],                     "cmd.deploy"),
@@ -71,7 +71,7 @@ class TestCommandDispatch:
 
 
 class TestSysArgvPassthrough:
-    """验证子命令名和额外参数的处理。"""
+    """Verify subcommand name and extra argument handling."""
 
     def test_no_args_defaults_to_deploy(self, monkeypatch: pytest.MonkeyPatch,
                                         mock_subcommand) -> None:
@@ -83,13 +83,12 @@ class TestSysArgvPassthrough:
 
     def test_command_stripped_from_argv(self, monkeypatch: pytest.MonkeyPatch,
                                         mock_subcommand) -> None:
-        """子命令自己的 main 不应看到命令名。"""
+        """The subcommand's main() must not see the command name in sys.argv."""
         monkeypatch.setattr(sys, "argv", ["fastinkctl.py", "deploy", "--render-only"])
         mi, mod = mock_subcommand
         main()
         mi.assert_called_once_with("cmd.deploy")
         mod.main.assert_called_once()
-        # sys.argv 中 "deploy" 应已被移除
         assert sys.argv == ["fastinkctl.py", "--render-only"]
 
     @pytest.mark.parametrize(["full_args", "expected_remaining"], [
@@ -109,7 +108,7 @@ class TestSysArgvPassthrough:
 
 
 class TestDeployHelpFlags:
-    """验证 -h 不会被当成命令，而是显示帮助。"""
+    """Verify -h is treated as help, not a command."""
 
     def test_dash_h(self, monkeypatch: pytest.MonkeyPatch,
                     capsys: pytest.CaptureFixture) -> None:
@@ -119,10 +118,10 @@ class TestDeployHelpFlags:
 
 
 class TestMainBlock:
-    """测试 __main__ 保护代码的 KeyboardInterrupt 处理。"""
+    """Test the __main__ guard code's KeyboardInterrupt handling."""
 
     def test_keyboard_interrupt_exit_code(self) -> None:
-        """运行 fastinkctl --help，确保正常退出。"""
+        """Run fastinkctl --help and verify clean exit."""
         result = subprocess.run(
             [sys.executable, str(_FASTINKCTL), "--help"],
             capture_output=True, text=True, timeout=15,
@@ -131,7 +130,7 @@ class TestMainBlock:
         assert "fastinkctl deploy" in result.stdout
 
     def test_keyboard_interrupt_unknown_command(self) -> None:
-        """运行 fastinkctl 不存在的命令，验证退出码。"""
+        """Run fastinkctl with a nonexistent command and verify exit code."""
         result = subprocess.run(
             [sys.executable, str(_FASTINKCTL), "does-not-exist"],
             capture_output=True, text=True, timeout=15,

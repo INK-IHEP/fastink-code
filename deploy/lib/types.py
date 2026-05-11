@@ -5,12 +5,12 @@ from typing import TypedDict
 
 
 class DeployAnswers(TypedDict, total=False):
-    """类型化的部署答案字典。total=False 允许渐进式填充。"""
-    # 元信息
+    """Typed deploy answers dictionary. total=False allows gradual population."""
+    # Meta
     profile: str
     image_source: str
 
-    # 镜像
+    # Images
     server_image: str
     cron_image: str
     rootbrowse_image: str
@@ -18,7 +18,7 @@ class DeployAnswers(TypedDict, total=False):
     xrootd_image: str
     init_image: str
 
-    # 网络
+    # Network
     host_name: str
     host_port: int
     rootbrowse_port: int
@@ -26,12 +26,12 @@ class DeployAnswers(TypedDict, total=False):
     public_base_url: str
     enable_nginx: bool
 
-    # 存储
+    # Storage
     data_root: str
     enable_xrootd: bool
     extra_mounts_file: str
 
-    # 认证
+    # Auth
     enable_krb5: bool
     krb5_conf_host_path: str
     xrootd_krb5_keytab_source_path: str
@@ -50,7 +50,7 @@ class DeployAnswers(TypedDict, total=False):
     slurm_conf_host_path: str
     munge_socket_dir: str
 
-    # 数据库
+    # Database
     db_name: str
     db_user: str
     db_root_password: str
@@ -60,7 +60,7 @@ class DeployAnswers(TypedDict, total=False):
     # Redis
     redis_password: str
 
-    # 运行时
+    # Runtime
     project_name: str
     workers: int
     ink_production: bool
@@ -75,13 +75,13 @@ class DeployAnswers(TypedDict, total=False):
     nginx_cert_source_path: str
     nginx_key_source_path: str
 
-    # 自动填充
+    # Auto-filled
     db_data_dir: str
     redis_data_dir: str
 
 
 class RuntimePaths(TypedDict, total=False):
-    """类型化的运行时路径字典。"""
+    """Typed runtime paths dictionary."""
     data_root: Path
     db_data_dir: Path
     redis_data_dir: Path
@@ -106,7 +106,7 @@ class RuntimePaths(TypedDict, total=False):
 
 
 def get_bool(answers: dict, key: str, default: bool = False) -> bool:
-    """类型安全地获取字典中的 bool 值。"""
+    """Type-safe bool accessor for answer dictionaries."""
     v = answers.get(key)
     if v is None:
         return default
@@ -118,7 +118,7 @@ def get_bool(answers: dict, key: str, default: bool = False) -> bool:
 
 
 def get_str(answers: dict, key: str, default: str = "") -> str:
-    """类型安全地获取字典中的 str 值。"""
+    """Type-safe string accessor for answer dictionaries."""
     v = answers.get(key)
     if v is None:
         return default
@@ -126,7 +126,7 @@ def get_str(answers: dict, key: str, default: str = "") -> str:
 
 
 def get_int(answers: dict, key: str, default: int = 0) -> int:
-    """类型安全地获取字典中的 int 值。"""
+    """Type-safe int accessor for answer dictionaries."""
     v = answers.get(key)
     if v is None:
         return default

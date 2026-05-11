@@ -1,4 +1,4 @@
-"""Render 工具函数测试：YAML block 生成、deep_merge、profile_chain 等。"""
+"""Render utility tests: YAML block generation, deep_merge, profile_chain, etc."""
 from typing import Optional
 
 import pytest
@@ -42,7 +42,7 @@ class TestRenderOptionalSingleVolumeBlock:
 
 class TestRenderYamlListBlock:
     def test_indent_0_gives_valid_yaml(self) -> None:
-        """indent=0 时输出可直接解析为 YAML list。"""
+        """indent=0 output is directly parseable as a YAML list."""
         result = render_yaml_list_block(["a", "b"], indent=0)
         assert yaml.safe_load(result) == ["a", "b"]
 
@@ -88,7 +88,7 @@ class TestDeepMerge:
         assert result == {"a": {"b": 1, "c": 2}}
 
     def test_list_overwrite(self) -> None:
-        # deep_merge 中 list 是覆盖（后覆盖前），不是追加
+        # deep_merge overwrites lists (latter wins), it does not append
         assert deep_merge({"a": [1]}, {"a": [2]}) == {"a": [2]}
 
     def test_new_keys_added(self) -> None:

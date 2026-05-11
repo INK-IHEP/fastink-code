@@ -1,4 +1,4 @@
-"""Docker compose 操作测试：验证 subprocess 参数构建正确。"""
+"""Docker compose operations: verify subprocess argument construction."""
 import subprocess
 from pathlib import Path
 
