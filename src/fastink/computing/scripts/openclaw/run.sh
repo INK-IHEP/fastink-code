@@ -36,7 +36,7 @@ OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
 LOCAL_MODEL_BASE_URL="https://aiapi.ihep.ac.cn/apiv2"
-MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-15}"
+MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-60}"
 APP_TOKEN="$(python3 - <<'PY'
 import secrets
 print(secrets.token_hex(32))
