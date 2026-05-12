@@ -1,6 +1,6 @@
-"""命令注册表测试：register / get_module_path / known_commands。
+"""Command registry tests: register / get_module_path / known_commands.
 
-使用 deploy.cmd 绝对路径导入，避免与 stdlib cmd 模块冲突。
+Uses deploy.cmd absolute imports to avoid conflict with the stdlib cmd module.
 """
 from deploy.cmd import register, get_module_path, known_commands
 

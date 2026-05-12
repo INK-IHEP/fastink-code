@@ -36,7 +36,7 @@ OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
 LOCAL_MODEL_BASE_URL="https://aiapi.ihep.ac.cn/apiv2"
-MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-15}"
+MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-60}"
 APP_TOKEN="$(python3 - <<'PY'
 import secrets
 print(secrets.token_hex(32))
@@ -427,10 +427,6 @@ APP_PID=$!
 log "spawned background pid=${APP_PID}"
 
 MONITOR_PID=""
-monitor_openclaw_runtime "${APP_PID}" "${LOCAL_ONLY_MODELS}" &
-MONITOR_PID=$!
-log "started runtime monitor pid=${MONITOR_PID} enforce_local_only=${LOCAL_ONLY_MODELS}"
-
 READY=0
 for _ in $(seq 1 60); do
     if ! kill -0 "${APP_PID}" 2>/dev/null; then
@@ -450,6 +446,10 @@ done
 
 if [ "${READY}" -eq 0 ]; then
     log "openclaw gateway did not start listening within 60 seconds"
+else
+    monitor_openclaw_runtime "${APP_PID}" "${LOCAL_ONLY_MODELS}" &
+    MONITOR_PID=$!
+    log "started runtime monitor pid=${MONITOR_PID} enforce_local_only=${LOCAL_ONLY_MODELS}"
 fi
 
 log "waiting for background process ${APP_PID}"

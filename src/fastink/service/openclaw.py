@@ -97,6 +97,8 @@ DEFAULT_MODEL = {
     "contextWindow": 64000,
     "maxTokens": 8192,
 }
+LOCAL_MODEL_CONTEXT_WINDOW = 32000
+REMOTE_MODEL_CONTEXT_WINDOW = 128000
 
 
 def _is_local_port_available(port: int) -> bool:
@@ -173,6 +175,19 @@ def _run_as_user(username: str, command: str) -> str:
 
 def _normalize_base_url(value: str) -> str:
     return str(value or "").rstrip("/")
+
+
+def _is_local_model(base_url: str, model_id: str) -> bool:
+    return (
+        _normalize_base_url(base_url) == _normalize_base_url(DEFAULT_OPENCLAW_TEMPLATES["hepai/deepseek"]["base_url"])
+        and str(model_id or "").startswith("hepai/")
+    )
+
+
+def _get_model_context_window(base_url: str, model_id: str) -> int:
+    if _is_local_model(base_url=base_url, model_id=model_id):
+        return LOCAL_MODEL_CONTEXT_WINDOW
+    return REMOTE_MODEL_CONTEXT_WINDOW
 
 
 def _resolve_user_experiment_group(username: str) -> str:
@@ -403,6 +418,10 @@ def _merge_model(existing_model: dict | None, payload: OpenClawSyncRequest) -> d
         else:
             merged[key] = value
 
+    merged["contextWindow"] = _get_model_context_window(
+        base_url=payload.base_url,
+        model_id=payload.model_id,
+    )
     if not merged.get("name"):
         merged["name"] = payload.model_id
     return merged
@@ -489,13 +508,6 @@ def _iter_provider_models(target_config: dict) -> list[tuple[str, dict, dict]]:
             if isinstance(model, dict):
                 items.append((provider_key, provider_config, model))
     return items
-
-
-def _is_local_model(base_url: str, model_id: str) -> bool:
-    return (
-        _normalize_base_url(base_url) == _normalize_base_url(DEFAULT_OPENCLAW_TEMPLATES["hepai/deepseek"]["base_url"])
-        and str(model_id or "").startswith("hepai/")
-    )
 
 
 def _validate_experiment_data_models(target_config: dict) -> None:

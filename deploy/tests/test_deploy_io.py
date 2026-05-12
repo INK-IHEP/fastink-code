@@ -1,4 +1,4 @@
-"""路径解析测试：resolve_deploy_paths 的目录结构约定。"""
+"""Path resolution tests: resolve_deploy_paths directory conventions."""
 from deploy.lib.deploy_io import resolve_deploy_paths
 
 
