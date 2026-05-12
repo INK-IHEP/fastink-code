@@ -36,6 +36,28 @@ class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
         super().__init__(uid)
         self.CLUSTER_TYPE = "slurm"
+
+    def _seconds_to_slurm_time(self, total_seconds: int) -> str:
+        if total_seconds < 0:
+            raise ValueError("Time limit seconds must be >= 0.")
+
+        days, rem = divmod(total_seconds, 24 * 3600)
+        hours, rem = divmod(rem, 3600)
+        minutes, seconds = divmod(rem, 60)
+        if days > 0:
+            return f"{days}-{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    def _normalize_slurm_time_limit(self, raw_value: object, fallback: str = "24:00:00") -> str:
+        value = str(raw_value).strip()
+        if not value:
+            return fallback
+
+        # Defensive conversion: treat plain numbers in config as seconds.
+        if value.isdigit():
+            return self._seconds_to_slurm_time(int(value))
+
+        return value
     
     def _get_interactive_job_types(self) -> List[str]:
         """Get the list of interactive job types from config."""
@@ -149,6 +171,18 @@ class HPC_Scheduler(SchedulerBase):
         submit_abs_job_script = ""
         interactive_job_types = self._get_interactive_job_types()
         if jobtype in interactive_job_types:
+            # Apply a configurable time limit for interactive job types.
+            interactive_job_time_limit = get_config(
+                "computing",
+                "interactive_job_time_limit",
+                fallback="24:00:00",
+            )
+            normalized_time_limit = self._normalize_slurm_time_limit(
+                interactive_job_time_limit,
+                fallback="24:00:00",
+            )
+            args.append(f"--time={normalized_time_limit}")
+
             executable_dir = get_config("computing", "cluster_scripts")
             executable = f"{executable_dir}/{jobtype}/shell.sh"
 
@@ -687,7 +721,7 @@ class HPC_Scheduler(SchedulerBase):
                             self.UID, job_id, start_time, self.CLUSTER_TYPE
                         )
 
-            elif slurm_state in ("COMPLETED", "FAILED"):
+            elif slurm_state in ("COMPLETED", "FAILED", "TIMEOUT"):
                 job_status = slurm_state
                 if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
                     update_end_time(

@@ -56,6 +56,7 @@ ${noenv_jobtype_block}
   cm_host: ${cm_host}
   gateway_node: ${gateway_node}
   cluster_scripts: ${cluster_scripts}
+  interactive_job_time_limit: "24:00:00"
   nginx_node: ${public_base_url_yaml}
   ink_dir: ${ink_dir}
   start_keywords:

@@ -225,7 +225,7 @@ def find_active_jobs(uid, jobtype, *, session:Session):
         else:
             stmt = stmt.where(models.JobInfo.job_type == jobtype)
 
-    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "FAILED", "CANCELLED", "CANCELED"]))
+    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "FAILED", "TIMEOUT", "CANCELLED", "CANCELED"]))
 
     try:
         results = session.execute(stmt).scalars()
