@@ -37,6 +37,11 @@
             "workspace": ""
         }
     },
+    "skills": {
+        "load": {
+            "extraDirs": ["/cvmfs/common.ihep.ac.cn/skills/"]
+        }
+    },
     "tools": {
         "profile": "coding",
         "exec": {
