@@ -31,6 +31,14 @@ from uuid import uuid4
 import logging
 logger = logging.getLogger("ink.hpcadapter")
 
+SLURM_TERMINAL_JOB_STATUSES = frozenset({
+    "COMPLETED",
+    "FAILED",
+    "TIMEOUT",
+    "OUT_OF_MEMORY",
+    "CANCELLED",
+})
+
 @scheduler("slurm")
 class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
@@ -70,6 +78,16 @@ class HPC_Scheduler(SchedulerBase):
         # async mode
         interactive_job_types = self._get_interactive_job_types()
         return job_data.job_type in interactive_job_types
+
+    def _hidden_terminal_job_key(self, job_id: str | int) -> str:
+        return f"cluster_jobs:hidden:{self.CLUSTER_TYPE}:{self.USERNAME}:{job_id}"
+
+    async def _mark_terminal_job_hidden(self, job_id: str | int) -> None:
+        r = redis_connect()
+        await r.set(self._hidden_terminal_job_key(job_id), "1")
+
+    async def _is_terminal_job_hidden(self, r, job_id: str | int) -> bool:
+        return bool(await r.exists(self._hidden_terminal_job_key(job_id)))
 
     async def _gen_slurm_submit_cmd(
         self, 
@@ -651,6 +669,9 @@ class HPC_Scheduler(SchedulerBase):
                 if job_type not in req_job_type.split(","):
                     continue
 
+            if await self._is_terminal_job_hidden(r, job_id):
+                continue
+
             # --------------------------------------
             # DB sync (insert if not exists)
             # --------------------------------------
@@ -721,7 +742,7 @@ class HPC_Scheduler(SchedulerBase):
                             self.UID, job_id, start_time, self.CLUSTER_TYPE
                         )
 
-            elif slurm_state in ("COMPLETED", "FAILED", "TIMEOUT"):
+            elif slurm_state in ("COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY"):
                 job_status = slurm_state
                 if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
                     update_end_time(
@@ -950,6 +971,28 @@ class HPC_Scheduler(SchedulerBase):
         # 2. If job_id is known → cancel Slurm job
         # ==================================================
         if resolved_job_id:
+            current_job_status = None
+            try:
+                _, current_job_status, _, _ = get_job_info(
+                    self.UID,
+                    resolved_job_id,
+                    cluster,
+                )
+            except NoResultFound:
+                current_job_status = None
+
+            if current_job_status in SLURM_TERMINAL_JOB_STATUSES:
+                await self._mark_terminal_job_hidden(resolved_job_id)
+                return {
+                    "cluster": cluster,
+                    "submit_uuid": submit_uuid,
+                    "job_id": resolved_job_id,
+                    "job_status": current_job_status,
+                    "hidden": True,
+                }
+
+            # For non-terminal jobs, attempt scancel and mark hidden after transition
+
             try:
                 await sub_command(
                     f"scancel {resolved_job_id}",
@@ -988,11 +1031,13 @@ class HPC_Scheduler(SchedulerBase):
                 "submit_uuid": submit_uuid,
                 "job_id": resolved_job_id,
                 "job_status": "CANCELLED",
+                "hidden": False,
             }
 
         # ==================================================
         # 3. No job_id → treat as ASYNC SUBMITTING job
         # ==================================================
+        # Hidden flag not applicable for SUBMITTING jobs without job_id
         # (Only possible if submit_uuid is provided)
         removed_global = await self._remove_job_from_queue_by_uuid(
             f"submitting_jobs:{cluster}", submit_uuid
@@ -1016,6 +1061,7 @@ class HPC_Scheduler(SchedulerBase):
             "submit_uuid": submit_uuid,
             "job_id": None,
             "job_status": "CANCELLED",
+            "hidden": False,
         }
 
 
