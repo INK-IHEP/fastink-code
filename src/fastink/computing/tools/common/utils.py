@@ -286,7 +286,7 @@ async def connect_rootbrowse_job(job_id, uid, clusterid):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def generate_userotp(uid, hostname):
+def generate_userotp(uid, hostname, job_path=None):
     
     username = change_uid_to_username(uid)
     client = paramiko.SSHClient()
@@ -296,7 +296,24 @@ def generate_userotp(uid, hostname):
         private_key = paramiko.RSAKey.from_private_key_file("/root/.ssh/id_rsa")
         client.connect(f"{hostname}", port=22, username="root", pkey=private_key)
 
-        command = f"sudo -iu {username} /cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
+        otp_script = "/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
+
+        # Keep OTP generation environment consistent with VNC job runtime context.
+        # Only inject KRB5CCNAME when ccache file exists to avoid cross-cluster regressions.
+        if job_path:
+            ccache_path = f"{job_path}/krb5cc_{uid}"
+            if os.path.exists(ccache_path):
+                otp_cmd = (
+                    f"export KRB5CCNAME={quote(ccache_path)}; "
+                    "if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; "
+                    "then /usr/bin/aklog >/dev/null 2>&1 || true; fi; "
+                    f"{otp_script}"
+                )
+                command = f"sudo -iu {quote(username)} bash -lc {quote(otp_cmd)}"
+            else:
+                command = f"sudo -iu {quote(username)} {otp_script}"
+        else:
+            command = f"sudo -iu {quote(username)} {otp_script}"
         stdin, stdout, stderr = client.exec_command(command)
 
         exit_status = stdout.channel.recv_exit_status()
@@ -309,7 +326,7 @@ def generate_userotp(uid, hostname):
         output = next((ln.strip() for ln in reversed(raw.splitlines()) if ln.strip()), "")
 
     except Exception as e:
-        raise RuntimeError(f"Generate user OTP failed. {e}")
+        raise RuntimeError(f"Generate user OTP failed on host={hostname}, user={username}. {e}")
     
     finally:
         client.close()
@@ -331,7 +348,7 @@ async def connect_vnc_job(job_id, uid, clusterid):
         if not host or not port:
             raise HTTPException(status_code=500, detail="No host and port record in vnc loginfile.")
 
-        userOTP = generate_userotp(uid, host)
+        userOTP = generate_userotp(uid, host, job_path=job_path)
                 
         vnc_url = f"{NGINX_NODE}/vnc/{host}/{port}/vnc.html?password={userOTP}&autoconnect=true"
         
