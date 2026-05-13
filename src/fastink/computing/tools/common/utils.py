@@ -293,8 +293,22 @@ def generate_userotp(uid, hostname, job_path=None):
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
-        private_key = paramiko.RSAKey.from_private_key_file("/root/.ssh/id_rsa")
-        client.connect(f"{hostname}", port=22, username="root", pkey=private_key)
+        key_candidates = [
+            "/root/.ssh/id_rsa",
+            "/root/.ssh/id_ed25519",
+            "/root/.ssh/id_ecdsa",
+        ]
+        key_files = [p for p in key_candidates if os.path.exists(p)]
+
+        client.connect(
+            f"{hostname}",
+            port=22,
+            username="root",
+            key_filename=key_files or None,
+            allow_agent=True,
+            look_for_keys=True,
+            timeout=8,
+        )
 
         otp_script = "/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
 
