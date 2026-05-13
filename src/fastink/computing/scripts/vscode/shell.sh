@@ -31,5 +31,6 @@ if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; then
 fi
 
 export VSCODE_BIN="/usr/bin/code-server"
+export NODE_OPTIONS="--max-old-space-size=5120"
 
 ${APP_PATH}/run.sh ${APP_PATH} ${APP_PORT}
