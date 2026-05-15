@@ -89,6 +89,75 @@ class HPC_Scheduler(SchedulerBase):
     async def _is_terminal_job_hidden(self, r, job_id: str | int) -> bool:
         return bool(await r.exists(self._hidden_terminal_job_key(job_id)))
 
+    def _map_sacct_state_to_job_status(self, slurm_state: str) -> str | None:
+        state = (slurm_state or "").strip().upper()
+
+        if state.startswith("PENDING"):
+            return "QUEUEING"
+        if state.startswith("RUNNING"):
+            return "RUNNING"
+        if state.startswith("COMPLETED"):
+            return "COMPLETED"
+        if state.startswith("FAILED"):
+            return "FAILED"
+        if state.startswith("TIMEOUT"):
+            return "TIMEOUT"
+        if state.startswith("OUT_OF_ME"):
+            return "OUT_OF_MEMORY"
+        if state.startswith("CANCELLED"):
+            return "CANCELLED"
+
+        return None
+
+    async def _refresh_db_status_for_jobids(self, job_ids: list[str | int]) -> None:
+        if not job_ids:
+            return
+
+        ids = [str(j).strip() for j in job_ids if str(j).strip()]
+        if not ids:
+            return
+
+        sacct_cmd = (
+            f"sacct -j {','.join(ids)} "
+            "--format=JobID,State "
+            "-P -X -n"
+        )
+
+        try:
+            stdout = await sub_command(
+                sacct_cmd,
+                10,
+                "refresh job status from sacct failed",
+                "refresh job status from sacct timeout",
+            )
+        except Exception as e:
+            logger.debug(f"refresh_db_status_for_jobids: skip due to sacct error: {e}")
+            return
+
+        for line in stdout.decode(errors="ignore").strip().split("\n"):
+            if not line:
+                continue
+
+            fields = line.split("|")
+            if len(fields) < 2:
+                continue
+
+            raw_job_id = fields[0].strip()
+            slurm_state = fields[1].strip()
+
+            job_id = raw_job_id.split(".", 1)[0]
+            mapped_status = self._map_sacct_state_to_job_status(slurm_state)
+            if not mapped_status:
+                continue
+
+            try:
+                _, db_status, _, _ = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+            except Exception:
+                continue
+
+            if db_status != mapped_status:
+                update_job_status(self.UID, job_id, mapped_status, self.CLUSTER_TYPE)
+
     async def _gen_slurm_submit_cmd(
         self, 
         cpu: int, 
@@ -327,6 +396,13 @@ class HPC_Scheduler(SchedulerBase):
                 job_data.job_type,
                 self.CLUSTER_TYPE,
             )
+            if active_jobs:
+                await self._refresh_db_status_for_jobids(list(active_jobs.keys()))
+                active_jobs = find_active_jobs(
+                    self.UID,
+                    job_data.job_type,
+                    self.CLUSTER_TYPE,
+                )
             if active_jobs:
                 logger.debug(
                     f"SLURM-ASYNC: job {job_data.job_type} already running in cluster, jobids: {list(active_jobs.keys())}"
@@ -661,6 +737,7 @@ class HPC_Scheduler(SchedulerBase):
             job_id = job_id = fields[0].strip()
             partition = fields[1]
             slurm_state = fields[2]
+            slurm_state_norm = (slurm_state or "").strip().upper()
             node_list = fields[5]
             job_type = fields[6]
             submit_time = fields[7].replace("T", " ")
@@ -711,10 +788,10 @@ class HPC_Scheduler(SchedulerBase):
             # --------------------------------------
             # Normalize Slurm job state
             # --------------------------------------
-            if slurm_state == "PENDING":
+            if slurm_state_norm.startswith("PENDING"):
                 job_status = "QUEUEING"
 
-            elif slurm_state == "RUNNING":
+            elif slurm_state_norm.startswith("RUNNING"):
                 job_status = "RUNNING"
 
                 if connect_sign == "False":
@@ -746,14 +823,35 @@ class HPC_Scheduler(SchedulerBase):
                             self.UID, job_id, start_time, self.CLUSTER_TYPE
                         )
 
-            elif slurm_state in ("COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY"):
-                job_status = slurm_state
+            elif slurm_state_norm.startswith("COMPLETED"):
+                job_status = "COMPLETED"
                 if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
                     update_end_time(
                         self.UID, job_id, end_time, self.CLUSTER_TYPE
                     )
 
-            elif slurm_state.startswith("CANCELLED"):
+            elif slurm_state_norm.startswith("FAILED"):
+                job_status = "FAILED"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("TIMEOUT"):
+                job_status = "TIMEOUT"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("OUT_OF_ME"):
+                job_status = "OUT_OF_MEMORY"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("CANCELLED") or slurm_state_norm.startswith("CANCELED"):
                 # sacct may return values like "CANCELLED by 0"; normalize for API/DB.
                 job_status = "CANCELLED"
                 if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):

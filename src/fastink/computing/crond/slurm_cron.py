@@ -228,19 +228,43 @@ async def _remove_user_submitting_job_by_uuid(r, cluster: str, username: str, su
         
         
 def _map_slurm_status_to_internal(db_status: str, slurm_state: str) -> str:
+    state = (slurm_state or "").strip().upper()
 
-    if slurm_state == "PENDING":
+    if state.startswith("PENDING"):
         return "QUEUEING"
 
-    if slurm_state == "RUNNING":
+    if state.startswith("RUNNING"):
         return "RUNNING"
 
-    if slurm_state in ("COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY"):
-        return slurm_state
+    if state.startswith("COMPLETED"):
+        return "COMPLETED"
 
-    if slurm_state.startswith("CANCELLED"):
+    if state.startswith("FAILED"):
+        return "FAILED"
+
+    if state.startswith("TIMEOUT"):
+        return "TIMEOUT"
+
+    if state.startswith("OUT_OF_ME"):
+        return "OUT_OF_MEMORY"
+
+    if state.startswith("CANCELLED"):
         # sacct may return "CANCELLED by <uid>"; keep internal status normalized.
         return "CANCELLED"
+
+    if state.startswith("CANCELED"):
+        # Defensive compatibility for non-standard single-L variants.
+        return "CANCELLED"
+
+    if state in ("COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY"):
+        return slurm_state
+
+    logger.debug(
+        "Unrecognized slurm state in reconciliation: raw_state=%s normalized_state=%s db_status=%s",
+        slurm_state,
+        state,
+        db_status,
+    )
 
     return db_status
 
