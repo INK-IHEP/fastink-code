@@ -322,7 +322,11 @@ class HPC_Scheduler(SchedulerBase):
                     }
 
             # Check 2: job of the same type already active in the database
-            active_jobs = find_active_jobs(self.UID, job_data.job_type)
+            active_jobs = find_active_jobs(
+                self.UID,
+                job_data.job_type,
+                self.CLUSTER_TYPE,
+            )
             if active_jobs:
                 logger.debug(
                     f"SLURM-ASYNC: job {job_data.job_type} already running in cluster, jobids: {list(active_jobs.keys())}"

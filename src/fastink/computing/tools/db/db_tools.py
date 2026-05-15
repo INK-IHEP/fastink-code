@@ -209,7 +209,7 @@ def find_completed_jobs(uid, jobtype, *, session:Session):
 
 
 @read_session
-def find_active_jobs(uid, jobtype, *, session:Session):
+def find_active_jobs(uid, jobtype, clusterid=None, *, session:Session):
     """
     Find active jobs by excluding terminal states.
     """
@@ -219,13 +219,16 @@ def find_active_jobs(uid, jobtype, *, session:Session):
 
     if uid:
         stmt = stmt.where(models.JobInfo.uid == uid)
+    if clusterid:
+        stmt = stmt.where(models.JobInfo.clusterid == clusterid)
+
     if jobtype:
         if jobtype == 'all':
             stmt = stmt.where(models.JobInfo.clusterid == 'htcondor')
         else:
             stmt = stmt.where(models.JobInfo.job_type == jobtype)
 
-    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "FAILED", "TIMEOUT", "CANCELLED", "CANCELED"]))
+    stmt = stmt.where(models.JobInfo.job_status.notin_(["COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY", "CANCELLED", "CANCELED"]))
 
     try:
         results = session.execute(stmt).scalars()

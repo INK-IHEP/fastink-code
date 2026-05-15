@@ -235,7 +235,7 @@ def _map_slurm_status_to_internal(db_status: str, slurm_state: str) -> str:
     if slurm_state == "RUNNING":
         return "RUNNING"
 
-    if slurm_state in ("COMPLETED", "FAILED"):
+    if slurm_state in ("COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY"):
         return slurm_state
 
     if slurm_state.startswith("CANCELLED"):
