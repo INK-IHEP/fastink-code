@@ -22,6 +22,21 @@ pip install -e .
 python -m uvicorn fastink.main:app --reload --host 0.0.0.0 --port 8001 --log-config src/fastink/misc/uvicorn_log_config.yaml
 ```
 
+### VNC OTP prerequisites
+
+For VNC connect, FastINK backend calls `generateOTP.sh` through SSH from the runtime environment.
+If FastINK runs inside a container, SSH trust must be configured inside that container (not only on the host).
+
+Required checks:
+
+- Container can SSH to compute host as `root` (or your configured SSH user).
+- Container-side key files are present and readable.
+- Remote host allows `sudo -iu <username>` for OTP generation.
+
+Optional debug switch:
+
+- Set environment variable `INK_VNC_SSH_SELF_CHECK=true` to print SSH self-check diagnostics in backend logs.
+
 ## Deployment
 
 ### Public / generic deployment

@@ -300,6 +300,21 @@ def generate_userotp(uid, hostname, job_path=None):
         ]
         key_files = [p for p in key_candidates if os.path.exists(p)]
 
+        # Optional diagnostics to verify container-side SSH prerequisites.
+        # Enable with INK_VNC_SSH_SELF_CHECK=true.
+        if os.getenv("INK_VNC_SSH_SELF_CHECK", "false").lower() in ("1", "true", "yes", "on"):
+            try:
+                run_user = pwd.getpwuid(os.geteuid()).pw_name
+            except Exception:
+                run_user = "unknown"
+            logger.debug(
+                "VNC OTP SSH self-check: host=%s run_user=%s euid=%s key_files=%s",
+                hostname,
+                run_user,
+                os.geteuid(),
+                key_files,
+            )
+
         client.connect(
             f"{hostname}",
             port=22,
@@ -309,6 +324,9 @@ def generate_userotp(uid, hostname, job_path=None):
             look_for_keys=True,
             timeout=8,
         )
+
+        if os.getenv("INK_VNC_SSH_SELF_CHECK", "false").lower() in ("1", "true", "yes", "on"):
+            logger.debug("VNC OTP SSH self-check: ssh connection to %s as root succeeded", hostname)
 
         otp_script = "/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
 
@@ -340,6 +358,13 @@ def generate_userotp(uid, hostname, job_path=None):
         output = next((ln.strip() for ln in reversed(raw.splitlines()) if ln.strip()), "")
 
     except Exception as e:
+        logger.warning(
+            "Generate user OTP failed for host=%s user=%s. "
+            "If running in container, ensure container-side SSH key and trust are configured. error=%s",
+            hostname,
+            username,
+            e,
+        )
         raise RuntimeError(f"Generate user OTP failed on host={hostname}, user={username}. {e}")
     
     finally:
