@@ -15,20 +15,11 @@ Options:
 
 import argparse
 import sys
-from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent
-if str(_HERE.parent) not in sys.path:
-    sys.path.insert(0, str(_HERE.parent))
-
-from lib.deploy_io import resolve_deploy_paths
-
-_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
-
+from cmd.common import DEPLOY_DIR, load_deploy_answers
 from lib import cli_ui
 from lib.compose import compose_down
-from cmd.deploy import load_deploy_answers
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -40,16 +31,16 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    cli_ui.ensure_deps(_DEPLOY_DIR)
+    cli_ui.ensure_deps(DEPLOY_DIR)
     cli_ui.banner()
 
-    if not _DEPLOY_DIR.exists():
-        cli_ui.error(f"No deployment directory found at {_DEPLOY_DIR}")
+    if not DEPLOY_DIR.exists():
+        cli_ui.error(f"No deployment directory found at {DEPLOY_DIR}")
         sys.exit(1)
 
     answers = load_deploy_answers()
     project_name = str(answers.get("project_name", "fastink"))
-    compose_file = _DEPLOY_DIR / "docker-compose.yml"
+    compose_file = DEPLOY_DIR / "docker-compose.yml"
 
     if not compose_file.exists():
         cli_ui.error(f"Compose file not found: {compose_file}")

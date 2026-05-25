@@ -14,19 +14,12 @@ Options:
 
 import argparse
 import sys
-from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent
-if str(_HERE.parent) not in sys.path:
-    sys.path.insert(0, str(_HERE.parent))
-
-from lib.deploy_io import resolve_deploy_paths
-
-_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
-
+from cmd.common import DEPLOY_DIR, load_deploy_answers
 from lib import cli_ui
-from cmd.deploy import deploy_stack, load_deploy_answers, wait_for_health
+from lib.defaults import build_health_url
+from cmd.deploy import deploy_stack, wait_for_health
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -38,15 +31,15 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    cli_ui.ensure_deps(_DEPLOY_DIR)
+    cli_ui.ensure_deps(DEPLOY_DIR)
     cli_ui.banner()
 
-    if not _DEPLOY_DIR.exists():
-        cli_ui.error(f"No deployment directory found at {_DEPLOY_DIR}")
+    if not DEPLOY_DIR.exists():
+        cli_ui.error(f"No deployment directory found at {DEPLOY_DIR}")
         sys.exit(1)
 
     answers = load_deploy_answers()
-    compose_file = _DEPLOY_DIR / "docker-compose.yml"
+    compose_file = DEPLOY_DIR / "docker-compose.yml"
 
     if not compose_file.exists():
         cli_ui.error(f"Compose file not found: {compose_file}")
@@ -66,11 +59,9 @@ def main() -> None:
     deploy_stack(answers)
 
     if args.wait:
-        public_base_url = str(answers.get("public_base_url", ""))
-        if public_base_url:
-            health_url = f"{public_base_url}/health"
-            cli_ui.step(f"Wait for health check: {health_url}")
-            if wait_for_health(health_url):
-                cli_ui.success(f"Health check passed: {health_url}")
-            else:
-                cli_ui.warning(f"Health check did not pass within timeout: {health_url}")
+        health_url = build_health_url(answers) if answers.get("public_base_url") else ""
+        cli_ui.step(f"Wait for health check: {health_url}")
+        if wait_for_health(health_url):
+            cli_ui.success(f"Health check passed: {health_url}")
+        else:
+            cli_ui.warning(f"Health check did not pass within timeout: {health_url}")

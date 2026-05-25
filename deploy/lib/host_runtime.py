@@ -1,3 +1,10 @@
+"""Host pre-checks for FastINK deployment.
+
+Validates that required CLI tools (docker, docker compose, mountpoint)
+are available, that /cvmfs is mounted, and that all CVMFS paths needed
+at runtime are accessible.  Called early in every deploy to fail fast.
+"""
+
 from __future__ import annotations
 
 import argparse

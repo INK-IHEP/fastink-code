@@ -1,3 +1,11 @@
+"""Template rendering and bundle generation.
+
+Loads Jinja-style ``string.Template`` files from ``templates/``,
+substitutes variables from a flat mapping dict, deep-merges profile
+and extra overlays, and produces the final ``config.yml``,
+``docker-compose.yml``, ``.env``, and associated config files.
+"""
+
 import json
 import shutil
 import subprocess

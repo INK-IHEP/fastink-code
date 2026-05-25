@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import TypedDict
 
 
+# Shared set of truthy string values used across boolean parsing.
+BOOL_TRUE_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "y", "on"})
+
+
 class DeployAnswers(TypedDict, total=False):
     """Typed deploy answers dictionary. total=False allows gradual population."""
     # Meta
@@ -113,7 +117,7 @@ def get_bool(answers: dict, key: str, default: bool = False) -> bool:
     if isinstance(v, bool):
         return v
     if isinstance(v, str):
-        return v.lower() in ("1", "true", "yes", "y", "on")
+        return v.lower() in BOOL_TRUE_VALUES
     return bool(v)
 
 

@@ -11,6 +11,12 @@ class DeployPaths(NamedTuple):
     deploy_dir: Path           # fastink-code/.deploy/
 
 
+def write_file(path: Path, content: str) -> None:
+    """Write content to path, creating parent directories if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def resolve_deploy_paths() -> DeployPaths:
     """Resolve standard deploy paths relative to this module's location.
 

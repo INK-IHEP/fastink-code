@@ -1,3 +1,9 @@
+"""Thin wrappers around ``docker compose`` subcommands.
+
+Each function returns the process exit code (or parsed data)
+so callers can inspect success/failure without exception handling.
+"""
+
 from __future__ import annotations
 
 import json

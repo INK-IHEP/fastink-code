@@ -18,17 +18,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent
-if str(_HERE.parent) not in sys.path:
-    sys.path.insert(0, str(_HERE.parent))
-
-from lib.deploy_io import resolve_deploy_paths
-
-_DEPLOY_DIR = resolve_deploy_paths().deploy_dir
-
+from cmd.common import DEPLOY_DIR, load_deploy_answers
 from lib import cli_ui
 from lib.compose import compose_down
-from cmd.deploy import load_deploy_answers
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -47,22 +39,22 @@ def run_cmd(cmd: list[str]) -> subprocess.CompletedProcess:
 
 def main() -> None:
     args = parse_args()
-    cli_ui.ensure_deps(_DEPLOY_DIR)
+    cli_ui.ensure_deps(DEPLOY_DIR)
     cli_ui.banner()
 
-    if not _DEPLOY_DIR.exists():
-        cli_ui.error(f"No deployment directory found at {_DEPLOY_DIR}")
+    if not DEPLOY_DIR.exists():
+        cli_ui.error(f"No deployment directory found at {DEPLOY_DIR}")
         sys.exit(1)
 
     answers = load_deploy_answers()
     project_name = str(answers.get("project_name", "fastink"))
-    compose_file = _DEPLOY_DIR / "docker-compose.yml"
+    compose_file = DEPLOY_DIR / "docker-compose.yml"
 
     cli_ui.step("Destroy deployment")
     cli_ui.summary_table([
         ("Project", project_name),
         ("Compose file", str(compose_file)),
-        ("Deploy directory", str(_DEPLOY_DIR)),
+        ("Deploy directory", str(DEPLOY_DIR)),
     ])
 
     if not args.yes:
@@ -109,7 +101,7 @@ def main() -> None:
     if not args.keep_dot_deploy:
         if args.keep_answers:
             # Preserve answers.json, delete everything else
-            for item in _DEPLOY_DIR.iterdir():
+            for item in DEPLOY_DIR.iterdir():
                 if item.name == "answers.json":
                     continue
                 if item.is_dir():
@@ -122,7 +114,7 @@ def main() -> None:
             if not args.yes:
                 remove_deploy = cli_ui.confirm_prompt("Delete .deploy/ directory entirely", False)
             if remove_deploy:
-                shutil.rmtree(_DEPLOY_DIR)
+                shutil.rmtree(DEPLOY_DIR)
                 cli_ui.success("Deployment directory deleted")
 
     cli_ui.success("Destroy complete")
