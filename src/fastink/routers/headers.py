@@ -19,11 +19,11 @@ class UserValidationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # only execute for API requests
         if not request.url.path.startswith("/api"):
-            logger.debug(f"Not an API request, skip middleware")
+            logger.debug("Not an API request, skip middleware")
             return await call_next(request)
 
         if request.url.path.startswith(tuple(self.skip_routers)):
-            logger.debug(f"Skip authentication for {request.url.path}")
+            logger.debug("Skip authentication for %s", request.url.path)
             return await call_next(request)
 
         # extract username and token from headers
@@ -47,7 +47,7 @@ class UserValidationMiddleware(BaseHTTPMiddleware):
 
         # validate user
         if not validate_token(username, token):
-            logger.warning(f"Invalid user {username} with token {token}")
+            logger.warning("Invalid user %s with token %s", username, token)
             return JSONResponse(
                 status_code=200,
                 content={
@@ -75,12 +75,12 @@ class IPWhitelistMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # only works on skip_routers
         if not request.url.path.startswith(self.forbidden_routers):
-            logger.debug(f"IP whitelist will not be applied to {request.url.path}")
+            logger.debug("IP whitelist will not be applied to %s", request.url.path)
             return await call_next(request)
 
         # get client ip
         client_ip = request.headers.get("X-Real-IP") or request.client.host
-        logger.debug(f"client ip: {client_ip}")
+        logger.debug("client ip: %s", client_ip)
 
         # skip testclient
         if client_ip == "testclient":
@@ -122,14 +122,14 @@ class TimerMiddleware(BaseHTTPMiddleware):
             process_time = time.perf_counter() - start_time
             url = mask_url_query(str(request.url), {"password"})
             logger.error(
-                f"Exception {e} | {process_time:.4f}s | Request: {request.method} {url}"
+                "Exception %s | %.4fs | Request: %s %s", e, process_time, request.method, url
             )
             raise
         process_time = time.perf_counter() - start_time
         # response.headers["X-Process-Time"] = f"{process_time:.4f}"
         url = mask_url_query(str(request.url), {"password"})
         logger.debug(
-            f"{process_time:.4f}s | Request: {request.method} {response.status_code} {url}"
+            "%.4fs | Request: %s %s %s", process_time, request.method, response.status_code, url
         )
         return response
 
@@ -139,9 +139,9 @@ def validate_token(username: str, token: str) -> bool:
     client_id = get_config("auth", "client_id")
     client_secret = get_config("auth", "client_secret")
     type = get_config("auth", "type")
-    logger.debug(f"Validating user {username}, issuer {issuer}, type {type}")
+    logger.debug("Validating user %s, issuer %s, type %s", username, issuer, type)
     # using plugins
-    logger.debug(f"validating user {username} with {type} plugin")
+    logger.debug("validating user %s with %s plugin", username, type)
     plugin = importlib.import_module(f"fastink.auth.plugins.{type}")
     try:
         if plugin.validate_token(
@@ -153,7 +153,7 @@ def validate_token(username: str, token: str) -> bool:
         ):
             return True
     except Exception as e:
-        logger.error(f"User validation failed: {e}")
+        logger.error("User validation failed: %s", e)
         return False
 
 

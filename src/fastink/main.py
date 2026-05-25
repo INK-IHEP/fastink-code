@@ -13,6 +13,7 @@ from fastink.routers.headers import (
 from fastink.common.config import get_config
 from fastink.routers.plugin_loader import load_router_plugins
 from fastink.common.hooks import load_instance_hooks
+from fastink.common.logger import logger
 from fastink.common.plugin_interface import plugin_manager
 
 app = FastAPI()
@@ -99,8 +100,6 @@ def version():
 
 @app.get("/check")
 def check():
-    from fastink.common.logger import logger
-
     logger.debug("directly check debug log")
     logger.info("directly check info log")
     logger.warning("directly check warning log")
