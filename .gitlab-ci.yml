@@ -1,0 +1,156 @@
+stages:
+  - build
+  - publish
+  - trigger
+  - release
+
+.build-images:
+  script:
+    - export IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+    - docker build -t "fastink-init:${IMAGE_TAG}" -f deploy/images/init/Dockerfile .
+    - docker build -t "fastink-server:${IMAGE_TAG}" -f deploy/images/server/Dockerfile .
+    - docker build --build-arg "BASE_IMAGE=fastink-server:${IMAGE_TAG}" -t "fastink-redis-cron:${IMAGE_TAG}" -f deploy/images/cron/Dockerfile .
+    - docker build -t "fastink-rootbrowse:${IMAGE_TAG}" -f deploy/images/rootbrowse/Dockerfile .
+    - docker build -t "fastink-htcondor:${IMAGE_TAG}" -f deploy/images/htcondor/Dockerfile .
+  after_script:
+    - docker system prune -f
+
+build_dev_images:
+  extends: .build-images
+  stage: build
+  tags:
+    - fastink-test
+  before_script:
+    - export IMAGE_TAG="dev-local"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+
+publish_release_images:
+  extends: .build-images
+  stage: publish
+  tags:
+    - fastink
+  before_script:
+    - export IMAGE_TAG="$CI_COMMIT_TAG"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+  script:
+    - export IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+    - echo "$DOCKERHUB_PASSWORD" | docker login dockerhub.ihep.ac.cn -u "$DOCKERHUB_USER" --password-stdin
+    - docker build -t "fastink-init:${IMAGE_TAG}" -f deploy/images/init/Dockerfile .
+    - docker build -t "fastink-server:${IMAGE_TAG}" -f deploy/images/server/Dockerfile .
+    - docker build --build-arg "BASE_IMAGE=fastink-server:${IMAGE_TAG}" -t "fastink-redis-cron:${IMAGE_TAG}" -f deploy/images/cron/Dockerfile .
+    - docker build -t "fastink-rootbrowse:${IMAGE_TAG}" -f deploy/images/rootbrowse/Dockerfile .
+    - docker build -t "fastink-htcondor:${IMAGE_TAG}" -f deploy/images/htcondor/Dockerfile .
+    - docker tag "fastink-init:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-init:${IMAGE_TAG}"
+    - docker tag "fastink-server:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-server:${IMAGE_TAG}"
+    - docker tag "fastink-redis-cron:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${IMAGE_TAG}"
+    - docker tag "fastink-rootbrowse:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${IMAGE_TAG}"
+    - docker tag "fastink-htcondor:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-htcondor:${IMAGE_TAG}"
+    - docker tag "fastink-init:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-init:latest"
+    - docker tag "fastink-server:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-server:latest"
+    - docker tag "fastink-redis-cron:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest"
+    - docker tag "fastink-rootbrowse:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest"
+    - docker tag "fastink-htcondor:${IMAGE_TAG}" "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-init:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-server:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-htcondor:${IMAGE_TAG}"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-init:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-server:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-redis-cron:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-rootbrowse:latest"
+    - docker push "dockerhub.ihep.ac.cn/ink/fastink-htcondor:latest"
+  after_script:
+    - docker logout dockerhub.ihep.ac.cn || true
+    - docker system prune -f
+
+trigger_dev:
+  stage: trigger
+  needs:
+    - job: build_dev_images
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: always
+  trigger:
+    project: INK/fastink-dev
+    branch: main
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  variables:
+    TARGET_JOB: "deploy-dev-job"
+    FASTINK_CODE_REF: "${CI_COMMIT_SHA}"
+    FASTINK_SERVER_IMAGE: "fastink-server:dev-local"
+    FASTINK_CRON_IMAGE: "fastink-redis-cron:dev-local"
+    FASTINK_ROOTBROWSE_IMAGE: "fastink-rootbrowse:dev-local"
+    FASTINK_SKIP_PULL: "true"
+
+trigger_prod:
+  stage: trigger
+  needs:
+    - job: publish_release_images
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: always
+  trigger:
+    project: INK/fastink-dev
+    branch: main
+    strategy: depend
+    forward:
+      pipeline_variables: true
+  variables:
+    TARGET_JOB: "deploy-prod-job"
+    FASTINK_CODE_REF: "${CI_COMMIT_TAG}"
+    FASTINK_SERVER_IMAGE: "fastink-server:${CI_COMMIT_TAG}"
+    FASTINK_CRON_IMAGE: "fastink-redis-cron:${CI_COMMIT_TAG}"
+    FASTINK_ROOTBROWSE_IMAGE: "fastink-rootbrowse:${CI_COMMIT_TAG}"
+
+sync_release_to_github:
+  stage: release
+  tags:
+    - fastink
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_RELEASE_DESCRIPTION
+      when: always
+    - when: never
+  script:
+    - echo "=== Checking if tag '$CI_COMMIT_TAG' has a GitLab Release ==="
+    - |
+      set -e
+      RELEASE_API_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases/${CI_COMMIT_TAG}"
+      if ! curl -sSf -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" "$RELEASE_API_URL" > /dev/null 2>&1; then
+        echo "No release found for tag ${CI_COMMIT_TAG}. Skipping sync."
+        exit 0
+      fi
+      echo "✅ Release exists. Proceeding to download release archive..."
+    - |
+      WORKDIR=$(mktemp -d)
+      ARCHIVE_URL="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/repository/archive?sha=${CI_COMMIT_TAG}"
+      curl -sL -H "PRIVATE-TOKEN: ${GITLAB_API_TOKEN}" "$ARCHIVE_URL" -o "$WORKDIR/release.tar.gz"
+      tar -xzf "$WORKDIR/release.tar.gz" -C "$WORKDIR" --strip-components=1
+    - |
+      export http_proxy=${GITHUB_HTTP_PROXY}
+      export https_proxy=${GITHUB_HTTP_PROXY}
+      cd "$WORKDIR"
+      git init
+      git config user.name "gitlab-ci"
+      git config user.email "ci@${CI_SERVER_HOST}"
+      git checkout -b main || git checkout -b master || true
+      git add -A
+      git commit -m "Import release ${CI_COMMIT_TAG} from ${CI_PROJECT_PATH}"
+      git tag "${CI_COMMIT_TAG}"
+      GITHUB_REPO="https://oauth2:${GITHUB_TOKEN}@github.com/INK-IHEP/fastink-code.git"
+      echo "🚀 Pushing to GitHub repository..."
+      git push --force "${GITHUB_REPO}" HEAD:main
+      git push --force "${GITHUB_REPO}" --tags
+    - echo "✅ Sync completed successfully."
+  after_script:
+    - |
+      rm -rf "$WORKDIR" || true
+      if [ -z "$GITLAB_API_TOKEN" ] || [ -z "$GITHUB_TOKEN" ]; then
+        echo "⚠️  GITLAB_API_TOKEN or GITHUB_TOKEN not set!"
+      fi
