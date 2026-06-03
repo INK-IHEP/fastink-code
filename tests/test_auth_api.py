@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from fastink.auth.permission import query_user_permissions
+from fastink.auth.permission import query_user_permissions, query_users_by_permission
 from fastink.auth.user import get_user
 from fastink.common.config import get_config
 from fastink.main import app
@@ -215,3 +215,67 @@ class TestAuthAPI:
         assert data["data"]["uid"] == raw_data["uid"]
         assert data["data"]["email"] == raw_data["email"]
         assert data["data"]["id"] == str(raw_data["id"])
+
+    def test_get_users_by_permission_success(self):
+        """Test querying users by a permission that the test user has."""
+        # First, find a permission the test user actually has
+        user_perms = query_user_permissions(username=test_username)
+        if not user_perms:
+            pytest.skip("Test user has no permissions, cannot test")
+        target_perm = user_perms[0]
+
+        response = client.get(
+            "/api/v2/auth/get_users_by_permission",
+            params={"permission": target_perm},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == InkStatus.SUCCESS
+        assert data["data"]["permission"] == target_perm
+        assert "users" in data["data"]
+        assert isinstance(data["data"]["users"], list)
+        assert data["data"]["total"] == len(data["data"]["users"])
+        assert data["data"]["page"] == 1
+        assert data["data"]["limit"] == 5000
+
+        # Verify the test user is in the result
+        usernames = [u["username"] for u in data["data"]["users"]]
+        assert test_username in usernames
+
+        # Verify each user dict has expected keys
+        for user_dict in data["data"]["users"]:
+            for key in ("id", "username", "email", "uid", "created_at", "updated_at"):
+                assert key in user_dict, f"User dict missing key: {key}"
+
+    def test_get_users_by_permission_not_found(self):
+        """Test querying users by a permission that does not exist."""
+        response = client.get(
+            "/api/v2/auth/get_users_by_permission",
+            params={"permission": "nonexistent_perm_xyz_test"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == InkStatus.PERMISSION_QUERY_FAILURE
+        assert "Query users by permission failed" in data["msg"]
+        assert data["data"] is None
+
+    def test_get_users_by_permission_pagination(self):
+        """Test pagination of get_users_by_permission."""
+        user_perms = query_user_permissions(username=test_username)
+        if not user_perms:
+            pytest.skip("Test user has no permissions, cannot test")
+        target_perm = user_perms[0]
+
+        # Page 1 with limit=1
+        response = client.get(
+            "/api/v2/auth/get_users_by_permission",
+            params={"permission": target_perm, "limit": 1, "page": 1},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == InkStatus.SUCCESS
+        assert len(data["data"]["users"]) <= 1
+        assert data["data"]["limit"] == 1
+        assert data["data"]["page"] == 1
+        # total should reflect the true count (may be >= 1)
+        assert data["data"]["total"] >= 1

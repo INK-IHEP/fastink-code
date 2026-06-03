@@ -41,6 +41,30 @@ def get_users(*, session: Session) -> list[dict[str, Any]]:
 
 
 @read_session
+def get_users_by_permission(
+    permission_name: str, *, session: Session
+) -> list[dict[str, Any]]:
+    """Return all users who hold a specific permission (by permission string name).
+
+    Returns an empty list if the permission exists but no users have it.
+    """
+    stmt = (
+        select(models.Users)
+        .join(
+            models.UserPermissions,
+            models.Users.id == models.UserPermissions.user_id,
+        )
+        .join(
+            models.Permissions,
+            models.UserPermissions.permission_id == models.Permissions.id,
+        )
+        .where(models.Permissions.permission == permission_name)
+    )
+    result = session.execute(stmt).scalars().all()
+    return [user.to_dict() for user in result]
+
+
+@read_session
 def get_user(
     username: Optional[str] = None,
     email: Optional[str] = None,

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from fastink.auth import user
 from fastink.auth.krb5 import create_krb5, get_krb5
 from fastink.auth import token as token_manager
-from fastink.auth.permission import query_user_permissions
+from fastink.auth.permission import query_user_permissions, query_users_by_permission
 from fastink.common.logger import logger
 from fastink.common.config import get_config
 from fastink.routers import headers
@@ -193,6 +193,39 @@ async def get_permission(username: str = Query(None)) -> dict:
             "data": None,
         }
     return result
+
+
+@router.get("/get_users_by_permission")
+async def get_users_by_permission(
+    permission: str = Query(..., description="Permission name"),
+    page: int = Query(1, description="Page number"),
+    limit: int = Query(5000, description="Items per page"),
+) -> dict:
+    try:
+        users = query_users_by_permission(permission=permission)
+    except Exception as err:
+        return {
+            "status": InkStatus.PERMISSION_QUERY_FAILURE,
+            "msg": f"Query users by permission failed: {err}",
+            "data": None,
+        }
+
+    total = len(users)
+    start_idx = max(0, (page - 1) * limit)
+    end_idx = start_idx + max(0, limit)
+    paged_users = users[start_idx:end_idx]
+
+    return {
+        "status": InkStatus.SUCCESS,
+        "msg": f"Users with permission '{permission}' queried successfully",
+        "data": {
+            "permission": permission,
+            "users": paged_users,
+            "total": total,
+            "page": page,
+            "limit": limit,
+        },
+    }
 
 
 @router.post("/create_user")
