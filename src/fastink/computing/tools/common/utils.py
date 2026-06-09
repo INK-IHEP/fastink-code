@@ -1,3 +1,4 @@
+import signal
 import asyncio, json
 import importlib, grp
 import pwd, os, base64
@@ -81,7 +82,7 @@ async def read_file(uid, file_path: str) -> str:
     file_content = ""
     username = change_uid_to_username(uid)
     krb5_enabled = get_config("common", "krb5_enabled")
-    xrootd_path = get_config("computing", "xrootd_path")
+    xrootd_path = get_config("storage", "xrd_host")
     file_content = await common.cat_file(fname=file_path, username=username, mgm=xrootd_path, krb5_enabled=krb5_enabled)
 
     return file_content
@@ -285,17 +286,66 @@ async def connect_rootbrowse_job(job_id, uid, clusterid):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def generate_userotp(uid, hostname):
+def generate_userotp(uid, hostname, job_path=None):
     
     username = change_uid_to_username(uid)
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
-        private_key = paramiko.RSAKey.from_private_key_file("/root/.ssh/id_rsa")
-        client.connect(f"{hostname}", port=22, username="root", pkey=private_key)
+        key_candidates = [
+            "/root/.ssh/id_rsa",
+            "/root/.ssh/id_ed25519",
+            "/root/.ssh/id_ecdsa",
+        ]
+        key_files = [p for p in key_candidates if os.path.exists(p)]
 
-        command = f"sudo -iu {username} /cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
+        # Optional diagnostics to verify container-side SSH prerequisites.
+        # Enable with INK_VNC_SSH_SELF_CHECK=true.
+        if os.getenv("INK_VNC_SSH_SELF_CHECK", "false").lower() in ("1", "true", "yes", "on"):
+            try:
+                run_user = pwd.getpwuid(os.geteuid()).pw_name
+            except Exception:
+                run_user = "unknown"
+            logger.debug(
+                "VNC OTP SSH self-check: host=%s run_user=%s euid=%s key_files=%s",
+                hostname,
+                run_user,
+                os.geteuid(),
+                key_files,
+            )
+
+        client.connect(
+            f"{hostname}",
+            port=22,
+            username="root",
+            key_filename=key_files or None,
+            allow_agent=True,
+            look_for_keys=True,
+            timeout=8,
+        )
+
+        if os.getenv("INK_VNC_SSH_SELF_CHECK", "false").lower() in ("1", "true", "yes", "on"):
+            logger.debug("VNC OTP SSH self-check: ssh connection to %s as root succeeded", hostname)
+
+        otp_script = "/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/generateOTP.sh"
+
+        # Keep OTP generation environment consistent with VNC job runtime context.
+        # Only inject KRB5CCNAME when ccache file exists to avoid cross-cluster regressions.
+        if job_path:
+            ccache_path = f"{job_path}/krb5cc_{uid}"
+            if os.path.exists(ccache_path):
+                otp_cmd = (
+                    f"export KRB5CCNAME={quote(ccache_path)}; "
+                    "if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; "
+                    "then /usr/bin/aklog >/dev/null 2>&1 || true; fi; "
+                    f"{otp_script}"
+                )
+                command = f"sudo -iu {quote(username)} bash -lc {quote(otp_cmd)}"
+            else:
+                command = f"sudo -iu {quote(username)} {otp_script}"
+        else:
+            command = f"sudo -iu {quote(username)} {otp_script}"
         stdin, stdout, stderr = client.exec_command(command)
 
         exit_status = stdout.channel.recv_exit_status()
@@ -308,7 +358,14 @@ def generate_userotp(uid, hostname):
         output = next((ln.strip() for ln in reversed(raw.splitlines()) if ln.strip()), "")
 
     except Exception as e:
-        raise RuntimeError(f"Generate user OTP failed. {e}")
+        logger.warning(
+            "Generate user OTP failed for host=%s user=%s. "
+            "If running in container, ensure container-side SSH key and trust are configured. error=%s",
+            hostname,
+            username,
+            e,
+        )
+        raise RuntimeError(f"Generate user OTP failed on host={hostname}, user={username}. {e}")
     
     finally:
         client.close()
@@ -330,7 +387,7 @@ async def connect_vnc_job(job_id, uid, clusterid):
         if not host or not port:
             raise HTTPException(status_code=500, detail="No host and port record in vnc loginfile.")
 
-        userOTP = generate_userotp(uid, host)
+        userOTP = generate_userotp(uid, host, job_path=job_path)
                 
         vnc_url = f"{NGINX_NODE}/vnc/{host}/{port}/vnc.html?password={userOTP}&autoconnect=true"
         
@@ -471,7 +528,7 @@ async def write_openclaw_bind_metadata(username: str, uid: int, job_dir: str) ->
         src_data=payload,
         dst=metadata_path,
         username=username,
-        mgm=get_config("computing", "xrootd_path"),
+        mgm=get_config("storage", "xrd_host"),
         mode="600",
     )
     logger.info(
@@ -493,7 +550,7 @@ def get_user_exp_group_dir(uid: int) -> str:
 
 async def init_job_dir(username: str, job_type: str):
     
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     time_stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
     user_home_dir = os.path.expanduser(f'~{username}')
     uid = change_username_to_uid(username)
@@ -541,7 +598,7 @@ async def generate_condor_submit(
     extra_param = default_job_config.get("extra_param")
     job_cpus = default_job_config.get("RequestCpus", cpu)
     job_mem = default_job_config.get("RequestMemory", mem)
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     uid = change_username_to_uid(username)
     
     workernode = default_job_config.get("workernode", request_wn)
@@ -713,7 +770,7 @@ def build_openclaw_arguments(
 
 async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
     
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     uid = change_username_to_uid(username)
 
     def build_default_job_dir() -> str:
@@ -767,7 +824,7 @@ async def generate_condor_sync_submit(
     arguments: Optional[str] = None
 ):
 
-    XROOTD_PATH = get_config("computing", "xrootd_path")
+    XROOTD_PATH = get_config("storage", "xrd_host")
     uid = change_username_to_uid(username)
     groupname = grp.getgrgid(pwd.getpwuid(uid).pw_gid).gr_name
 
@@ -874,7 +931,7 @@ async def generate_condor_sync_submit(
 async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, timeout: int = 30):
 
     ccache_path = f"{job_dir}/krb5cc_{uid}"
-    check_command = f"su - {username} -c 'export KRB5CCNAME={ccache_path} && klist'"
+    check_command = f"timeout -s 9 -k 10 10  su - {username} -c 'export KRB5CCNAME={ccache_path} && klist'"
     try:
         stdout = await sub_command(check_command, timeout, "KRB5 Ticket Check Failed", "Klist check timeout")        
         ticket_info = stdout.decode(errors="ignore").strip()
@@ -883,24 +940,49 @@ async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, time
         logger.error(f"HTC-ASYNC-LOG: Kerberos ticket is INVALID for {username}. Error: {e}")
 
 
+# async def sub_command(command, timeoutsec, errinfo, tminfo):
+#     process = await asyncio.create_subprocess_shell(
+#         command,
+#         stdout=asyncio.subprocess.PIPE,
+#         stderr=asyncio.subprocess.PIPE,
+#         # create_subprocess_shell 本身就用 shell 了，这里不要再传 shell=True
+#     )
+
+#     try:
+#         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
+
+#     except asyncio.TimeoutError as e:
+#         process.kill()
+#         stdout, stderr = await process.communicate()                                                           
+#         # process.kill()                                                                                                                                     
+#         # process.stdout.close()                                                                                                                             
+#         # process.stderr.close()                                                                                                                             
+#         # await process.wait()                                                                                                                               
+#         raise Exception(f"{tminfo} {e}.")
+
+#     if process.returncode != 0:
+#         error_msg = stderr.decode(errors="ignore").strip()
+#         raise Exception(f"{errinfo} {error_msg}")
+
+#     return stdout
+
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     process = await asyncio.create_subprocess_shell(
         command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        # create_subprocess_shell 本身就用 shell 了，这里不要再传 shell=True
+        preexec_fn=os.setsid,
     )
 
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
 
     except asyncio.TimeoutError as e:
-        # process.kill()
-        # stdout, stderr = await process.communicate()                                                           
-        process.kill()                                                                                                                                     
-        process.stdout.close()                                                                                                                             
-        process.stderr.close()                                                                                                                             
-        await process.wait()                                                                                                                               
+        pgid = os.getpgid(process.pid)
+        os.killpg(pgid, signal.SIGKILL)
+        process.stdout.close()
+        process.stderr.close()
+        await process.wait()
         raise Exception(f"{tminfo} {e}.")
 
     if process.returncode != 0:

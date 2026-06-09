@@ -33,7 +33,7 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
             job_dir = f"{ink_dir}/{username[0]}/{username}/.ink/Jobs/{jobtype}-{time_stamp}"
         krb5_enabled = get_config("common", "krb5_enabled")
         token_filename = ""
-        xrootd_path = get_config("computing", "xrootd_path")
+        xrootd_path = get_config("storage", "xrd_host")
     
     build_env_logger.debug(f"Build job env variables: user_home_dir({user_home_dir}), ink_dir({ink_dir}), job_dir({job_dir}), krb5_enabled({krb5_enabled}), token_filename({token_filename})")
     

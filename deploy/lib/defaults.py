@@ -1,7 +1,17 @@
+"""Default answer values, normalization, and health-URL helpers.
+
+Holds the canonical default configuration for both quickstart and
+custom profiles, including image tags, port numbers, and boolean
+feature toggles.  Also provides normalisation that fills in missing
+keys and computes derived values (e.g. ``public_base_url``).
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
+from lib.types import BOOL_TRUE_VALUES
 
 BOOL_FIELDS = {
     "enable_nginx",
@@ -121,6 +131,12 @@ def build_public_base_url(host_name: str, host_port: int, *, enable_nginx: bool 
 
 
 
+def build_health_url(answers: dict[str, Any]) -> str:
+    """Return the health check URL for a given answers dict."""
+    base = str(answers.get("public_base_url", ""))
+    return f"{base}/health"
+
+
 def default_answers(profile: str = "quickstart", deploy_dir: Path | None = None) -> dict[str, Any]:
     defaults: dict[str, Any] = dict(COMMON_DEFAULTS)
     defaults["profile"] = profile
@@ -160,7 +176,7 @@ def normalize_answers(
 def parse_override_value(key: str, value: str):
     if key in BOOL_FIELDS:
         normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "y", "on"}:
+        if normalized in BOOL_TRUE_VALUES:
             return True
         if normalized in {"0", "false", "no", "n", "off"}:
             return False

@@ -103,6 +103,17 @@ def query_user_permissions(
     return permissions
 
 
+def query_users_by_permission(permission: str) -> list:
+    """Query all users who have a specific permission.
+
+    Raises NoResultFound if the permission does not exist.
+    Returns an empty list if the permission exists but no users have it.
+    """
+    # Validate that the permission exists (raises NoResultFound if not)
+    common.get_permission(permission=permission)
+    return common.get_users_by_permission(permission_name=permission)
+
+
 @hookable
 def check_user_permission(username: str, permission: str) -> bool:
     user_id = common.get_user(username=username)["id"]

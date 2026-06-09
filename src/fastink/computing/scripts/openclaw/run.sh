@@ -19,7 +19,7 @@ log_multiline() {
     fi
     while IFS= read -r line; do
         log "${prefix}: ${line}"
-    done <<< "${content}"
+    done <<<"${content}"
 }
 
 APP_PATH=${1}
@@ -30,14 +30,15 @@ OPENCLAW_USER=${5:-${USER:-}}
 OPENCLAW_EXTRA_BINDS_FILE=${6:-}
 APP_LOGIN_INFO="app_login.info"
 LOG_FILE="${APP_PATH}/openclaw-launch.log"
-APP_RUN_FQDN="`/bin/hostname -f 2>/dev/null || /bin/hostname`"
-APP_RUN_HOST="`printf '%s' \"${APP_RUN_FQDN}\" | /bin/awk -F '.' '{print $1}'`"
+APP_RUN_FQDN="$(/bin/hostname -f 2>/dev/null || /bin/hostname)"
+APP_RUN_HOST="$(printf '%s' "${APP_RUN_FQDN}" | /bin/awk -F '.' '{print $1}')"
 OPENCLAW_CONFIG_FILE="${OPENCLAW_DIR}/openclaw.json"
 APPTAINER_BIN="${APPTAINER_BIN:-apptainer}"
 PORT_CHECK_BIN="${PORT_CHECK_BIN:-$(command -v ss || command -v netstat || true)}"
 LOCAL_MODEL_BASE_URL="https://aiapi.ihep.ac.cn/apiv2"
-MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-15}"
-APP_TOKEN="$(python3 - <<'PY'
+MODEL_CHECK_INTERVAL="${MODEL_CHECK_INTERVAL:-60}"
+APP_TOKEN="$(
+    python3 - <<'PY'
 import secrets
 print(secrets.token_hex(32))
 PY
@@ -363,6 +364,10 @@ if [ "$(printf '%s\n' "${CONFIG_MODEL_REPORT}" | awk -F= '/^RESULT=/{print $2}' 
     done < <(resolve_extra_readonly_binds)
 fi
 
+if [ -d /var/run/munge ]; then
+    EXTRA_BINDS+=(--bind /var/run/munge:/var/run/munge:ro)
+fi
+
 log "starting run.sh"
 log "app_port=${APP_PORT}"
 log "openclaw_user=${OPENCLAW_USER}"
@@ -378,12 +383,12 @@ if [ "${#EXTRA_BINDS[@]}" -gt 0 ]; then
 fi
 
 OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" \
-APP_PORT="${APP_PORT}" \
-APP_BASE_PATH="${APP_BASE_PATH}" \
-APP_RUN_FQDN="${APP_RUN_FQDN}" \
-OPENCLAW_USER="${OPENCLAW_USER}" \
-APP_TOKEN="${APP_TOKEN}" \
-python3 - <<'PY'
+    APP_PORT="${APP_PORT}" \
+    APP_BASE_PATH="${APP_BASE_PATH}" \
+    APP_RUN_FQDN="${APP_RUN_FQDN}" \
+    OPENCLAW_USER="${OPENCLAW_USER}" \
+    APP_TOKEN="${APP_TOKEN}" \
+    python3 - <<'PY'
 import json
 import os
 from pathlib import Path
@@ -415,7 +420,7 @@ PY
 
 log "updated gateway config"
 
-/bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"HOST_FQDN\": \"${APP_RUN_FQDN}\", \"PORT\": \"${APP_PORT}\", \"USERNAME\": \"${OPENCLAW_USER}\", \"BASE_PATH\": \"${APP_BASE_PATH}\", \"TOKEN\": \"${APP_TOKEN}\"}" > "${APP_LOGIN_INFO}"
+/bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"HOST_FQDN\": \"${APP_RUN_FQDN}\", \"PORT\": \"${APP_PORT}\", \"USERNAME\": \"${OPENCLAW_USER}\", \"BASE_PATH\": \"${APP_BASE_PATH}\", \"TOKEN\": \"${APP_TOKEN}\"}" >"${APP_LOGIN_INFO}"
 log "wrote app_login.info"
 
 (
@@ -427,10 +432,6 @@ APP_PID=$!
 log "spawned background pid=${APP_PID}"
 
 MONITOR_PID=""
-monitor_openclaw_runtime "${APP_PID}" "${LOCAL_ONLY_MODELS}" &
-MONITOR_PID=$!
-log "started runtime monitor pid=${MONITOR_PID} enforce_local_only=${LOCAL_ONLY_MODELS}"
-
 READY=0
 for _ in $(seq 1 60); do
     if ! kill -0 "${APP_PID}" 2>/dev/null; then
@@ -450,6 +451,10 @@ done
 
 if [ "${READY}" -eq 0 ]; then
     log "openclaw gateway did not start listening within 60 seconds"
+else
+    monitor_openclaw_runtime "${APP_PID}" "${LOCAL_ONLY_MODELS}" &
+    MONITOR_PID=$!
+    log "started runtime monitor pid=${MONITOR_PID} enforce_local_only=${LOCAL_ONLY_MODELS}"
 fi
 
 log "waiting for background process ${APP_PID}"

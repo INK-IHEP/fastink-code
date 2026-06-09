@@ -14,14 +14,15 @@ Usage:
 Run "fastinkctl <command> --help" for command-specific options.
 """
 
+import importlib
 import sys
 from pathlib import Path
 
-# Path setup: add deploy/ root to sys.path so cmd/* and lib/* are importable.
 _HERE = Path(__file__).resolve().parent  # deploy/
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
+from cmd import get_module_path
 
 USAGE = __doc__
 
@@ -29,47 +30,32 @@ USAGE = __doc__
 def main() -> None:
     args = sys.argv[1:]
 
-    if not args or args[0] in ("deploy", "install"):
-        from cmd.deploy import main as deploy_main
-
-        if args and args[0] in ("deploy", "install"):
-            sys.argv = [sys.argv[0]] + args[1:]
-        else:
-            sys.argv = [sys.argv[0]]
-        deploy_main()
-
-    elif args[0] in ("destroy", "uninstall"):
-        from cmd.destroy import main as destroy_main
-
-        sys.argv = [sys.argv[0]] + args[1:]
-        destroy_main()
-
-    elif args[0] == "down":
-        from cmd.down import main as down_main
-
-        sys.argv = [sys.argv[0]] + args[1:]
-        down_main()
-
-    elif args[0] == "up":
-        from cmd.up import main as up_main
-
-        sys.argv = [sys.argv[0]] + args[1:]
-        up_main()
-
-    elif args[0] == "status":
-        from cmd.status import main as status_main
-
-        sys.argv = [sys.argv[0]] + args[1:]
-        status_main()
-
+    if not args:
+        command = "deploy"
     elif args[0] in ("-h", "--help", "help"):
         print(USAGE)
-
+        return
     else:
-        print(f"Unknown command: {args[0]}\n", file=sys.stderr)
+        command = args[0]
+
+    module_path = get_module_path(command)
+    if module_path is None:
+        print(f"Unknown command: {command}\n", file=sys.stderr)
         print(USAGE, file=sys.stderr)
         sys.exit(1)
 
+    # Strip the command name so subcommand parsers don't see it
+    sys.argv = [sys.argv[0]] + args[1:]
+    module = importlib.import_module(module_path)
+    module.main()
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n")
+        from lib import cli_ui
+
+        cli_ui.warning("Aborted.")
+        sys.exit(1)

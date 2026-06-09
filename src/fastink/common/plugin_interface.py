@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from fastapi import FastAPI
 
+from fastink.common.logger import logger
+
 
 class FastINKPlugin(ABC):
     """
@@ -100,7 +102,6 @@ class PluginManager:
             try:
                 plugin_module = importlib.import_module(package_name)
             except ImportError as e:
-                from fastink.common.logger import logger
                 logger.error(f"Failed to import plugin '{package_name}': {e}")
                 return None
 
@@ -110,7 +111,6 @@ class PluginManager:
             try:
                 return plugin_class()
             except Exception as e:
-                from fastink.common.logger import logger
                 logger.error(f"Failed to instantiate Plugin class from '{package_name}': {e}")
                 return None
 
@@ -125,14 +125,12 @@ class PluginManager:
                 except Exception:
                     continue
 
-        from fastink.common.logger import logger
         logger.error(f"No valid Plugin class found in '{package_name}'")
         return None
 
     def load_plugins_from_config(self, config_section: str = "unified_plugins") -> None:
         """Load plugins based on configuration."""
         from fastink.common.config import get_config
-        from fastink.common.logger import logger
 
         plugin_packages_str = get_config(config_section, "packages", "")
 
@@ -158,7 +156,6 @@ class PluginManager:
 
     def register_plugin_routers(self, app: FastAPI) -> None:
         """Register all plugin routers."""
-        from fastink.common.logger import logger
 
         for plugin in self.loaded_plugins:
             try:
@@ -169,7 +166,6 @@ class PluginManager:
 
     def register_plugin_hooks(self) -> None:
         """Register all plugin hooks."""
-        from fastink.common.logger import logger
 
         for plugin in self.loaded_plugins:
             try:

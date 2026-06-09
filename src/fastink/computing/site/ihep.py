@@ -50,7 +50,7 @@ async def _generate_home_link(user_home_dir, ink_dir, user_group, username, toke
         ln_command = ""
         homelink = Path(f"{user_home_dir}/.ink")
         mvname = Path(f"{user_home_dir}/.inkold")
-        xrootd_path = get_config("computing", "xrootd_path")
+        xrootd_path = get_config("storage", "xrd_host")
         is_exist, _ = await common.path_exist(name=str(homelink), username=username, mgm=xrootd_path)
         
         if is_exist:
@@ -140,7 +140,7 @@ async def build_job_env(uid, jobtype, rawjobPath, jobfilename):
     job_dir = f"{ink_dir}/.ink/Jobs/{jobtype}-{time_stamp}"
 
     token_filename = ""
-    xrootd_path = get_config("computing", "xrootd_path")
+    xrootd_path = get_config("storage", "xrd_host")
 
     token = get_krb5(username)
     if not token:

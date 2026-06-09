@@ -18,16 +18,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-_HERE = Path(__file__).resolve().parent          # deploy/cmd/
-_DEPLOY_ROOT = _HERE.parent                       # deploy/
-_REPO_ROOT = _DEPLOY_ROOT.parent                  # fastink-code/
-_DEPLOY_DIR = _REPO_ROOT / ".deploy"
-
-if str(_DEPLOY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_DEPLOY_ROOT))
-
+from cmd.common import DEPLOY_DIR, load_deploy_answers
 from lib import cli_ui
-from cmd.deploy import load_deploy_answers
+from lib.compose import compose_down
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -46,22 +39,22 @@ def run_cmd(cmd: list[str]) -> subprocess.CompletedProcess:
 
 def main() -> None:
     args = parse_args()
-    cli_ui.ensure_deps(_DEPLOY_DIR)
+    cli_ui.ensure_deps(DEPLOY_DIR)
     cli_ui.banner()
 
-    if not _DEPLOY_DIR.exists():
-        cli_ui.error(f"No deployment directory found at {_DEPLOY_DIR}")
+    if not DEPLOY_DIR.exists():
+        cli_ui.error(f"No deployment directory found at {DEPLOY_DIR}")
         sys.exit(1)
 
     answers = load_deploy_answers()
     project_name = str(answers.get("project_name", "fastink"))
-    compose_file = _DEPLOY_DIR / "docker-compose.yml"
+    compose_file = DEPLOY_DIR / "docker-compose.yml"
 
     cli_ui.step("Destroy deployment")
     cli_ui.summary_table([
         ("Project", project_name),
         ("Compose file", str(compose_file)),
-        ("Deploy directory", str(_DEPLOY_DIR)),
+        ("Deploy directory", str(DEPLOY_DIR)),
     ])
 
     if not args.yes:
@@ -79,11 +72,9 @@ def main() -> None:
     if not args.yes:
         remove_volumes = cli_ui.confirm_prompt("Remove named volumes (database and redis data)", False)
 
-    cmd = ["docker", "compose", "-p", project_name, "-f", str(compose_file), "down"]
-    if remove_volumes and compose_file.exists():
-        cmd.append("-v")
     if compose_file.exists():
-        run_cmd(cmd)
+        cli_ui.info(f"+ docker compose -p {project_name} -f {compose_file} down" + (" -v" if remove_volumes else ""))
+        compose_down(project_name, compose_file, remove_volumes=remove_volumes)
     else:
         cli_ui.warning(f"Compose file not found: {compose_file} — skipping docker compose down")
     cli_ui.success("Containers stopped" + (" and volumes removed" if remove_volumes else ""))
@@ -110,9 +101,7 @@ def main() -> None:
     if not args.keep_dot_deploy:
         if args.keep_answers:
             # Preserve answers.json, delete everything else
-            answers_data = _DEPLOY_DIR / "answers.json"
-            answers_content = answers_data.read_text(encoding="utf-8") if answers_data.exists() else None
-            for item in _DEPLOY_DIR.iterdir():
+            for item in DEPLOY_DIR.iterdir():
                 if item.name == "answers.json":
                     continue
                 if item.is_dir():
@@ -125,7 +114,7 @@ def main() -> None:
             if not args.yes:
                 remove_deploy = cli_ui.confirm_prompt("Delete .deploy/ directory entirely", False)
             if remove_deploy:
-                shutil.rmtree(_DEPLOY_DIR)
+                shutil.rmtree(DEPLOY_DIR)
                 cli_ui.success("Deployment directory deleted")
 
     cli_ui.success("Destroy complete")

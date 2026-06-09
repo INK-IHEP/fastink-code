@@ -31,11 +31,41 @@ from uuid import uuid4
 import logging
 logger = logging.getLogger("ink.hpcadapter")
 
+SLURM_TERMINAL_JOB_STATUSES = frozenset({
+    "COMPLETED",
+    "FAILED",
+    "TIMEOUT",
+    "OUT_OF_MEMORY",
+    "CANCELLED",
+})
+
 @scheduler("slurm")
 class HPC_Scheduler(SchedulerBase):
     def __init__(self, uid: int):
         super().__init__(uid)
         self.CLUSTER_TYPE = "slurm"
+
+    def _seconds_to_slurm_time(self, total_seconds: int) -> str:
+        if total_seconds < 0:
+            raise ValueError("Time limit seconds must be >= 0.")
+
+        days, rem = divmod(total_seconds, 24 * 3600)
+        hours, rem = divmod(rem, 3600)
+        minutes, seconds = divmod(rem, 60)
+        if days > 0:
+            return f"{days}-{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    def _normalize_slurm_time_limit(self, raw_value: object, fallback: str = "24:00:00") -> str:
+        value = str(raw_value).strip()
+        if not value:
+            return fallback
+
+        # Defensive conversion: treat plain numbers in config as seconds.
+        if value.isdigit():
+            return self._seconds_to_slurm_time(int(value))
+
+        return value
     
     def _get_interactive_job_types(self) -> List[str]:
         """Get the list of interactive job types from config."""
@@ -48,6 +78,85 @@ class HPC_Scheduler(SchedulerBase):
         # async mode
         interactive_job_types = self._get_interactive_job_types()
         return job_data.job_type in interactive_job_types
+
+    def _hidden_terminal_job_key(self, job_id: str | int) -> str:
+        return f"cluster_jobs:hidden:{self.CLUSTER_TYPE}:{self.USERNAME}:{job_id}"
+
+    async def _mark_terminal_job_hidden(self, job_id: str | int) -> None:
+        r = redis_connect()
+        await r.set(self._hidden_terminal_job_key(job_id), "1")
+
+    async def _is_terminal_job_hidden(self, r, job_id: str | int) -> bool:
+        return bool(await r.exists(self._hidden_terminal_job_key(job_id)))
+
+    def _map_sacct_state_to_job_status(self, slurm_state: str) -> str | None:
+        state = (slurm_state or "").strip().upper()
+
+        if state.startswith("PENDING"):
+            return "QUEUEING"
+        if state.startswith("RUNNING"):
+            return "RUNNING"
+        if state.startswith("COMPLETED"):
+            return "COMPLETED"
+        if state.startswith("FAILED"):
+            return "FAILED"
+        if state.startswith("TIMEOUT"):
+            return "TIMEOUT"
+        if state.startswith("OUT_OF_ME"):
+            return "OUT_OF_MEMORY"
+        if state.startswith("CANCELLED"):
+            return "CANCELLED"
+
+        return None
+
+    async def _refresh_db_status_for_jobids(self, job_ids: list[str | int]) -> None:
+        if not job_ids:
+            return
+
+        ids = [str(j).strip() for j in job_ids if str(j).strip()]
+        if not ids:
+            return
+
+        sacct_cmd = (
+            f"sacct -j {','.join(ids)} "
+            "--format=JobID,State "
+            "-P -X -n"
+        )
+
+        try:
+            stdout = await sub_command(
+                sacct_cmd,
+                10,
+                "refresh job status from sacct failed",
+                "refresh job status from sacct timeout",
+            )
+        except Exception as e:
+            logger.debug(f"refresh_db_status_for_jobids: skip due to sacct error: {e}")
+            return
+
+        for line in stdout.decode(errors="ignore").strip().split("\n"):
+            if not line:
+                continue
+
+            fields = line.split("|")
+            if len(fields) < 2:
+                continue
+
+            raw_job_id = fields[0].strip()
+            slurm_state = fields[1].strip()
+
+            job_id = raw_job_id.split(".", 1)[0]
+            mapped_status = self._map_sacct_state_to_job_status(slurm_state)
+            if not mapped_status:
+                continue
+
+            try:
+                _, db_status, _, _ = get_job_info(self.UID, job_id, self.CLUSTER_TYPE)
+            except Exception:
+                continue
+
+            if db_status != mapped_status:
+                update_job_status(self.UID, job_id, mapped_status, self.CLUSTER_TYPE)
 
     async def _gen_slurm_submit_cmd(
         self, 
@@ -149,6 +258,18 @@ class HPC_Scheduler(SchedulerBase):
         submit_abs_job_script = ""
         interactive_job_types = self._get_interactive_job_types()
         if jobtype in interactive_job_types:
+            # Apply a configurable time limit for interactive job types.
+            interactive_job_time_limit = get_config(
+                "computing",
+                "interactive_job_time_limit",
+                fallback="24:00:00",
+            )
+            normalized_time_limit = self._normalize_slurm_time_limit(
+                interactive_job_time_limit,
+                fallback="24:00:00",
+            )
+            args.append(f"--time={normalized_time_limit}")
+
             executable_dir = get_config("computing", "cluster_scripts")
             executable = f"{executable_dir}/{jobtype}/shell.sh"
 
@@ -252,6 +373,7 @@ class HPC_Scheduler(SchedulerBase):
         # 1. Prevent duplicate submissions (same job_type)
         # --------------------------------------------------
         if self._need_dedup(job_data):
+            # Check 1: job already in Redis submitting queue
             raw_jobs = await r.lrange(user_queue, 0, -1)
 
             for raw in raw_jobs:
@@ -267,6 +389,31 @@ class HPC_Scheduler(SchedulerBase):
                         "job_id": None,
                         "error": f"job_type '{job_data.job_type}' already in submitting queue"
                     }
+
+            # Check 2: job of the same type already active in the database
+            active_jobs = find_active_jobs(
+                self.UID,
+                job_data.job_type,
+                self.CLUSTER_TYPE,
+            )
+            if active_jobs:
+                await self._refresh_db_status_for_jobids(list(active_jobs.keys()))
+                active_jobs = find_active_jobs(
+                    self.UID,
+                    job_data.job_type,
+                    self.CLUSTER_TYPE,
+                )
+            if active_jobs:
+                logger.debug(
+                    f"SLURM-ASYNC: job {job_data.job_type} already running in cluster, jobids: {list(active_jobs.keys())}"
+                )
+                return {
+                    "cluster": cluster,
+                    "submit_uuid": submit_uuid,
+                    "job_status": "DUPLICATE",
+                    "job_id": None,
+                    "error": f"job_type '{job_data.job_type}' already running in cluster"
+                }
 
         # --------------------------------------------------
         # 2. Build Redis job payload
@@ -305,6 +452,8 @@ class HPC_Scheduler(SchedulerBase):
 
             # Status marker
             "job_status": "SUBMITTING",
+            "submit_mode": "ASYNC",
+            "async_submit_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             # Retry policy
             "retry_count": 0,
             "max_retries": int(get_config("crond", "async_submit_retries", fallback=3)),
@@ -376,6 +525,23 @@ class HPC_Scheduler(SchedulerBase):
         job_type = job.get("job_type")
         submit_uuid = job.get("submit_uuid")
 
+        cancel_key = f"cancelled_submit_uuid:{cluster}:{submit_uuid}"
+
+        # If user already cancelled this async request, do not submit to Slurm.
+        if submit_uuid and await r.get(cancel_key):
+            await self._remove_job_from_queue_by_uuid(
+                f"{cluster}_submitting_jobs:{username}", submit_uuid
+            )
+            logger.info(
+                f"submit_job_from_queue: submit_uuid={submit_uuid} already cancelled, skip submission"
+            )
+            return {
+                "cluster": cluster,
+                "submit_uuid": submit_uuid,
+                "job_status": "CANCELLED",
+                "job_id": None,
+            }
+
         try:
             # --------------------------------------------------
             # 1. Prepare job runtime
@@ -405,6 +571,21 @@ class HPC_Scheduler(SchedulerBase):
                 error_file=job.get("error_file"),
                 job_content=job.get("job_script"),
             )
+
+            # Re-check cancellation right before sbatch to avoid submit-after-cancel race.
+            if submit_uuid and await r.get(cancel_key):
+                await self._remove_job_from_queue_by_uuid(
+                    f"{cluster}_submitting_jobs:{username}", submit_uuid
+                )
+                logger.info(
+                    f"submit_job_from_queue: submit_uuid={submit_uuid} cancelled before sbatch, skip"
+                )
+                return {
+                    "cluster": cluster,
+                    "submit_uuid": submit_uuid,
+                    "job_status": "CANCELLED",
+                    "job_id": None,
+                }
 
             # --------------------------------------------------
             # 3. Execute sbatch
@@ -467,6 +648,7 @@ class HPC_Scheduler(SchedulerBase):
 
                 "job_status": "SUBMITTED",
                 "submit_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "submit_mode": "ASYNC",
             }
             for k in ("cpu", "mem", "gpu_num", "partition", "qos"):
                 if k in job:
@@ -555,6 +737,7 @@ class HPC_Scheduler(SchedulerBase):
             job_id = job_id = fields[0].strip()
             partition = fields[1]
             slurm_state = fields[2]
+            slurm_state_norm = (slurm_state or "").strip().upper()
             node_list = fields[5]
             job_type = fields[6]
             submit_time = fields[7].replace("T", " ")
@@ -566,6 +749,9 @@ class HPC_Scheduler(SchedulerBase):
             if req_job_type:
                 if job_type not in req_job_type.split(","):
                     continue
+
+            if await self._is_terminal_job_hidden(r, job_id):
+                continue
 
             # --------------------------------------
             # DB sync (insert if not exists)
@@ -602,10 +788,10 @@ class HPC_Scheduler(SchedulerBase):
             # --------------------------------------
             # Normalize Slurm job state
             # --------------------------------------
-            if slurm_state == "PENDING":
+            if slurm_state_norm.startswith("PENDING"):
                 job_status = "QUEUEING"
 
-            elif slurm_state == "RUNNING":
+            elif slurm_state_norm.startswith("RUNNING"):
                 job_status = "RUNNING"
 
                 if connect_sign == "False":
@@ -637,10 +823,37 @@ class HPC_Scheduler(SchedulerBase):
                             self.UID, job_id, start_time, self.CLUSTER_TYPE
                         )
 
-            elif slurm_state in ("COMPLETED", "FAILED") or slurm_state.startswith(
-                "CANCELLED"
-            ):
-                job_status = slurm_state
+            elif slurm_state_norm.startswith("COMPLETED"):
+                job_status = "COMPLETED"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("FAILED"):
+                job_status = "FAILED"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("TIMEOUT"):
+                job_status = "TIMEOUT"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("OUT_OF_ME"):
+                job_status = "OUT_OF_MEMORY"
+                if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
+                    update_end_time(
+                        self.UID, job_id, end_time, self.CLUSTER_TYPE
+                    )
+
+            elif slurm_state_norm.startswith("CANCELLED") or slurm_state_norm.startswith("CANCELED"):
+                # sacct may return values like "CANCELLED by 0"; normalize for API/DB.
+                job_status = "CANCELLED"
                 if not get_endtime_info(self.UID, job_id, self.CLUSTER_TYPE):
                     update_end_time(
                         self.UID, job_id, end_time, self.CLUSTER_TYPE
@@ -654,10 +867,17 @@ class HPC_Scheduler(SchedulerBase):
                     self.UID, job_id, job_status, self.CLUSTER_TYPE
                 )
 
+            # Frontend no longer expects cancelled jobs in the query list.
+            if job_status == "CANCELLED":
+                continue
+
             # --------------------------------------
             # NEW: resolve submit_uuid via Redis mapping
             # --------------------------------------
             submit_uuid = ""
+            job_async_submit_time = ""
+            submit_mode = "SYNC"
+
             uuid_val = await r.get(
                 f"job_id_to_submit_uuid:{self.CLUSTER_TYPE}:{job_id}"
             )
@@ -668,11 +888,24 @@ class HPC_Scheduler(SchedulerBase):
             else:
                 submit_uuid = uuid_val
 
+            if submit_uuid:
+                submit_mode = "ASYNC"
+                async_job_key = f"cluster_jobs:{self.CLUSTER_TYPE}:{self.USERNAME}:{job_id}"
+                async_submit_val = await r.hget(async_job_key, "submit_time")
+                if async_submit_val is None:
+                    job_async_submit_time = ""
+                elif isinstance(async_submit_val, bytes):
+                    job_async_submit_time = async_submit_val.decode()
+                else:
+                    job_async_submit_time = str(async_submit_val)
+
             job_list.append(
                 {
                     "clusterId": self.CLUSTER_TYPE,
                     "jobId": job_id,
                     "submitUuid": submit_uuid,   # NEW
+                    "jobAsyncSubmitTime": job_async_submit_time,
+                    "submitMode": submit_mode,
                     "jobPartition": partition,
                     "jobType": job_type,
                     "jobSubmitTime": submit_time,
@@ -707,6 +940,8 @@ class HPC_Scheduler(SchedulerBase):
                     "clusterId": self.CLUSTER_TYPE,
                     "jobId": "",
                     "submitUuid": job.get("submit_uuid"),  # NEW
+                    "jobAsyncSubmitTime": job.get("async_submit_time", ""),
+                    "submitMode": job.get("submit_mode", "ASYNC"),
                     "jobType": job_type,
                     "jobSubmitTime": "",
                     "jobStatus": "SUBMITTING",
@@ -808,6 +1043,14 @@ class HPC_Scheduler(SchedulerBase):
         cluster = self.CLUSTER_TYPE
         username = self.USERNAME
 
+        if submit_uuid:
+            # Mark cancellation first to block retry requeue / late submission race.
+            await r.set(
+                f"cancelled_submit_uuid:{cluster}:{submit_uuid}",
+                "1",
+                ex=86400,
+            )
+
         resolved_job_id = None
 
         # ==================================================
@@ -830,6 +1073,28 @@ class HPC_Scheduler(SchedulerBase):
         # 2. If job_id is known → cancel Slurm job
         # ==================================================
         if resolved_job_id:
+            current_job_status = None
+            try:
+                _, current_job_status, _, _ = get_job_info(
+                    self.UID,
+                    resolved_job_id,
+                    cluster,
+                )
+            except NoResultFound:
+                current_job_status = None
+
+            if current_job_status in SLURM_TERMINAL_JOB_STATUSES:
+                await self._mark_terminal_job_hidden(resolved_job_id)
+                return {
+                    "cluster": cluster,
+                    "submit_uuid": submit_uuid,
+                    "job_id": resolved_job_id,
+                    "job_status": current_job_status,
+                    "hidden": True,
+                }
+
+            # For non-terminal jobs, attempt scancel and mark hidden after transition
+
             try:
                 await sub_command(
                     f"scancel {resolved_job_id}",
@@ -855,16 +1120,26 @@ class HPC_Scheduler(SchedulerBase):
             except Exception:
                 pass
 
+            if submit_uuid:
+                await self._remove_job_from_queue_by_uuid(
+                    f"submitting_jobs:{cluster}", submit_uuid
+                )
+                await self._remove_job_from_queue_by_uuid(
+                    f"{cluster}_submitting_jobs:{username}", submit_uuid
+                )
+
             return {
                 "cluster": cluster,
                 "submit_uuid": submit_uuid,
                 "job_id": resolved_job_id,
                 "job_status": "CANCELLED",
+                "hidden": False,
             }
 
         # ==================================================
         # 3. No job_id → treat as ASYNC SUBMITTING job
         # ==================================================
+        # Hidden flag not applicable for SUBMITTING jobs without job_id
         # (Only possible if submit_uuid is provided)
         removed_global = await self._remove_job_from_queue_by_uuid(
             f"submitting_jobs:{cluster}", submit_uuid
@@ -888,6 +1163,7 @@ class HPC_Scheduler(SchedulerBase):
             "submit_uuid": submit_uuid,
             "job_id": None,
             "job_status": "CANCELLED",
+            "hidden": False,
         }
 
 

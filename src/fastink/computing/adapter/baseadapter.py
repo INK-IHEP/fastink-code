@@ -12,7 +12,7 @@ class SchedulerBase(ABC):
         self.USERNAME = change_uid_to_username(self.UID)
         self.GID = pwd.getpwuid(uid).pw_gid
         self.GROUPNAME = grp.getgrgid(self.GID).gr_name
-        self.XROOTD_PATH = get_config("computing", "xrootd_path")
+        self.XROOTD_PATH = get_config("storage", "xrd_host")
         self.KRB5_ENABLED = get_config("common", "krb5_enabled")
 
     

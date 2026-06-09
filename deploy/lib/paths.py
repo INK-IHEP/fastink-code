@@ -1,3 +1,11 @@
+"""Runtime path planning.
+
+Builds a flat dictionary of all paths used during deployment
+(data dirs, config dirs, key dirs, etc.).  Directories are
+created eagerly; file paths are touched (empty) so the init
+container or service can write into them later.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

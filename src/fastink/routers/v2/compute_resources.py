@@ -16,6 +16,20 @@ from fastink.computing.tools.common.utils import change_username_to_uid, connect
 
 router = APIRouter()
 
+
+def _normalize_and_filter_jobs(joblist: list[dict]) -> list[dict]:
+    normalized = []
+
+    for job in joblist:
+        raw_status = str(job.get("jobStatus", "") or "")
+        if raw_status.startswith("CANCELLED"):
+            # Frontend requirement: do not return cancelled jobs.
+            continue
+
+        normalized.append(job)
+
+    return normalized
+
 @router.get("/get_joboutput")
 async def check_common_job(
     username: str = Depends(get_username),
@@ -265,7 +279,14 @@ async def create_normal_job(
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
         jobid = await adapter.submit_job(jobclass)
-        
+
+        if isinstance(jobid, dict) and jobid.get("job_status") == "DUPLICATE":
+            return {
+                "status": InkStatus.DUPLICATE_JOB,
+                "msg": jobid.get("error", "Duplicate interactive job type."),
+                "data": {}
+            }
+
         return {
             "status": InkStatus.SUCCESS,
             "msg": f"Create job successfully.",
@@ -290,6 +311,13 @@ async def create_common_job(
     try:
         adapter = get_scheduler(jobclass.cluster_id, username)
         result = await adapter.submit_job(jobclass)
+
+        if isinstance(result, dict) and result.get("job_status") == "DUPLICATE":
+            return {
+                "status": InkStatus.DUPLICATE_JOB,
+                "msg": result.get("error", "Duplicate interactive job type."),
+                "data": {}
+            }
 
         if jobclass.submit_mode == SubmitMode.SYNC:
             return {
@@ -352,6 +380,8 @@ async def query_common_job(
             adapter = get_scheduler(cluster_id, username)
             joblist = await adapter.query_job(job_type) or []
 
+        joblist = _normalize_and_filter_jobs(joblist)
+
         start_idx = max(0, (page - 1) * limit)
         end_idx = start_idx + max(0, limit)
         paged = joblist[start_idx:end_idx]
@@ -380,10 +410,10 @@ async def delete_common_job(
     cluster_id: str = Body(..., description="Cluster ID",embed=True)
 ):
     try:
-        if not job_id:
+        if not job_id and not submit_uuid:
             return {
-                "status": InkStatus.SUCCESS,
-                "msg": f"Delete successfully.",
+                "status": InkStatus.BAD_REQUEST,
+                "msg": "Delete job failed: either job_id or submit_uuid is required.",
                 "data": {}
             }
 
@@ -393,9 +423,16 @@ async def delete_common_job(
             submit_uuid=submit_uuid
         )
 
+        if job_id:
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": f"Delete job {job_id} successfully.",
+                "data": {}
+            }
+
         return {
             "status": InkStatus.SUCCESS,
-            "msg": f"Delete job {job_id} successfully.",
+            "msg": f"Delete job {submit_uuid} successfully.",
             "data": {}
         }
 

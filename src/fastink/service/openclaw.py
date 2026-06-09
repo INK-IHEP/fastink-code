@@ -10,7 +10,12 @@ from copy import deepcopy
 from pathlib import Path
 from shlex import quote
 
+from sqlalchemy.exc import NoResultFound
+
+from fastink.auth.common import get_user
+from fastink.auth.platform_api import get_user_api_key
 from fastink.common.config import get_config
+from fastink.common.logger import logger
 from fastink.common.utils import query_pwd_group
 from fastink.computing.tools.common.utils import (
     change_username_to_uid,
@@ -33,13 +38,13 @@ DEFAULT_OPENCLAW_TEMPLATES = {
         "base_url": "https://aiapi.ihep.ac.cn/apiv2",
         "api_key": "",
         "api_name": "openai-completions",
-        "model_id": "hepai/deepseek-v3.2",
+        "model_id": "hepai/deepseek-v4-flash",
     },
     "Deepseek": {
         "base_url": "https://api.deepseek.com",
         "api_key": "",
         "api_name": "openai-completions",
-        "model_id": "deepseek-chat",
+        "model_id": "deepseek-v4-flash",
     },
     "Qwen coding plan": {
         "base_url": "https://coding.dashscope.aliyuncs.com/v1",
@@ -97,6 +102,8 @@ DEFAULT_MODEL = {
     "contextWindow": 64000,
     "maxTokens": 8192,
 }
+LOCAL_MODEL_CONTEXT_WINDOW = 512 * 1024
+REMOTE_MODEL_CONTEXT_WINDOW = 128000
 
 
 def _is_local_port_available(port: int) -> bool:
@@ -173,6 +180,81 @@ def _run_as_user(username: str, command: str) -> str:
 
 def _normalize_base_url(value: str) -> str:
     return str(value or "").rstrip("/")
+
+
+def _is_local_model(base_url: str, model_id: str) -> bool:
+    return (
+        _normalize_base_url(base_url) == _normalize_base_url(DEFAULT_OPENCLAW_TEMPLATES["hepai/deepseek"]["base_url"])
+        and str(model_id or "").startswith("hepai/")
+    )
+
+
+def _get_model_context_window(base_url: str, model_id: str) -> int:
+    if _is_local_model(base_url=base_url, model_id=model_id):
+        return LOCAL_MODEL_CONTEXT_WINDOW
+    return REMOTE_MODEL_CONTEXT_WINDOW
+
+
+def _get_user_email(username: str) -> str | None:
+    try:
+        user = get_user(username=username)
+    except NoResultFound:
+        logger.info("No user record found when resolving OpenClaw API key email for %s", username)
+        return None
+    except Exception as exc:
+        logger.warning("Failed to resolve OpenClaw API key email for %s: %s", username, exc)
+        return None
+
+    email = (user or {}).get("email")
+    if not email:
+        logger.info("No email found when resolving OpenClaw API key for %s", username)
+        return None
+    return str(email)
+
+
+async def _get_user_model_api_key(username: str) -> str:
+    email = _get_user_email(username)
+    if not email:
+        return ""
+
+    try:
+        api_key = await get_user_api_key(email)
+    except Exception as exc:
+        logger.warning("Failed to fetch OpenClaw API key for %s: %s", username, exc)
+        return ""
+    return str(api_key or "")
+
+
+async def _fill_local_model_api_key(username: str, template_payload: dict) -> dict:
+    templates = template_payload.get("templates")
+    if not isinstance(templates, dict):
+        return template_payload
+
+    needs_api_key = any(
+        isinstance(entry, dict)
+        and not entry.get("api_key")
+        and _is_local_model(
+            base_url=entry.get("base_url", ""),
+            model_id=entry.get("model_id", ""),
+        )
+        for entry in templates.values()
+    )
+    if not needs_api_key:
+        return template_payload
+
+    api_key = await _get_user_model_api_key(username)
+    if not api_key:
+        return template_payload
+
+    for entry in templates.values():
+        if not isinstance(entry, dict) or entry.get("api_key"):
+            continue
+        if _is_local_model(
+            base_url=entry.get("base_url", ""),
+            model_id=entry.get("model_id", ""),
+        ):
+            entry["api_key"] = api_key
+    return template_payload
 
 
 def _resolve_user_experiment_group(username: str) -> str:
@@ -403,6 +485,10 @@ def _merge_model(existing_model: dict | None, payload: OpenClawSyncRequest) -> d
         else:
             merged[key] = value
 
+    merged["contextWindow"] = _get_model_context_window(
+        base_url=payload.base_url,
+        model_id=payload.model_id,
+    )
     if not merged.get("name"):
         merged["name"] = payload.model_id
     return merged
@@ -449,12 +535,12 @@ def _template_key_for_model(base_url: str, model_id: str) -> str:
 async def get_openclaw_template(username: str) -> dict:
     context = await _build_openclaw_context(username)
     if not context["target_dir_exists"] or not context["config_exists"] or not context["config_valid"]:
-        return _render_openclaw_templates()
+        return await _fill_local_model_api_key(username, _render_openclaw_templates())
 
     target_config = context["config"]
     provider_key, provider_config, primary_model = _get_primary_model_context(target_config)
     if provider_config is None or primary_model is None:
-        return _render_openclaw_templates()
+        return await _fill_local_model_api_key(username, _render_openclaw_templates())
 
     selected_values = {
         "base_url": provider_config.get("baseUrl", ""),
@@ -467,10 +553,19 @@ async def get_openclaw_template(username: str) -> dict:
         model_id=selected_values["model_id"],
     )
     if selected_key != "custom":
-        return _render_openclaw_templates(selected_key=selected_key, selected_values=selected_values)
+        return await _fill_local_model_api_key(
+            username,
+            _render_openclaw_templates(
+                selected_key=selected_key,
+                selected_values=selected_values,
+            ),
+        )
 
     selected_values["api_key"] = provider_config.get("apiKey", "")
-    return _render_openclaw_templates(selected_key="custom", selected_values=selected_values)
+    return await _fill_local_model_api_key(
+        username,
+        _render_openclaw_templates(selected_key="custom", selected_values=selected_values),
+    )
 
 
 def _iter_provider_models(target_config: dict) -> list[tuple[str, dict, dict]]:
@@ -489,13 +584,6 @@ def _iter_provider_models(target_config: dict) -> list[tuple[str, dict, dict]]:
             if isinstance(model, dict):
                 items.append((provider_key, provider_config, model))
     return items
-
-
-def _is_local_model(base_url: str, model_id: str) -> bool:
-    return (
-        _normalize_base_url(base_url) == _normalize_base_url(DEFAULT_OPENCLAW_TEMPLATES["hepai/deepseek"]["base_url"])
-        and str(model_id or "").startswith("hepai/")
-    )
 
 
 def _validate_experiment_data_models(target_config: dict) -> None:

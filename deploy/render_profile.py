@@ -5,17 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from lib.defaults import normalize_answers, parse_override_value
+from lib.deploy_io import write_file
 from lib.paths import build_runtime_paths
 from lib.render import render_bundle
 
 
 def load_answers(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def write_file(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
 
 
 def parse_args() -> argparse.Namespace:

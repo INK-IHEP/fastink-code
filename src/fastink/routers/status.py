@@ -51,3 +51,4 @@ class InkStatus(str, Enum):
     RESOURCE_OPERATION_TIME_OUT = "R03"
     RESOURCE_NOT_SUPPORT = "R04"
     WRONG_JOB_TYPE = "R05"
+    DUPLICATE_JOB = "R06"

@@ -159,6 +159,21 @@ async def _process_single_job(r, cluster: str, raw_job: str, job_number: int):
 
             # Retry policy: allow finite retries then fail
             if isinstance(job, dict):
+                submit_uuid = job.get("submit_uuid")
+                cancel_key = f"cancelled_submit_uuid:{cluster}:{submit_uuid}"
+
+                if submit_uuid and await r.get(cancel_key):
+                    await _remove_user_submitting_job_by_uuid(
+                        r,
+                        cluster,
+                        job.get("username"),
+                        submit_uuid,
+                    )
+                    logger.info(
+                        f"[{cluster}] Skip retry for cancelled submit_uuid={submit_uuid}"
+                    )
+                    return
+
                 retry_count = int(job.get("retry_count", 0)) + 1
                 max_retries = int(job.get("max_retries", 3))
 
@@ -172,7 +187,12 @@ async def _process_single_job(r, cluster: str, raw_job: str, job_number: int):
                     await asyncio.sleep(retry_delay)
                 else:
                     await r.lpush(f"failed_jobs:{cluster}", json.dumps(job, ensure_ascii=False))
-                    await r.lrem(f"{cluster}_submitting_jobs:{job.get('username')}", 0, json.dumps(job, ensure_ascii=False))
+                    await _remove_user_submitting_job_by_uuid(
+                        r,
+                        cluster,
+                        job.get("username"),
+                        job.get("submit_uuid"),
+                    )
                     logger.error(
                         f"[{cluster}] Dropped job after {max_retries} retries: {job.get('submit_uuid')}"
                     )
@@ -185,18 +205,66 @@ async def _process_single_job(r, cluster: str, raw_job: str, job_number: int):
             f"[{cluster}] Unexpected error processing job #{job_number}: {e}",
             exc_info=True
         )
+
+
+async def _remove_user_submitting_job_by_uuid(r, cluster: str, username: str, submit_uuid: str) -> bool:
+    if not username or not submit_uuid:
+        return False
+
+    queue_key = f"{cluster}_submitting_jobs:{username}"
+    raw_jobs = await r.lrange(queue_key, 0, -1)
+
+    for raw in raw_jobs:
+        try:
+            job = json.loads(raw)
+        except Exception:
+            continue
+
+        if job.get("submit_uuid") == submit_uuid:
+            await r.lrem(queue_key, 1, raw)
+            return True
+
+    return False
         
         
 def _map_slurm_status_to_internal(db_status: str, slurm_state: str) -> str:
+    state = (slurm_state or "").strip().upper()
 
-    if slurm_state == "PENDING":
+    if state.startswith("PENDING"):
         return "QUEUEING"
 
-    if slurm_state == "RUNNING":
+    if state.startswith("RUNNING"):
         return "RUNNING"
 
-    if slurm_state in ("COMPLETED", "FAILED") or slurm_state.startswith("CANCELLED"):
+    if state.startswith("COMPLETED"):
+        return "COMPLETED"
+
+    if state.startswith("FAILED"):
+        return "FAILED"
+
+    if state.startswith("TIMEOUT"):
+        return "TIMEOUT"
+
+    if state.startswith("OUT_OF_ME"):
+        return "OUT_OF_MEMORY"
+
+    if state.startswith("CANCELLED"):
+        # sacct may return "CANCELLED by <uid>"; keep internal status normalized.
+        return "CANCELLED"
+
+    if state.startswith("CANCELED"):
+        # Defensive compatibility for non-standard single-L variants.
+        return "CANCELLED"
+
+    if state in ("COMPLETED", "FAILED", "TIMEOUT", "OUT_OF_MEMORY"):
         return slurm_state
+
+    logger.debug(
+        "Unrecognized slurm state in reconciliation: raw_state=%s normalized_state=%s db_status=%s",
+        slurm_state,
+        state,
+        db_status,
+    )
 
     return db_status
 
