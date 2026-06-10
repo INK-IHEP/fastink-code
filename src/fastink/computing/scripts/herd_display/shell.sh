@@ -1,8 +1,8 @@
 #!/bin/bash
 
-HERD_ROOT=${1:-"/herdfs/user/quzy/public/demo/compact_electron_30.root"}
-HERD_XML=${2:-"compact/v2024b/v2024b-test.xml"}
-HERD_BIN=${3:-"/herdfs/user/quzy/public/runink.sh"}
+HERD_ROOT=${1}
+HERD_XML=${2}
+HERD_BIN=${3}
 
 if [ -n "${INKPATH:-}" ] && [ -n "${INKLDPATH:-}" ]; then
     export PATH="$INKPATH:$PATH"
