@@ -1,14 +1,35 @@
 #!/bin/bash
 
-HPORT=${1}
-HXML=${2}
-HROOT=${3}
+HERD_ROOT=${1}
+HERD_XML=${2}
+HERD_BIN=${3}
 
-APP_RUN_HOST="`/bin/hostname | /bin/awk -F '.' '{print $1}'`"
+if [ -n "${INKPATH:-}" ] && [ -n "${INKLDPATH:-}" ]; then
+    export PATH="$INKPATH:$PATH"
+    export APPTAINERENV_PATH="$INKPATH"
+    export LD_LIBRARY_PATH=$INKLDPATH
+    export APPTAINERENV_LD_LIBRARY_PATH=$INKLDPATH
+fi
 
+function get_free_port() {
+    while true; do
+        PORT=$(shuf -i 49152-65535 -n 1)
+        if ! /usr/sbin/ss -ltn | grep -q ":$PORT\b"; then
+            echo $PORT
+            break
+        fi
+    done
+}
 
+# Configure HERD Event Display environment
+APP_PORT=$(get_free_port)
+APP_PATH="`/bin/pwd`"
+if [ -f "${APP_PATH}/krb5cc_${UID}" ]; then
+  export KRB5CCNAME="${APP_PATH}/krb5cc_${UID}"
+fi
 
-/bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${APP_PORT}\", \"xml\": \"${HXML}\", \"root\": \"${HROOT}\"}}" > ${APP_LOGIN_INFO}
+if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; then
+  /usr/bin/aklog
+fi
 
-${HERD_BIN} ${HPORT} ${HXML} ${HROOT}  2>&1
-
+${APP_PATH}/run.sh ${APP_PORT} ${HERD_ROOT} ${HERD_XML} ${HERD_BIN}

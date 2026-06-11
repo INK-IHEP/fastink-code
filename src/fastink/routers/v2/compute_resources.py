@@ -12,7 +12,7 @@ from fastink.routers.status import InkStatus
 from fastink.common.logger import logger
 from fastink.computing.adapter.strategy import get_scheduler
 from fastink.computing.cluster.cluster import HTC_JOB, SLURM_JOB, SubmitMode
-from fastink.computing.tools.common.utils import change_username_to_uid, connect_jupyter_job, connect_openclaw_job, connect_rootbrowse_job, connect_sshd, connect_vnc_job, connect_vscode_job
+from fastink.computing.tools.common.utils import change_username_to_uid, connect_herd_display_job, connect_jupyter_job, connect_openclaw_job, connect_rootbrowse_job, connect_sshd, connect_vnc_job, connect_vscode_job
 
 router = APIRouter()
 
@@ -128,6 +128,20 @@ async def connect_common_job(
                     "url": openclaw_url,
                     "jobId": job_id,
                     "connect_type": "openclaw"
+                }
+            }
+
+        elif job_type == "herd_display":
+            host, port, herd_display_url = await connect_herd_display_job(job_id=job_id, uid=uid, clusterid=cluster_id)
+            return {
+                "status": InkStatus.SUCCESS,
+                "msg": "Request Success",
+                "data": {
+                    "host": host,
+                    "port": port,
+                    "url": herd_display_url,
+                    "jobId": job_id,
+                    "connect_type": "herd_display"
                 }
             }
         

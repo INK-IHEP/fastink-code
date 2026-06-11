@@ -259,6 +259,28 @@ async def connect_openclaw_job(job_id, uid, clusterid):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def connect_herd_display_job(job_id, uid, clusterid):
+
+    job_path, = get_job_path(uid, job_id, clusterid)
+    info_file = f"{job_path}/app_login.info"
+
+    try:
+        login_info = await read_file(uid, info_file)
+        nginx_node = get_config("computing", "nginx_node")
+
+        host = parse_info(login_info, "HOST")
+        port = parse_info(login_info, "PORT")
+        herd_display_url = f"{nginx_node}/herd_display/{host}/{port}/"
+
+        if not host or not port:
+            raise HTTPException(status_code=500, detail="No host and port record in HERD display login file.")
+
+        return host, port, herd_display_url
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 async def connect_rootbrowse_job(job_id, uid, clusterid):
 
     # 切换到指定的作业目录
@@ -626,6 +648,8 @@ async def generate_condor_submit(
             job_dir=jobdir,
             arguments=arguments,
         )
+    elif jobtype == "herd_display":
+        arguments = build_herd_display_arguments(arguments)
     
     config = {
         "universe": "vanilla",
@@ -768,6 +792,20 @@ def build_openclaw_arguments(
     return " ".join(openclaw_args)
 
 
+def build_herd_display_arguments(arguments: Optional[str] = None) -> str:
+    if arguments:
+        return arguments
+
+    herd_config = get_config("jobtype", "herd_display")
+    return " ".join(
+        [
+            quote(herd_config["herd_root"]),
+            quote(herd_config["herd_xml"]),
+            quote(herd_config["herd_bin"]),
+        ]
+    )
+
+
 async def init_sync_job_dir(username: str, job_type: str, job_dir: Optional[str] = None, script_path: Optional[str] = None) -> str:
     
     XROOTD_PATH = get_config("storage", "xrd_host")
@@ -890,6 +928,8 @@ async def generate_condor_sync_submit(
                 job_dir=job_dir,
                 arguments=arguments,
             )
+        elif job_type == "herd_display":
+            arguments = build_herd_display_arguments(arguments)
         
         config = {
             "universe": "vanilla",

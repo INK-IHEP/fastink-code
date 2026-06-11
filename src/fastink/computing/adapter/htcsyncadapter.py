@@ -26,7 +26,7 @@ class HTC_SYNC_Scheduler(SchedulerBase):
             "JobStatus", "JobStartDate", "RemoteHost", "HepJob_JobType", "HepJob_RequestOS"
         ]
         EXTRA_ATTRS = ["Iwd", "Out", "Err", "holdreason"]
-        ALL_JOB_TYPES = ["enode", "ink_special", "jupyter", "vscode", "rootbrowse", "vnc", "npu", "compile", "openclaw"]
+        ALL_JOB_TYPES = ["enode", "ink_special", "jupyter", "vscode", "rootbrowse", "vnc", "npu", "compile", "openclaw", "herd_display"]
 
         if job_type == "all":
             constraint = " || ".join([f'HepJob_JobType == "{jt}"' for jt in ALL_JOB_TYPES])
