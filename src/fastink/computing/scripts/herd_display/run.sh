@@ -9,4 +9,4 @@ APP_RUN_HOST="`/bin/hostname | /bin/awk -F '.' '{print $1}'`"
 
 /bin/echo "{\"HOST\": \"${APP_RUN_HOST}\", \"PORT\": \"${APP_PORT}\", \"xml\": \"${HERD_XML}\", \"root\": \"${HERD_ROOT}\"}" > ${APP_LOGIN_INFO}
 
-/bin/bash ${HERD_BIN} ${APP_PORT} ${HERD_XML} ${HERD_ROOT} 2>&1
+/bin/bash ${HERD_BIN} ${APP_PORT} ${HERD_XML} ${HERD_ROOT} ${APP_RUN_HOST} 2>&1
