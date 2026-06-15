@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 if [ -n "${INKPATH:-}" ] && [ -n "${INKLDPATH:-}" ]; then
     export PATH="$INKPATH:$PATH"
     export APPTAINERENV_PATH="$INKPATH"
@@ -31,5 +30,9 @@ if command -v /usr/bin/aklog >/dev/null 2>&1 && klist -s 2>/dev/null; then
 fi
 
 export VSCODE_BIN="/usr/bin/code-server"
+export NODE_OPTIONS="--max-old-space-size=5120"
+export INK_INIT_HOURS=${INK_INIT_HOURS:-24}       # 初始时长（小时）
+export INK_CHECK_INTERVAL=${INK_CHECK_INTERVAL:-900}   # 看门狗轮询间隔（秒）
+export INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800}  # 距上次活跃心跳 < 此秒数视为"真在用"
 
 ${APP_PATH}/run.sh ${APP_PATH} ${APP_PORT}

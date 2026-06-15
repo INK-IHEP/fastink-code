@@ -2,14 +2,6 @@
 
 APP_PORT=${1}
 LISTEN_PORT=${2}
-
-# =====================================================================
-# 生命周期参数（可被环境变量覆盖）
-# =====================================================================
-INK_INIT_HOURS=${INK_INIT_HOURS:-24}       # 初始时长（小时）
-INK_CHECK_INTERVAL=${INK_CHECK_INTERVAL:-300}   # 监控轮询间隔（秒）
-INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800}  # 距上次键鼠输入 < 此秒数视为"真在用"（默认5分钟）
-
 DEADLINE=$(( $(date +%s) + INK_INIT_HOURS * 3600 ))
 
 # X idle 读取依赖 Python 标准库 ctypes + 系统库 libXss（无任何第三方包）。

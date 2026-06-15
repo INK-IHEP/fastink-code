@@ -6,12 +6,6 @@ APP_PASSWD=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 APP_CONFIG_FILE="config.yaml"
 APP_LOGIN_INFO="app_login.info"
 APP_RUN_HOST="`/bin/hostname | /bin/awk -F '.' '{print $1}'`"
-
-
-INK_INIT_HOURS=${INK_INIT_HOURS:-24}       # 初始时长（小时）
-INK_CHECK_INTERVAL=${INK_CHECK_INTERVAL:-300}   # 看门狗轮询间隔（秒）
-INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800}  # 距上次活跃心跳 < 此秒数视为"真在用"
-
 DEADLINE=$(( $(date +%s) + INK_INIT_HOURS * 3600 ))
 
 # 心跳文件：由 ink-heartbeat 扩展在“窗口聚焦且有真实交互”时刷新

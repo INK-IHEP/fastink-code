@@ -32,5 +32,9 @@ export JUPYTER_PATH=\
 "/cvmfs/slurm.ihep.ac.cn/alma9/junokernel/share/jupyter/:"\
 "$JUPYTER_PATH"
 
+export INK_INIT_HOURS=${INK_INIT_HOURS:-24}             # 初始时长（小时）
+export INK_CHECK_INTERVAL=${INK_CHECK_INTERVAL:-900}    # 看门狗轮询间隔（秒）
+export INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800} # 无活动超过此分钟数视为空闲（秒）
+
 ./run.sh ${APP_PORT}
 

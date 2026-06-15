@@ -51,5 +51,9 @@ APP_PORT=$(get_free_port)
 LISTEN_PORT=$(get_free_port)
 export VNC_CMD="/opt/TurboVNC/bin/vncserver"
 export NOVNC_CMD="/cvmfs/common.ihep.ac.cn/software/noVNC-master/utils/novnc_proxy"
+export INK_INIT_HOURS=${INK_INIT_HOURS:-24}       # 初始时长（小时）
+export INK_CHECK_INTERVAL=${INK_CHECK_INTERVAL:-900}   # 监控轮询间隔（秒）
+export INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800}  # 距上次键鼠输入 < 此秒数视为"真在用"
+
 
 ./run.sh ${APP_PORT} ${LISTEN_PORT}

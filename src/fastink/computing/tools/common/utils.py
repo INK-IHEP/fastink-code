@@ -727,8 +727,18 @@ def generate_submit_command(username: str, job_dir: str, job_type: str, submitfi
         env_parts.append(env_kv("INKPATH", "$PATH"))
         env_parts.append(env_kv("INKLDPATH", "$LD_LIBRARY_PATH"))
 
+    job_walltime = int(get_config("job_time", "walltime"))
+    watch_interval = int(get_config("job_time", "check_interval"))
+    active_idle = int(get_config("job_time", "active_idle"))
+
+    env_parts.append(env_kv("INK_INIT_HOURS", job_walltime))
+    env_parts.append(env_kv("INK_CHECK_INTERVAL", watch_interval))
+    env_parts.append(env_kv("INK_ACTIVE_IDLE_SEC", active_idle))
+
+
     if krb5_enabled:
         env_parts.insert(1, env_kv("KRB5CCNAME", quote(f"{job_dir}/krb5cc_{uid}")))
+
 
     SCHEDD_HOST = get_config("computing", "schedd_host")
     CM_HOST = get_config("computing", "cm_host")
@@ -979,32 +989,6 @@ async def check_user_kerberos_ticket(username: str, uid: int, job_dir: str, time
     except Exception as e:
         logger.error(f"HTC-ASYNC-LOG: Kerberos ticket is INVALID for {username}. Error: {e}")
 
-
-# async def sub_command(command, timeoutsec, errinfo, tminfo):
-#     process = await asyncio.create_subprocess_shell(
-#         command,
-#         stdout=asyncio.subprocess.PIPE,
-#         stderr=asyncio.subprocess.PIPE,
-#         # create_subprocess_shell 本身就用 shell 了，这里不要再传 shell=True
-#     )
-
-#     try:
-#         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeoutsec)
-
-#     except asyncio.TimeoutError as e:
-#         process.kill()
-#         stdout, stderr = await process.communicate()                                                           
-#         # process.kill()                                                                                                                                     
-#         # process.stdout.close()                                                                                                                             
-#         # process.stderr.close()                                                                                                                             
-#         # await process.wait()                                                                                                                               
-#         raise Exception(f"{tminfo} {e}.")
-
-#     if process.returncode != 0:
-#         error_msg = stderr.decode(errors="ignore").strip()
-#         raise Exception(f"{errinfo} {error_msg}")
-
-#     return stdout
 
 async def sub_command(command, timeoutsec, errinfo, tminfo):
     process = await asyncio.create_subprocess_shell(
