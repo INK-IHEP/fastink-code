@@ -259,7 +259,7 @@ async def connect_openclaw_job(job_id, uid, clusterid):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def connect_herd_display_job(job_id, uid, clusterid):
+async def connect_herddisplay_job(job_id, uid, clusterid):
 
     job_path, = get_job_path(uid, job_id, clusterid)
     info_file = f"{job_path}/app_login.info"
@@ -267,15 +267,16 @@ async def connect_herd_display_job(job_id, uid, clusterid):
     try:
         login_info = await read_file(uid, info_file)
         nginx_node = get_config("computing", "nginx_node")
+        username = change_uid_to_username(uid)
 
         host = parse_info(login_info, "HOST")
         port = parse_info(login_info, "PORT")
-        herd_display_url = f"{nginx_node}/herd_display/{host}/{port}/"
+        herddisplay_url = f"{nginx_node}/herddisplay/{host}/{port}/{username}/"
 
         if not host or not port:
             raise HTTPException(status_code=500, detail="No host and port record in HERD display login file.")
 
-        return host, port, herd_display_url
+        return host, port, herddisplay_url
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -648,8 +649,8 @@ async def generate_condor_submit(
             job_dir=jobdir,
             arguments=arguments,
         )
-    elif jobtype == "herd_display":
-        arguments = build_herd_display_arguments(arguments)
+    elif jobtype == "herddisplay":
+        arguments = build_herddisplay_arguments(arguments)
     
     config = {
         "universe": "vanilla",
@@ -792,11 +793,11 @@ def build_openclaw_arguments(
     return " ".join(openclaw_args)
 
 
-def build_herd_display_arguments(arguments: Optional[str] = None) -> str:
+def build_herddisplay_arguments(arguments: Optional[str] = None) -> str:
     if arguments:
         return arguments
 
-    herd_config = get_config("jobtype", "herd_display")
+    herd_config = get_config("jobtype", "herddisplay")
     return " ".join(
         [
             quote(herd_config["herd_root"]),
@@ -928,8 +929,8 @@ async def generate_condor_sync_submit(
                 job_dir=job_dir,
                 arguments=arguments,
             )
-        elif job_type == "herd_display":
-            arguments = build_herd_display_arguments(arguments)
+        elif job_type == "herddisplay":
+            arguments = build_herddisplay_arguments(arguments)
         
         config = {
             "universe": "vanilla",

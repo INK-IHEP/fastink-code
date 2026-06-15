@@ -23,9 +23,9 @@ async def get_system_jobs():
             return formatted_job
     
         else:
-            job_total_list = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc": 0, "openclaw": 0, "herd_display": 0}
-            job_queue_list = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc": 0, "openclaw": 0, "herd_display": 0}
-            job_running_list = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc": 0, "openclaw": 0, "herd_display": 0}
+            job_total_list = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc": 0, "openclaw": 0, "herddisplay": 0}
+            job_queue_list = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc": 0, "openclaw": 0, "herddisplay": 0}
+            job_running_list = {"enode": 0, "jupyter": 0, "vscode": 0, "rootbrowse": 0, "vnc": 0, "openclaw": 0, "herddisplay": 0}
             
             
             SCHEDD_HOST = get_config("computing", "schedd_host")
@@ -33,7 +33,7 @@ async def get_system_jobs():
             command = (
                 f"condor_q "
                 f"-name {quote(SCHEDD_HOST)} "
-                f"-const 'HepJob_JobType == \"enode\" || HepJob_JobType == \"jupyter\" || HepJob_JobType == \"vscode\" || HepJob_JobType == \"rootbrowse\" || HepJob_JobType == \"vnc\" || HepJob_JobType == \"openclaw\" || HepJob_JobType == \"herd_display\"' "
+                f"-const 'HepJob_JobType == \"enode\" || HepJob_JobType == \"jupyter\" || HepJob_JobType == \"vscode\" || HepJob_JobType == \"rootbrowse\" || HepJob_JobType == \"vnc\" || HepJob_JobType == \"openclaw\" || HepJob_JobType == \"herddisplay\"' "
                 "-af Owner ClusterId ProcId HepJob_RealGroup Qdate JobStatus JobStartDate RemoteHost HepJob_JobType"
             )
             
