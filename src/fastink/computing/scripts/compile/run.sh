@@ -10,7 +10,7 @@ APP_RUN_HOST="`/bin/hostname | /bin/awk -F '.' '{print $1}'`"
 
 INK_INIT_HOURS=${INK_INIT_HOURS:-24}       # 初始时长（小时）
 INK_CHECK_INTERVAL=${INK_CHECK_INTERVAL:-300}   # 看门狗轮询间隔（秒）
-INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800}  # 距上次活跃心跳 < 此秒数视为"真在用"（默认5分钟）
+INK_ACTIVE_IDLE_SEC=${INK_ACTIVE_IDLE_SEC:-1800}  # 距上次活跃心跳 < 此秒数视为"真在用"
 
 DEADLINE=$(( $(date +%s) + INK_INIT_HOURS * 3600 ))
 
