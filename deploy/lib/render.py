@@ -367,8 +367,6 @@ def _build_storage_mapping(
         "xrootd_vo_list_content": "\n".join(xrootd_vo_entries) + ("\n" if xrootd_vo_entries else ""),
         "xrootd_port": get_str(answers, "xrootd_port", "1094"),
         "xrd_host": yaml_string("root://fastink-xrootd:1098" if enable_xrootd else "root://127.0.0.1:1094"),
-        "fs_backend": yaml_string("xrootd"),
-        "max_file_size": str(2147483648),
         "data_root": str(paths["data_root"]),
         "db_data_dir": str(paths["db_data_dir"].resolve()),
         "redis_data_dir": str(paths["redis_data_dir"].resolve()),
@@ -384,8 +382,6 @@ def _build_auth_mapping(
         "enable_krb5": str(enable_krb5).lower(),
         "krb5_enabled": str(enable_krb5).lower(),
         "auth_type": yaml_string("krb5" if enable_krb5 else "password"),
-        "security_access": str(False).lower(),
-        "ip_whitelist_access": str(False).lower(),
     }
 
 
@@ -423,12 +419,6 @@ def _build_computing_mapping(
             get_int(answers, "htcondor_default_request_cpus", 1),
             get_int(answers, "htcondor_default_request_memory", 6000),
         ),
-        "site": yaml_string("generic"),
-        "cluster_scripts": yaml_string("/ink/src/fastink/computing/scripts"),
-        "ink_dir": yaml_string("/home/{username}"),
-        "gateway_node": yaml_string("localhost"),
-        "service_port": str(2000),
-        "service_node_yaml": yaml_string("fastink-rootbrowse"),
         "server_condor_conf_host_path": server_condor_conf_host_path,
         "cron_condor_conf_host_path": cron_condor_conf_host_path,
         "htcondor_local_conf_host_path": htcondor_local_conf_host_path,
@@ -620,9 +610,6 @@ def build_mapping(
         "db_user_yaml": yaml_string(get_str(answers, "db_user")),
         "db_password_yaml": yaml_string(get_str(answers, "db_password")),
         "redis_password_yaml": yaml_string(get_str(answers, "redis_password")),
-        "app_plugins": yaml_string(""),
-        "router_plugins": yaml_string(""),
-        "unified_plugin_packages": yaml_string(""),
     })
     return mapping
 
