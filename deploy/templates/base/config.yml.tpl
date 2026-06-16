@@ -66,6 +66,11 @@ crond:
   submit_workers: []
   async_submit_retries: 3
 
+job_time:
+  walltime: 24
+  check_interval: 900
+  active_idle: 1800
+
 jobtype:
 ${jobtype_defaults_block}
 
