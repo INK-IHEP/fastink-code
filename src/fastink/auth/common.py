@@ -513,7 +513,7 @@ def get_user_permission(
         raise NoResultFound("User permission not found")
 
 
-@transactional_session
+@read_session
 def get_user_permissions(
     user_id: str, *, session: Session
 ) -> Optional[list[dict[str, Any]]]:
@@ -651,3 +651,151 @@ def delete_user_authorization(
         return True
     except DatabaseError:
         raise DatabaseError("Failed to delete user authorization")
+
+
+# ---------------------------------------------------------------------------
+# Group-Permission mapping DAL
+# ---------------------------------------------------------------------------
+
+
+@transactional_session
+def add_group_permission(
+    group_name: str, permission_id: str, *, session: Session
+) -> bool:
+    """Map a Linux group to a permission.
+
+    Raises sqlalchemy.exc.IntegrityError if the mapping already exists.
+    """
+    new_mapping = models.GroupPermissions(
+        group_name=group_name,
+        permission_id=permission_id,
+    )
+    new_mapping.save(session=session, flush=True)
+    return True
+
+
+@read_session
+def get_group_permission(
+    group_name: str, permission_id: str, *, session: Session
+) -> Optional[dict[str, Any]]:
+    """Get a single group-permission mapping."""
+    stmt = select(models.GroupPermissions).where(
+        models.GroupPermissions.group_name == group_name,
+        models.GroupPermissions.permission_id == permission_id,
+    )
+    try:
+        result = session.execute(stmt).scalar_one()
+        return result.to_dict()
+    except NoResultFound:
+        raise NoResultFound("Group permission mapping not found")
+
+
+@read_session
+def get_group_permissions(
+    group_name: str, *, session: Session
+) -> list[dict[str, Any]]:
+    """Get all permission mappings for a given group."""
+    stmt = select(models.GroupPermissions).where(
+        models.GroupPermissions.group_name == group_name
+    )
+    result = session.execute(stmt).scalars().all()
+    return [r.to_dict() for r in result]
+
+
+@transactional_session
+def delete_group_permission(
+    group_name: str, permission_id: str, *, session: Session
+) -> bool:
+    """Remove a group-to-permission mapping."""
+    try:
+        stmt = delete(models.GroupPermissions).where(
+            models.GroupPermissions.group_name == group_name,
+            models.GroupPermissions.permission_id == permission_id,
+        )
+        session.execute(stmt)
+        session.flush()
+        return True
+    except DatabaseError:
+        raise DatabaseError("Failed to delete group permission")
+
+
+@transactional_session
+def delete_all_group_permissions_by_permission(
+    permission_id: str, *, session: Session
+) -> int:
+    """Delete all group_permission records associated with a permission.
+
+    Returns the number of records deleted.
+    """
+    try:
+        stmt = delete(models.GroupPermissions).where(
+            models.GroupPermissions.permission_id == permission_id
+        )
+        result = session.execute(stmt)
+        session.flush()
+        return result.rowcount
+    except DatabaseError:
+        raise DatabaseError("Failed to delete group permissions by permission")
+
+
+# —— Reverse-lookup functions ——
+
+
+@read_session
+def get_permissions_by_group_name(
+    group_name: str, *, session: Session
+) -> list[str]:
+    """Return permission name strings for a given Linux group.
+
+    Returns empty list if the group has no permissions mapped.
+    """
+    stmt = (
+        select(models.Permissions.permission)
+        .join(
+            models.GroupPermissions,
+            models.GroupPermissions.permission_id == models.Permissions.id,
+        )
+        .where(models.GroupPermissions.group_name == group_name)
+    )
+    result = session.execute(stmt).scalars().all()
+    return list(result)
+
+
+@read_session
+def get_group_names_by_permission(
+    permission_name: str, *, session: Session
+) -> list[str]:
+    """Return Linux group names that grant a given permission.
+
+    Returns empty list if no groups grant this permission.
+    """
+    stmt = (
+        select(models.GroupPermissions.group_name)
+        .join(
+            models.Permissions,
+            models.Permissions.id == models.GroupPermissions.permission_id,
+        )
+        .where(models.Permissions.permission == permission_name)
+    )
+    result = session.execute(stmt).scalars().all()
+    return list(result)
+
+
+@read_session
+def get_all_group_permissions(
+    *, session: Session
+) -> list[dict[str, Any]]:
+    """Return all group-permission mappings with resolved permission names."""
+    stmt = (
+        select(
+            models.GroupPermissions.group_name,
+            models.Permissions.permission,
+        )
+        .join(
+            models.Permissions,
+            models.Permissions.id == models.GroupPermissions.permission_id,
+        )
+        .order_by(models.GroupPermissions.group_name, models.Permissions.permission)
+    )
+    result = session.execute(stmt).all()
+    return [{"group_name": r[0], "permission": r[1]} for r in result]

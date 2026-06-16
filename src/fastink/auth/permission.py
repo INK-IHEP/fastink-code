@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, DatabaseError
 from typing import Optional, Callable
 
 from fastink.auth import common
+from fastink.auth.groups import get_user_groups
 from fastink.auth.krb5 import get_krb5
 from fastink.common.logger import logger
 from fastink.common.utils import timer
@@ -22,11 +23,11 @@ def add_permission(permission: str) -> bool:
 
 
 def delete_permission(permission: str) -> bool:
-    """Delete a permission and all associated user_permission records.
+    """Delete a permission and all associated user_permission and group_permission records.
 
-    This function first deletes all user_permission records that reference
-    this permission, then deletes the permission itself to avoid foreign
-    key constraint violations.
+    This function first deletes all user_permission and group_permission records
+    that reference this permission, then deletes the permission itself to avoid
+    foreign key constraint violations.
 
     Returns:
         bool: True if deletion was successful, False otherwise
@@ -36,8 +37,9 @@ def delete_permission(permission: str) -> bool:
     except NoResultFound:
         return False
     try:
-        # First delete all user_permission records that reference this permission
+        # First delete all user_permission and group_permission records
         common.delete_all_user_permissions_by_permission(permission_id=permission_id)
+        common.delete_all_group_permissions_by_permission(permission_id=permission_id)
         # Then delete the permission itself
         common.delete_permission(permission_id=permission_id)
     except (IntegrityError, DatabaseError):
@@ -82,17 +84,43 @@ def query_user_permissions(
     username: str = None, email: str = None, uid: str = None
 ) -> list:
     try:
-        user_id = common.get_user(username=username, email=email, uid=uid)["id"]
-    except Exception:
-        raise Exception("User not found")
+        user_record = common.get_user(username=username, email=email, uid=uid)
+        user_id = user_record["id"]
+        resolved_username = user_record["username"]
+    except NoResultFound:
+        raise NoResultFound("User not found")
+
+    permissions = list()
+
+    # Step 1: Collect direct user_permissions
     try:
         user_permissions = common.get_user_permissions(user_id=user_id)
-    except:
-        return []
-    permissions = list()
-    for user_permission in user_permissions:
-        permission_name = common.get_permission_name(user_permission["permission_id"])
-        permissions.append(permission_name)
+        for up in user_permissions:
+            permission_name = common.get_permission_name(up["permission_id"])
+            permissions.append(permission_name)
+    except NoResultFound:
+        pass  # No direct permissions, continue to group check
+
+    # Step 2: Collect group-based permissions (NEW)
+    try:
+        user_groups = get_user_groups(resolved_username)
+    except Exception as e:
+        logger.warning(
+            "Failed to resolve groups for user %s: %s", resolved_username, e
+        )
+        user_groups = []
+
+    for group_name in user_groups:
+        try:
+            group_perms = common.get_permissions_by_group_name(
+                group_name=group_name
+            )
+        except (NoResultFound, DatabaseError):
+            continue
+        for perm_name in group_perms:
+            if perm_name not in permissions:
+                permissions.append(perm_name)
+
     # Stupid hack to make CentOS7 and AlmaLinux9 permissions appear first in the list
     if "AlmaLinux9" in permissions:
         permissions.remove("AlmaLinux9")
@@ -104,39 +132,112 @@ def query_user_permissions(
 
 
 def query_users_by_permission(permission: str) -> list:
-    """Query all users who have a specific permission.
+    """Query all users who have a specific permission (direct OR via group).
 
     Raises NoResultFound if the permission does not exist.
     Returns an empty list if the permission exists but no users have it.
     """
     # Validate that the permission exists (raises NoResultFound if not)
     common.get_permission(permission=permission)
-    return common.get_users_by_permission(permission_name=permission)
+
+    # Step 1: Get users with direct permission (pure DB query)
+    direct_users = common.get_users_by_permission(permission_name=permission)
+    direct_ids = {u["id"] for u in direct_users}
+
+    # Step 2: Get Linux groups that grant this permission
+    group_names = common.get_group_names_by_permission(permission_name=permission)
+    if not group_names:
+        return direct_users
+
+    # Step 3: For each user NOT already included, check their Linux groups
+    all_users = common.get_users()
+    result = list(direct_users)
+
+    for user in all_users:
+        if user["id"] in direct_ids:
+            continue
+        try:
+            user_groups = get_user_groups(user["username"])
+            if any(g in group_names for g in user_groups):
+                result.append(user)
+        except Exception as e:
+            logger.warning(
+                "Failed to resolve groups for user %s: %s",
+                user["username"], e,
+            )
+            continue
+
+    return result
 
 
 @hookable
 def check_user_permission(username: str, permission: str) -> bool:
+    if not username or not permission:
+        raise ValueError(
+            f"username and permission must be non-empty strings, "
+            f"got username={username!r}, permission={permission!r}"
+        )
+
     user_id = common.get_user(username=username)["id"]
     perm_id = common.get_permission(permission=permission)["id"]
 
-    if common.get_user_permission(user_name=user_id, permission_id=perm_id):
-        logger.debug(f"User {username} has permission {permission}")
-        return True
-    else:
-        logger.debug(f"User {username} does not have permission {permission}")
-        return False
+    # Step 1: Check direct user_permissions (existing logic)
+    try:
+        if common.get_user_permission(user_id=user_id, permission_id=perm_id):
+            logger.debug(f"User {username} has direct permission {permission}")
+            return True
+    except NoResultFound:
+        pass  # No direct permission, continue to group check
+
+    # Step 2: Check group-based permissions (NEW)
+    try:
+        user_groups = get_user_groups(username)
+    except Exception as e:
+        logger.warning(
+            "Failed to resolve groups for user %s: %s", username, e
+        )
+        user_groups = []
+
+    if user_groups:
+        try:
+            group_names = common.get_group_names_by_permission(
+                permission_name=permission
+            )
+        except (NoResultFound, DatabaseError) as e:
+            logger.warning(
+                "Failed to query group permissions for %s: %s", permission, e
+            )
+            group_names = []
+        if any(g in group_names for g in user_groups):
+            logger.debug(
+                f"User {username} has permission {permission} via group membership"
+            )
+            return True
+
+    logger.debug(f"User {username} does not have permission {permission}")
+    return False
 
 
+@hookable
 def check_user_app(username: str, app: str) -> bool:
+    if not username or not app:
+        raise ValueError(
+            f"username and app must be non-empty strings, "
+            f"got username={username!r}, app={app!r}"
+        )
+
     user_id = common.get_user(username=username)["id"]
     app_id = common.get_app(app=app)["id"]
 
-    if common.get_user_app(user_name=user_id, app_id=app_id):
-        logger.debug(f"User {username} has access to app {app}")
-        return True
-    else:
-        logger.debug(f"User {username} does not have access to app {app}")
-        return False
+    try:
+        if common.get_user_app(user_id=user_id, app_id=app_id):
+            logger.debug(f"User {username} has access to app {app}")
+            return True
+    except NoResultFound:
+        pass
+
+    logger.debug(f"User {username} does not have access to app {app}")
+    return False
 
 
 def has_permission(
