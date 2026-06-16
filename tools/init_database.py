@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 
 from fastink.common.config import get_config
 from fastink.common.logger import logger
@@ -89,6 +90,33 @@ def init_db():
             common.add_authentication(authentication)
         except:
             pass
+
+    # Seed group-based permission mappings (replaces hardcoded logic)
+    group_perm_mappings = [
+        {"group_name": "physics", "permission": "CentOS7"},
+    ]
+    for mapping in group_perm_mappings:
+        try:
+            perm_id = common.get_permission(permission=mapping["permission"])["id"]
+        except Exception:
+            logger.warning(
+                "Skipping group_permission seed %s -> %s: permission not found",
+                mapping["group_name"],
+                mapping["permission"],
+            )
+            continue
+        try:
+            common.add_group_permission(
+                group_name=mapping["group_name"],
+                permission_id=perm_id,
+            )
+            logger.info(
+                "Seeded group_permission: %s -> %s",
+                mapping["group_name"],
+                mapping["permission"],
+            )
+        except IntegrityError:
+            pass  # Mapping already exists, skip
 
 
 if __name__ == "__main__":
