@@ -2,6 +2,7 @@
 
 import subprocess, os, sys, re, asyncio
 from typing import List, Dict, Any
+from dateutil import parser, tz
 from fastink.storage.utils import storage_init, PathType, mode_map, nice_size, async_exec, async_shell, path_stat, unquote_expand_user, async_timer, sync_timer, gen_empty_zip
 from fastink.storage.fuse import get_file_stream, init_ink_space
 from fastink.common.logger import logger
@@ -195,7 +196,7 @@ async def list_path(
                                 "user": ll[1],
                                 "group": ll[2],
                                 "size": fsize,
-                                "time": f"{ll[4]} {ll[5]}",
+                                "time": parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()),
                                 "path": ll[6],
                             }
                         )
@@ -208,7 +209,7 @@ async def list_path(
                                 "user": ll[1],
                                 "group": ll[2],
                                 "size": fsize,
-                                "time": f"{ll[4]} {ll[5]}",
+                                "time": parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()),
                                 "path": ll[6],
                             }
                         )

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import subprocess, os, sys, re, asyncio, uuid
+from dateutil import parser, tz
 from fastink.storage.utils import storage_init, PathType, nice_size, mode_map, async_exec, path_stat, unquote_expand_user, async_timer
 from fastink.common.logger import logger
 from fastink.common.exception import TokenExpiredException
@@ -163,7 +164,7 @@ async def list_path(
                                 "user": ll[1],
                                 "group": ll[2],
                                 "size": fsize,
-                                "time": f"{ll[4]} {ll[5]}",
+                                "time": parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()),
                                 "path": ll[6],
                             }
                         )
@@ -176,7 +177,7 @@ async def list_path(
                                 "user": ll[1],
                                 "group": ll[2],
                                 "size": fsize,
-                                "time": f"{ll[4]} {ll[5]}",
+                                "time": parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()),
                                 "path": ll[6],
                             }
                         )
