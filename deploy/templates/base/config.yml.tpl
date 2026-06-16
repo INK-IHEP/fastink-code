@@ -1,8 +1,50 @@
+# =============================================================================
+# FastINK Application Configuration — Canonical Defaults
+# =============================================================================
+#
+# This file is the single source of truth for ALL config keys.
+# Every key that get_config() reads at runtime must have a default here.
+#
+# HOW TO ADD A NEW CONFIG KEY
+# ===========================
+#
+#   Does the value need to be provided by the person running `fastinkctl deploy`?
+#   (e.g. database password, hostname, port number)
+#     YES → 1. Add a $${variable} placeholder here
+#            2. Add it to the questionnaire: deploy/lib/questionnaire.py
+#            3. Add a mapping entry: deploy/lib/render.py:build_mapping()
+#     NO  → Just hardcode the default value directly in this file.
+#
+#   Will different sites (IHEP, HAI, HEPS) need different values?
+#     YES → Put the generic default here, then override it in the
+#           site overlay (fastink-dev/overlay/config.ihep.yml).
+#
+# LAYERING (deep-merge order)
+# ===========================
+#   this template (after $${variable} substitution)
+#     → + site overlay (e.g. fastink-dev/overlay/config.ihep.yml)
+#       → + dev overlay (e.g. .vscode/.generated/config.dev.overlay.yml)
+#         = final config.yml
+#
+# ⚠  Overlays must ONLY override keys that already exist here.
+#    Never add a new key exclusively in an overlay.
+#
+# Keys not included here (no universal default — code fallback or site-specific):
+#   omat.*                   — external monitoring database (see fastink-dev/redis/omat-config.yml)
+#   graphite.*               — Graphite metrics endpoint
+#   assistant.*              — AI assistant configuration (see assistant-architecture.md)
+#   test.*                   — test credentials (IHEP development only)
+#   service.openclaw_template_dir — computed from package path (openclaw.py fallback)
+#   service.openclaw_container_image — depends on site image path (overridden by IHEP overlay)
+# =============================================================================
+
 common:
   krb5_enabled: ${krb5_enabled}
-  security_access: ${security_access}
-  ip_whitelist_access: ${ip_whitelist_access}
+  security_access: false
+  ip_whitelist_access: false
   log_level: INFO
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s (line %(lineno)d): %(message)s"
+  log_datefmt: "%Y-%m-%d %H:%M:%S"
   log_path: /ink/ink.log
 
 database:
@@ -42,11 +84,11 @@ security:
 
 storage:
   xrd_host: ${xrd_host}
-  fs_backend: ${fs_backend}
-  max_file_size: ${max_file_size}
+  fs_backend: xrootd
+  max_file_size: 2147483648
 
 computing:
-  site: ${site}
+  site: generic
   cluster_list:
 ${cluster_list_block}
   iptables_jobtype: []
@@ -54,17 +96,18 @@ ${cluster_list_block}
 ${noenv_jobtype_block}
   schedd_host: ${schedd_host}
   cm_host: ${cm_host}
-  gateway_node: ${gateway_node}
-  cluster_scripts: ${cluster_scripts}
+  gateway_node: localhost
+  cluster_scripts: /ink/src/fastink/computing/scripts
   interactive_job_time_limit: "24:00:00"
   nginx_node: ${public_base_url_yaml}
-  ink_dir: ${ink_dir}
+  ink_dir: /home/{username}
   start_keywords:
 ${start_keywords_block}
 
 crond:
   submit_workers: []
   async_submit_retries: 3
+  retry_delay_seconds: 10
 
 job_time:
   walltime: 24
@@ -74,18 +117,26 @@ job_time:
 jobtype:
 ${jobtype_defaults_block}
 
+hooks:
+  modules: ""
+
 app:
-  plugins: ${app_plugins}
+  plugins: ""
 
 plugins:
-  router_plugins: ${router_plugins}
+  router_plugins: ""
 
 unified_plugins:
-  packages: ${unified_plugin_packages}
+  packages: ""
 
 service:
-  service_node: ${service_node_yaml}
-  service_port: ${service_port}
-  ink_dir: ${ink_dir}
+  service_node: fastink-rootbrowse
+  service_port: 2000
+  ink_dir: /home/{username}
   monitor_url: ${public_base_url_yaml}
   job_monitor_url: ${public_base_url_yaml}
+  rootbrowse_script: /dev/shm/start-rootbrowse.sh
+  rootbrowse_check_script: /dev/shm/check-rootbrowse.sh
+  openclaw_user_root: /scratchfs/{experiment_group_lower}/{username}
+  openclaw_models_relpath: .openclaw
+  openclaw_exp_bind_map_file: /afs/ihep.ac.cn/soft/common/sysgroup/exp_file.json
