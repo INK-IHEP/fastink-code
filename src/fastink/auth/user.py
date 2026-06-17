@@ -5,7 +5,7 @@ from typing import Any, Optional
 from fastink.auth import common
 from fastink.auth import permission
 from fastink.common.logger import logger
-from fastink.common.utils import query_umt_uid, query_umt_username, query_umt_group
+from fastink.common.utils import query_umt_uid, query_umt_username
 from fastink.common.config import get_config
 
 
@@ -50,11 +50,9 @@ def add_user(
         logger.error("User already exists")
         raise ValueError("User already exists")
 
-    # Add user default permission
+    # Add user default permissions
     permission.add_user_permission(username=username, permission="cpu")
     permission.add_user_permission(username=username, permission="AlmaLinux9")
-    if query_umt_group(email) == "physics":
-        permission.add_user_permission(username=username, permission="CentOS7")
 
     return True
 

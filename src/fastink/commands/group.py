@@ -3,131 +3,99 @@ import json
 
 from sqlalchemy.exc import DatabaseError, IntegrityError, NoResultFound
 
-from fastink.auth import permission as perm_module
 from fastink.auth import common
-from fastink.commands.basecommand import TopLevelCommand, OperationDict
+from fastink.commands.basecommand import CommandBase, TopLevelCommand, OperationDict
 from fastink.common.utils import convert_to_str
 
 
-class Permission(TopLevelCommand):
+class Group(TopLevelCommand):
 
     def module_help(self) -> str:
-        return "Permissions management"
+        return "Linux group management"
 
     def usage_example(self) -> list[str]:
         return [
-            "ink permission list",
-            "ink permission add --permission=test_permission",
-            "ink permission delete --permission=test_permission",
+            "ink group permission list",
+            "ink group permission list --group=physics",
+            "ink group permission add --group=physics --permission=CentOS7",
+            "ink group permission delete --group=physics --permission=CentOS7",
         ]
 
     def _operations(self) -> dict[str, OperationDict]:
+        return {}
+
+    def implemented_subcommands(self) -> dict[str, type[CommandBase]]:
+        return {"permission": Permission}
+
+
+class Permission(CommandBase):
+    def module_help(self) -> str:
+        return "Linux group to permission mapping"
+
+    def usage_example(self) -> list[str]:
+        return [
+            "ink group permission list",
+            "ink group permission list --group=physics",
+            "ink group permission add --group=physics --permission=CentOS7",
+            "ink group permission delete --group=physics --permission=CentOS7",
+        ]
+
+    def implemented_subcommands(self) -> dict[str, type[CommandBase]]:
+        return {}
+
+    def _operations(self) -> dict[str, OperationDict]:
         return {
-            "add": {
-                "call": self.add_permission,
-                "docs": "Add a new permission",
-                "namespace": self.add_namespace,
-            },
             "list": {
-                "call": self.list_permissions,
-                "docs": "List all permissions",
-            },
-            "delete": {
-                "call": self.delete_permission,
-                "docs": "Delete a permission and all associated user/group permissions",
-                "namespace": self.delete_namespace,
-            },
-            "add_group_permission": {
-                "call": self.add_group_permission,
-                "docs": "Map a Linux group to a permission",
-                "namespace": self.add_group_permission_namespace,
-            },
-            "delete_group_permission": {
-                "call": self.delete_group_permission,
-                "docs": "Remove a Linux group-to-permission mapping",
-                "namespace": self.delete_group_permission_namespace,
-            },
-            "list_group_permissions": {
                 "call": self.list_group_permissions,
                 "docs": "List all group-permission mappings",
-                "namespace": self.list_group_permissions_namespace,
+                "namespace": self.list_namespace,
+            },
+            "add": {
+                "call": self.add_group_permission,
+                "docs": "Map a Linux group to a permission",
+                "namespace": self.add_namespace,
+            },
+            "delete": {
+                "call": self.delete_group_permission,
+                "docs": "Remove a Linux group-to-permission mapping",
+                "namespace": self.delete_namespace,
             },
         }
 
-    def implemented_subcommands(self) -> dict[str, type["CommandBase"]]:
-        return {}
+    # —— Namespace ——
 
-    def add_namespace(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--permission",
-            required=True,
-            help="Name of the permission",
-        )
-
-    def delete_namespace(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--permission",
-            required=True,
-            help="Name of the permission to delete",
-        )
-
-    def list_permissions(self) -> None:
-        try:
-            permissions = common.get_all_permissions()
-            if not permissions:
-                print("No permissions found")
-                return
-            print("Listing permissions...")
-            print(json.dumps(permissions, default=convert_to_str, indent=4))
-        except Exception as e:
-            print(f"Failed to list permissions: {e}")
-
-    def add_permission(self):
-        result = perm_module.add_permission(permission=self.args.permission)
-        if result:
-            print(f"Permission '{self.args.permission}' added successfully!")
-        else:
-            print(f"Failed to add permission '{self.args.permission}'!")
-
-    def delete_permission(self):
-        result = perm_module.delete_permission(permission=self.args.permission)
-        if result:
-            print(f"Permission '{self.args.permission}' deleted successfully!")
-        else:
-            print(f"Failed to delete permission '{self.args.permission}'!")
-
-    # —— Group permission management ——
-
-    def add_group_permission_namespace(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--group",
-            required=True,
-            help="Linux group name",
-        )
-        parser.add_argument(
-            "--permission",
-            required=True,
-            help="Permission name",
-        )
-
-    def delete_group_permission_namespace(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument(
-            "--group",
-            required=True,
-            help="Linux group name",
-        )
-        parser.add_argument(
-            "--permission",
-            required=True,
-            help="Permission name",
-        )
-
-    def list_group_permissions_namespace(self, parser: argparse.ArgumentParser) -> None:
+    def list_namespace(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument(
             "--group",
             required=False,
             help="Filter by Linux group name",
         )
+
+    def add_namespace(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--group",
+            required=True,
+            help="Linux group name",
+        )
+        parser.add_argument(
+            "--permission",
+            required=True,
+            help="Permission name",
+        )
+
+    def delete_namespace(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--group",
+            required=True,
+            help="Linux group name",
+        )
+        parser.add_argument(
+            "--permission",
+            required=True,
+            help="Permission name",
+        )
+
+    # —— Operations ——
 
     def add_group_permission(self):
         try:

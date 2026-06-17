@@ -27,7 +27,7 @@ setup(
         "fastapi",
         "fastapi_utils",
         "filelock",
-        "htcondor==24.0.18",
+        "htcondor==24.0.20",
         "httpx",
         "influxdb",
         "paramiko",

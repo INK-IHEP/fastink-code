@@ -188,6 +188,25 @@ class UserPermissions(BASE, ModelBase):
     )
 
 
+class GroupPermissions(BASE, ModelBase):
+    __tablename__ = "group_permissions"
+    group_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    permission_id: Mapped[uuid.UUID] = mapped_column(GUID(), nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "group_name", "permission_id", name="GROUP_PERMISSIONS_PK"
+        ),
+        ForeignKeyConstraint(
+            ["permission_id"],
+            ["permissions.id"],
+            name="GROUP_PERMISSIONS_PERMISSION_FK",
+        ),
+        Index("GROUP_PERMISSIONS_GROUP_IDX", "group_name"),
+        Index("GROUP_PERMISSIONS_PERMISSION_IDX", "permission_id"),
+    )
+
+
 class UserAuthorizations(BASE, ModelBase):
     __tablename__ = "user_authorizations"
     user_id: Mapped[uuid.UUID] = mapped_column(GUID(), nullable=False)
