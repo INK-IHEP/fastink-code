@@ -58,14 +58,13 @@ EOL
 echo "[INK] VSCode 初始时长 ${INK_INIT_HOURS} 小时，初始截止：$(date -d @${DEADLINE} '+%F %T')"
 
 INK_VSCODE_EXT_SHARED="/cvmfs/common.ihep.ac.cn/software/ink/soft/extensions/ink-heartbeat-ext"
-INK_EXT_DIR="${APP_PATH}/.ink_extensions/ink.ink-heartbeat-1.0.0"
+INK_EXT_DIR="${HOME}/.local/share/code-server/extensions/ink.ink-heartbeat-1.0.0"
 mkdir -p "$INK_EXT_DIR"
 cp -rf "${INK_VSCODE_EXT_SHARED}/." "$INK_EXT_DIR/"
 export INK_HEARTBEAT_FILE
-INK_VSCODE_EXTRA_ARGS="--extensions-dir ${APP_PATH}/.ink_extensions"
 
-# 后台启动 code-server（加载心跳扩展），看门狗守护其 PID
-${VSCODE_BIN} --config ${APP_PATH}/${APP_CONFIG_FILE} ${INK_VSCODE_EXTRA_ARGS} 2>&1 &
+# 后台启动 code-server（加载心跳扩展，使用默认扩展目录），看门狗守护其 PID
+${VSCODE_BIN} --config ${APP_PATH}/${APP_CONFIG_FILE} 2>&1 &
 APP_PID=$!
 
 trap 'kill -TERM ${APP_PID} 2>/dev/null' INT TERM
