@@ -38,7 +38,7 @@ DEFAULT_OPENCLAW_TEMPLATES = {
         "base_url": "https://aiapi.ihep.ac.cn/apiv2",
         "api_key": "",
         "api_name": "openai-completions",
-        "model_id": "hepai/deepseek-v4-flash",
+        "model_id": "hepai/deepseek-v4-pro",
     },
     "Deepseek": {
         "base_url": "https://api.deepseek.com",
@@ -62,7 +62,7 @@ DEFAULT_OPENCLAW_TEMPLATES = {
         "base_url": "https://api.minimaxi.com/anthropic",
         "api_key": "",
         "api_name": "anthropic-messages",
-        "model_id": "MiniMax-M2.7",
+        "model_id": "MiniMax-M3",
     },
     "Xiaomi mimo token plan": {
         "base_url": "https://token-plan-cn.xiaomimimo.com/v1",
