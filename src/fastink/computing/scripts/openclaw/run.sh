@@ -364,6 +364,10 @@ if [ "$(printf '%s\n' "${CONFIG_MODEL_REPORT}" | awk -F= '/^RESULT=/{print $2}' 
     done < <(resolve_extra_readonly_binds)
 fi
 
+if [ -d /scratchfs2 ]; then
+    EXTRA_BINDS+=(--bind /scratchfs2:/scratchfs2:rw)
+fi
+
 if [ -d /var/run/munge ]; then
     EXTRA_BINDS+=(--bind /var/run/munge:/var/run/munge:ro)
 fi
@@ -379,7 +383,7 @@ log "base_path=${APP_BASE_PATH}"
 log "auth_mode=token"
 log "local_only_models=${LOCAL_ONLY_MODELS}"
 if [ "${#EXTRA_BINDS[@]}" -gt 0 ]; then
-    log "extra_readonly_binds=${EXTRA_BINDS[*]}"
+    log "extra_binds=${EXTRA_BINDS[*]}"
 fi
 
 OPENCLAW_CONFIG_FILE="${OPENCLAW_CONFIG_FILE}" \
