@@ -35,9 +35,6 @@ services:
       - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
       - ${preload_cron_dir}:/opt/preload/cron:ro
       - ${cron_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
-${cron_krb5_conf_mount_block}
-${cron_slurm_mounts_block}
-${cron_extra_mounts_block}
 
   fastink-rootbrowse:
     image: ${rootbrowse_image}
@@ -55,7 +52,6 @@ ${cron_extra_mounts_block}
       - ${etc_init_dir}:/etc-init
       - ${rootbrowse_authorized_keys_host_path}:${rootbrowse_authorized_keys_container_path}:ro
       - ${preload_rootbrowse_dir}:/opt/preload/rootbrowse:ro
-${rootbrowse_extra_mounts_block}
     ports:
       - "${rootbrowse_port}:${rootbrowse_container_port}"
     tmpfs:
