@@ -450,12 +450,17 @@ def build_mapping(
     answers: DeployAnswers,
     paths: dict[str, Path],
     deploy_dir: Path,
+    *,
+    extra_mount_entries: Optional[list[str]] = None,
 ) -> dict[str, str]:
     """Compose the full template-variable mapping from domain sub-functions.
 
     The function computes shared values once, then delegates each logical
     group of keys to a dedicated ``_build_*_mapping`` helper.  Remaining
     general-purpose keys are added directly.
+
+    If *extra_mount_entries* is provided it is used directly (caller
+    has already loaded the file); otherwise the file is read here.
     """
     version_env = source_version_env()
     config_path = deploy_dir / "config.yml"
@@ -467,7 +472,8 @@ def build_mapping(
     enable_local_htcondor = get_bool(answers, "enable_local_htcondor")
 
     # ---- extra mounts ----
-    extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
+    if extra_mount_entries is None:
+        extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
     xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
 
     # ---- computing defaults ----
@@ -630,7 +636,7 @@ def build_compose_volume_overlay(
     return overlay
 
 
-def build_compose_port_overlay(enable_nginx: bool, host_port: str) -> dict:
+def build_compose_port_overlay(enable_nginx: bool, host_port: int) -> dict:
     """Build a compose overlay dict for the server port configuration.
 
     When nginx is enabled the server only exposes port 8000 internally.
@@ -742,10 +748,14 @@ def render_bundle(
     if initialize_host_assets:
         ensure_rootbrowse_ssh_material(paths)
         ensure_nginx_tls_material(answers, paths)
-    mapping = build_mapping(profile, answers, paths, deploy_dir)
+
+    # Load extra mounts once, shared by build_mapping (xrootd VO) and
+    # build_compose_volume_overlay (dynamic compose volumes).
+    extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
+    mapping = build_mapping(profile, answers, paths, deploy_dir,
+                            extra_mount_entries=extra_mount_entries)
 
     # Build dynamic compose overlays (replaces template string injection)
-    extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
     volume_overlay = build_compose_volume_overlay(
         extra_mount_entries=extra_mount_entries,
         enable_krb5=get_bool(answers, "enable_krb5"),
@@ -758,7 +768,7 @@ def render_bundle(
     )
     port_overlay = build_compose_port_overlay(
         enable_nginx=get_bool(answers, "enable_nginx"),
-        host_port=get_str(answers, "host_port", "8000"),
+        host_port=get_int(answers, "host_port", 8000),
     )
 
     bundle = {
