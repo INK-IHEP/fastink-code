@@ -320,7 +320,7 @@ def main() -> None:
     sys.exit(1)
 
 
-def build_or_pull_images(answers: dict[str, object]) -> None:
+def build_or_pull_images(answers: DeployAnswers) -> None:
     cli_ui.step("Prepare images")
 
     if answers["image_source"] == "build":

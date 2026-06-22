@@ -225,21 +225,6 @@ def build_xrootd_vo_entries(extra_mount_entries: list[str]) -> list[str]:
     return entries
 
 
-def render_volume_block(entries: list[str], indent: int = 6) -> str:
-    if not entries:
-        return ""
-    rendered = yaml.safe_dump(entries, default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()
-    prefix = " " * indent
-    return "\n" + "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
-
-
-def render_optional_single_volume_block(entry: Optional[str], indent: int = 6) -> str:
-    if not entry:
-        return ""
-    rendered = yaml.safe_dump([entry], default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()
-    prefix = " " * indent
-    return "\n" + "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
-
 
 def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
     rendered = yaml.safe_dump(values, sort_keys=False, allow_unicode=True).rstrip()
@@ -586,7 +571,6 @@ def build_mapping(
 
 
 def build_compose_volume_overlay(
-    answers: DeployAnswers,
     extra_mount_entries: list[str],
     enable_krb5: bool,
     krb5_conf_host_path: str,
@@ -768,7 +752,6 @@ def render_bundle(
     # Build dynamic compose overlays (replaces template string injection)
     extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
     volume_overlay = build_compose_volume_overlay(
-        answers,
         extra_mount_entries=extra_mount_entries,
         enable_krb5=get_bool(answers, "enable_krb5"),
         krb5_conf_host_path=get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf"),

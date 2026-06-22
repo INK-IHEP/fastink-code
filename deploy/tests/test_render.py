@@ -1,11 +1,7 @@
 """Render utility tests: YAML block generation, deep_merge, profile_chain, etc."""
-from typing import Optional
-
 import pytest
 import yaml
 from deploy.lib.render import (
-    render_volume_block,
-    render_optional_single_volume_block,
     render_yaml_list_block,
     default_jobtype_config_block,
     yaml_string,
@@ -13,31 +9,6 @@ from deploy.lib.render import (
     deep_merge,
     build_xrootd_vo_entries,
 )
-
-
-class TestRenderVolumeBlock:
-    @pytest.mark.parametrize(["entries", "expected"], [
-        ([], ""),
-        (["/a:/b"], '\n      - /a:/b'),
-        (["/a:/b", "/c:/d:ro"], '\n      - /a:/b\n      - /c:/d:ro'),
-    ])
-    def test_output(self, entries: list[str], expected: str) -> None:
-        assert render_volume_block(entries) == expected
-
-    def test_special_chars_use_yaml_quoting(self) -> None:
-        result = render_volume_block(["/path with spaces:/c:ro"])
-        parsed = yaml.safe_load(result.strip())
-        assert parsed == ["/path with spaces:/c:ro"]
-
-
-class TestRenderOptionalSingleVolumeBlock:
-    @pytest.mark.parametrize(["entry", "expected"], [
-        (None, ""),
-        ("", ""),
-        ("/a:/b:ro", '\n      - /a:/b:ro'),
-    ])
-    def test_output(self, entry: Optional[str], expected: str) -> None:
-        assert render_optional_single_volume_block(entry) == expected
 
 
 class TestRenderYamlListBlock:
