@@ -26,7 +26,7 @@ from lib.questionnaire import (
     print_preparation_notes,
     try_load_saved_answers,
 )
-from lib.types import get_bool
+from lib.types import get_bool, DeployAnswers
 
 
 REPO_ROOT = DEPLOY_PATHS.repo_root
@@ -39,14 +39,23 @@ def run_command(cmd: list[str], cwd: Path = REPO_ROOT) -> None:
 
 
 def check_prerequisites() -> None:
+    # Basic checks: docker, docker compose, mountpoint (always required)
     try:
-        check_host_prerequisites(require_cvmfs=True)
+        check_host_prerequisites(require_cvmfs=False)
     except RuntimeError as exc:
         cli_ui.error(str(exc))
         sys.exit(1)
 
+    # CVMFS check: warn but don't block deployment
+    try:
+        check_host_prerequisites(require_cvmfs=True)
+    except RuntimeError as exc:
+        cli_ui.warning(str(exc))
+        cli_ui.info("Jobs requiring CVMFS-hosted software (Jupyter, ROOT, VNC) will not work.")
+        cli_ui.info("File browsing and non-CVMFS-dependent functionality will still be available.")
 
-def stage_nginx_tls_material(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
+
+def stage_nginx_tls_material(answers: DeployAnswers, paths: dict[str, Path]) -> list[str]:
     notes: list[str] = []
     if not get_bool(answers, "enable_nginx"):
         return notes
@@ -90,7 +99,7 @@ def build_xrootd_notes(paths: dict[str, Path]) -> list[str]:
     ]
 
 
-def validate_krb5_paths(answers: dict[str, object], paths: dict[str, Path]) -> list[str]:
+def validate_krb5_paths(answers: DeployAnswers, paths: dict[str, Path]) -> list[str]:
     notes: list[str] = []
     if not get_bool(answers, "enable_krb5"):
         return notes
@@ -123,7 +132,7 @@ def validate_krb5_paths(answers: dict[str, object], paths: dict[str, Path]) -> l
     return notes
 
 
-def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> None:
+def run_init_container(answers: DeployAnswers, paths: dict[str, Path]) -> None:
     cli_ui.step("Initialize runtime assets")
     cmd = [
         "docker",
@@ -159,7 +168,7 @@ def run_init_container(answers: dict[str, object], paths: dict[str, Path]) -> No
 
 
 def print_post_install_notes(
-    answers: dict[str, object],
+    answers: DeployAnswers,
     paths: dict[str, Path],
     nginx_notes: list[str],
     xrootd_notes: list[str],
