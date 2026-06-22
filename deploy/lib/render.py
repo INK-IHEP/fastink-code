@@ -486,13 +486,9 @@ def build_mapping(
     ]
     htcondor_internal_domain = get_str(answers, "htcondor_internal_domain", "local")
 
-    # ---- krb5 / slurm paths ----
-    krb5_conf_host_path = get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf").strip()
+    # ---- krb5 / slurm paths (consumed by _build_mount_mapping) ----
     xrootd_krb5_keytab_source_path = get_str(answers, "xrootd_krb5_keytab_source_path").strip()
     xrootd_krb5_principal = get_str(answers, "xrootd_krb5_principal").strip()
-    enable_host_slurm_client = get_bool(answers, "enable_host_slurm_client")
-    slurm_conf_host_path = get_str(answers, "slurm_conf_host_path", "/etc/slurm/slurm.conf").strip()
-    munge_socket_dir = get_str(answers, "munge_socket_dir", "/var/run/munge").strip().rstrip("/")
 
     # ---- compose mapping from sub-functions ----
     mapping: dict[str, str] = {}
@@ -754,10 +750,10 @@ def render_bundle(
     volume_overlay = build_compose_volume_overlay(
         extra_mount_entries=extra_mount_entries,
         enable_krb5=get_bool(answers, "enable_krb5"),
-        krb5_conf_host_path=get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf"),
+        krb5_conf_host_path=get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf").strip(),
         enable_host_slurm_client=get_bool(answers, "enable_host_slurm_client"),
-        slurm_conf_host_path=get_str(answers, "slurm_conf_host_path", "/etc/slurm/slurm.conf"),
-        munge_socket_dir=get_str(answers, "munge_socket_dir", "/var/run/munge"),
+        slurm_conf_host_path=get_str(answers, "slurm_conf_host_path", "/etc/slurm/slurm.conf").strip(),
+        munge_socket_dir=get_str(answers, "munge_socket_dir", "/var/run/munge").strip().rstrip("/"),
         enable_xrootd=get_bool(answers, "enable_xrootd"),
         enable_local_htcondor=get_bool(answers, "enable_local_htcondor"),
     )
