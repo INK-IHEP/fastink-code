@@ -362,7 +362,7 @@ def build_or_pull_images(answers: DeployAnswers) -> None:
         p.stop()
 
 
-def deploy_stack(answers: dict[str, object]) -> None:
+def deploy_stack(answers: DeployAnswers) -> None:
     cli_ui.step("Start services with docker compose")
     from lib.compose import compose_up
 

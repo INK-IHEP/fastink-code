@@ -420,7 +420,6 @@ def _build_computing_mapping(
 
 
 def _build_mount_mapping(
-    answers: dict[str, object],
     paths: dict[str, Path],
     enable_krb5: bool,
     xrootd_krb5_keytab_source_path: str,
@@ -500,7 +499,7 @@ def build_mapping(
         htcondor_internal_domain, cluster_list, noenv_jobtype, start_keywords,
     ))
     mapping.update(_build_mount_mapping(
-        answers, paths, enable_krb5,
+        paths, enable_krb5,
         xrootd_krb5_keytab_source_path, xrootd_krb5_principal,
     ))
 
