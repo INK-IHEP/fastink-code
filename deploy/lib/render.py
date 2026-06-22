@@ -15,7 +15,7 @@ from typing import Optional
 
 import yaml
 
-from lib.types import get_bool, get_str, get_int
+from lib.types import get_bool, get_str, get_int, DeployAnswers
 
 
 DEPLOY_ROOT = Path(__file__).resolve().parent.parent
@@ -225,21 +225,6 @@ def build_xrootd_vo_entries(extra_mount_entries: list[str]) -> list[str]:
     return entries
 
 
-def render_volume_block(entries: list[str], indent: int = 6) -> str:
-    if not entries:
-        return ""
-    rendered = yaml.safe_dump(entries, default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()
-    prefix = " " * indent
-    return "\n" + "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
-
-
-def render_optional_single_volume_block(entry: Optional[str], indent: int = 6) -> str:
-    if not entry:
-        return ""
-    rendered = yaml.safe_dump([entry], default_flow_style=False, sort_keys=False, allow_unicode=True).rstrip()
-    prefix = " " * indent
-    return "\n" + "\n".join(f"{prefix}{line}" if line else line for line in rendered.splitlines())
-
 
 def render_yaml_list_block(values: list[object], indent: int = 2) -> str:
     rendered = yaml.safe_dump(values, sort_keys=False, allow_unicode=True).rstrip()
@@ -297,15 +282,26 @@ def load_yaml_file(path: Path) -> dict:
     return data or {}
 
 
-def deep_merge(base, overlay):
+def deep_merge(base, overlay, *, list_strategy: str = "replace"):
+    """Deep merge two dicts, with optional list concatenation.
+
+    Args:
+        base: Base dictionary.
+        overlay: Overlay dictionary to merge on top.
+        list_strategy: How to handle lists:
+            "replace" (default) — overlay list replaces base list.
+            "extend" — overlay list is appended to base list.
+    """
     if isinstance(base, dict) and isinstance(overlay, dict):
         merged = dict(base)
         for key, value in overlay.items():
             if key in merged:
-                merged[key] = deep_merge(merged[key], value)
+                merged[key] = deep_merge(merged[key], value, list_strategy=list_strategy)
             else:
                 merged[key] = value
         return merged
+    if isinstance(base, list) and isinstance(overlay, list) and list_strategy == "extend":
+        return base + overlay
     return overlay
 
 
@@ -323,7 +319,6 @@ def _build_network_mapping(
     paths: dict[str, Path],
     deploy_dir: Path,
     enable_nginx: bool,
-    server_port_block: str,
 ) -> dict[str, str]:
     """Network-related template variables (nginx, ports, host)."""
     nginx_conf_path = deploy_dir / "nginx" / "default.conf"
@@ -340,7 +335,6 @@ def _build_network_mapping(
         "nginx_key_host_path": str(Path(paths.get("nginx_key_path", deploy_dir / "nginx" / "key.pem")).resolve()),
         "nginx_cert_container_path": "/etc/nginx/ssl/cert.pem",
         "nginx_key_container_path": "/etc/nginx/ssl/key.pem",
-        "server_port_block": server_port_block,
         "rootbrowse_container_port": "2000",
     }
 
@@ -426,48 +420,17 @@ def _build_computing_mapping(
 
 
 def _build_mount_mapping(
-    answers: dict[str, object],
     paths: dict[str, Path],
-    extra_mounts_block: str,
     enable_krb5: bool,
-    krb5_conf_host_path: str,
-    enable_host_slurm_client: bool,
-    slurm_conf_host_path: str,
-    munge_socket_dir: str,
     xrootd_krb5_keytab_source_path: str,
     xrootd_krb5_principal: str,
 ) -> dict[str, str]:
-    """Mount-related template variables (extra volumes, krb5, slurm, xrootd keytab)."""
-    server_slurm_mounts_block = ""
-    cron_slurm_mounts_block = ""
-    if enable_host_slurm_client:
-        server_slurm_mounts_block = (
-            render_optional_single_volume_block(f"{munge_socket_dir}:/var/run/munge/")
-            + render_optional_single_volume_block(f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro")
-        )
-        cron_slurm_mounts_block = (
-            render_optional_single_volume_block(f"{munge_socket_dir}:/var/run/munge/")
-            + render_optional_single_volume_block(f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro")
-        )
-    common_krb5_mount_block = ""
-    xrootd_krb5_conf_mount_block = ""
-    htcondor_krb5_conf_mount_block = ""
-    if enable_krb5:
-        common_krb5_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
-        xrootd_krb5_conf_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
-        htcondor_krb5_conf_mount_block = render_optional_single_volume_block(f"{krb5_conf_host_path}:/etc/krb5.conf:ro")
+    """Mount-related template variables (xrootd keytab paths).
+
+    Dynamic volume mounts (extra-mounts, krb5.conf, slurm) are now
+    handled by build_compose_volume_overlay() instead of string injection.
+    """
     return {
-        "server_extra_mounts_block": extra_mounts_block,
-        "server_krb5_conf_mount_block": common_krb5_mount_block,
-        "server_slurm_mounts_block": server_slurm_mounts_block,
-        "cron_extra_mounts_block": extra_mounts_block,
-        "cron_krb5_conf_mount_block": common_krb5_mount_block,
-        "cron_slurm_mounts_block": cron_slurm_mounts_block,
-        "rootbrowse_extra_mounts_block": extra_mounts_block,
-        "xrootd_extra_mounts_block": extra_mounts_block,
-        "htcondor_extra_mounts_block": extra_mounts_block,
-        "htcondor_krb5_conf_mount_block": htcondor_krb5_conf_mount_block,
-        "xrootd_krb5_conf_mount_block": xrootd_krb5_conf_mount_block,
         "xrootd_krb5_keytab_host_path": str(
             Path(xrootd_krb5_keytab_source_path).expanduser().resolve()
             if enable_krb5 and xrootd_krb5_keytab_source_path
@@ -484,15 +447,20 @@ def _build_mount_mapping(
 
 def build_mapping(
     profile: str,
-    answers: dict[str, object],
+    answers: DeployAnswers,
     paths: dict[str, Path],
     deploy_dir: Path,
+    *,
+    extra_mount_entries: Optional[list[str]] = None,
 ) -> dict[str, str]:
     """Compose the full template-variable mapping from domain sub-functions.
 
     The function computes shared values once, then delegates each logical
     group of keys to a dedicated ``_build_*_mapping`` helper.  Remaining
     general-purpose keys are added directly.
+
+    If *extra_mount_entries* is provided it is used directly (caller
+    has already loaded the file); otherwise the file is read here.
     """
     version_env = source_version_env()
     config_path = deploy_dir / "config.yml"
@@ -504,8 +472,8 @@ def build_mapping(
     enable_local_htcondor = get_bool(answers, "enable_local_htcondor")
 
     # ---- extra mounts ----
-    extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
-    extra_mounts_block = render_volume_block(extra_mount_entries)
+    if extra_mount_entries is None:
+        extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
     xrootd_vo_entries = build_xrootd_vo_entries(extra_mount_entries)
 
     # ---- computing defaults ----
@@ -523,23 +491,13 @@ def build_mapping(
     ]
     htcondor_internal_domain = get_str(answers, "htcondor_internal_domain", "local")
 
-    # ---- krb5 / slurm paths ----
-    krb5_conf_host_path = get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf").strip()
+    # ---- krb5 / slurm paths (consumed by _build_mount_mapping) ----
     xrootd_krb5_keytab_source_path = get_str(answers, "xrootd_krb5_keytab_source_path").strip()
     xrootd_krb5_principal = get_str(answers, "xrootd_krb5_principal").strip()
-    enable_host_slurm_client = get_bool(answers, "enable_host_slurm_client")
-    slurm_conf_host_path = get_str(answers, "slurm_conf_host_path", "/etc/slurm/slurm.conf").strip()
-    munge_socket_dir = get_str(answers, "munge_socket_dir", "/var/run/munge").strip().rstrip("/")
-
-    # ---- server port ----
-    if enable_nginx:
-        server_port_block = '    expose:\n      - "8000"'
-    else:
-        server_port_block = f'    ports:\n      - "{answers["host_port"]}:8000"'
 
     # ---- compose mapping from sub-functions ----
     mapping: dict[str, str] = {}
-    mapping.update(_build_network_mapping(answers, paths, deploy_dir, enable_nginx, server_port_block))
+    mapping.update(_build_network_mapping(answers, paths, deploy_dir, enable_nginx))
     mapping.update(_build_storage_mapping(answers, paths, deploy_dir, enable_xrootd, xrootd_vo_entries))
     mapping.update(_build_auth_mapping(answers, enable_krb5))
     mapping.update(_build_computing_mapping(
@@ -547,8 +505,7 @@ def build_mapping(
         htcondor_internal_domain, cluster_list, noenv_jobtype, start_keywords,
     ))
     mapping.update(_build_mount_mapping(
-        answers, paths, extra_mounts_block, enable_krb5, krb5_conf_host_path,
-        enable_host_slurm_client, slurm_conf_host_path, munge_socket_dir,
+        paths, enable_krb5,
         xrootd_krb5_keytab_source_path, xrootd_krb5_principal,
     ))
 
@@ -614,6 +571,83 @@ def build_mapping(
     return mapping
 
 
+def build_compose_volume_overlay(
+    extra_mount_entries: list[str],
+    enable_krb5: bool,
+    krb5_conf_host_path: str,
+    enable_host_slurm_client: bool,
+    slurm_conf_host_path: str,
+    munge_socket_dir: str,
+    enable_xrootd: bool,
+    enable_local_htcondor: bool,
+) -> dict:
+    """Build a compose overlay dict for dynamic volumes.
+
+    Replaces the template variable string injection
+    (``${server_extra_mounts_block}``, ``${server_krb5_conf_mount_block}``, etc.)
+    with a structured dict that is deep-merged into the compose file using
+    ``list_strategy="extend"`` so volumes are appended rather than replaced.
+    """
+    overlay: dict = {"services": {}}
+
+    # krb5 conf mount (applies to all services)
+    krb5_volumes: list[str] = []
+    if enable_krb5:
+        krb5_volumes = [f"{krb5_conf_host_path}:/etc/krb5.conf:ro"]
+
+    # slurm mounts (server + cron only)
+    slurm_volumes: list[str] = []
+    if enable_host_slurm_client:
+        slurm_volumes = [
+            f"{munge_socket_dir}:/var/run/munge/",
+            f"{slurm_conf_host_path}:/etc/slurm/slurm.conf:ro",
+        ]
+
+    # extra mounts from file
+    extra_volumes = list(extra_mount_entries) if extra_mount_entries else []
+
+    # fastink-server: krb5 + slurm + extra
+    server_vols = krb5_volumes + slurm_volumes + extra_volumes
+    if server_vols:
+        overlay["services"]["fastink-server"] = {"volumes": server_vols}
+
+    # fastink-redis-cron: krb5 + slurm + extra
+    cron_vols = krb5_volumes + slurm_volumes + extra_volumes
+    if cron_vols:
+        overlay["services"]["fastink-redis-cron"] = {"volumes": cron_vols}
+
+    # fastink-rootbrowse: krb5 + extra
+    rootbrowse_vols = krb5_volumes + extra_volumes
+    if rootbrowse_vols:
+        overlay["services"]["fastink-rootbrowse"] = {"volumes": rootbrowse_vols}
+
+    # fastink-xrootd: krb5 + extra (only when xrootd is enabled)
+    if enable_xrootd:
+        xrootd_vols = krb5_volumes + extra_volumes
+        if xrootd_vols:
+            overlay["services"]["fastink-xrootd"] = {"volumes": xrootd_vols}
+
+    # fastink-htcondor: krb5 + extra (only when local htcondor is enabled)
+    if enable_local_htcondor:
+        htcondor_vols = krb5_volumes + extra_volumes
+        if htcondor_vols:
+            overlay["services"]["fastink-htcondor"] = {"volumes": htcondor_vols}
+
+    return overlay
+
+
+def build_compose_port_overlay(enable_nginx: bool, host_port: int) -> dict:
+    """Build a compose overlay dict for the server port configuration.
+
+    When nginx is enabled the server only exposes port 8000 internally.
+    When nginx is disabled the server publishes ``host_port:8000`` directly.
+    """
+    if enable_nginx:
+        return {"services": {"fastink-server": {"expose": ["8000"]}}}
+    else:
+        return {"services": {"fastink-server": {"ports": [f"{host_port}:8000"]}}}
+
+
 def render_config(
     profile: str,
     mapping: dict[str, str],
@@ -638,6 +672,9 @@ def render_compose(
     enable_nginx: bool,
     enable_xrootd: bool,
     extra_overlays: Optional[list[Path]] = None,
+    volume_overlay: Optional[dict] = None,
+    port_overlay: Optional[dict] = None,
+    additional_volume_overlay: Optional[dict] = None,
 ) -> str:
     base = render_yaml_template(TEMPLATE_ROOT / "base" / "docker-compose.yml.tpl", mapping)
     merged = base
@@ -662,8 +699,17 @@ def render_compose(
             merged,
             render_yaml_template(TEMPLATE_ROOT / "extras" / "htcondor.compose.yml.tpl", mapping),
         )
+    # Dynamic overlays: volumes use list_strategy="extend" to append
+    if volume_overlay:
+        merged = deep_merge(merged, volume_overlay, list_strategy="extend")
+    if port_overlay:
+        merged = deep_merge(merged, port_overlay)
     for overlay_path in extra_overlays or []:
         merged = deep_merge(merged, load_yaml_file(overlay_path))
+    # additional_volume_overlay goes AFTER extra_overlays so dev/IHEP
+    # site overlays can replace volumes first, then dev adds its own
+    if additional_volume_overlay:
+        merged = deep_merge(merged, additional_volume_overlay, list_strategy="extend")
     return dump_yaml(merged)
 
 
@@ -690,18 +736,41 @@ def render_htcondor_local_conf(mapping: dict[str, str]) -> str:
 
 def render_bundle(
     profile: str,
-    answers: dict[str, object],
+    answers: DeployAnswers,
     paths: dict[str, Path],
     deploy_dir: Path,
     *,
     config_overlay_paths: Optional[list[Path]] = None,
     compose_overlay_paths: Optional[list[Path]] = None,
+    additional_volume_overlay: Optional[dict] = None,
     initialize_host_assets: bool = True,
 ) -> dict[str, str]:
     if initialize_host_assets:
         ensure_rootbrowse_ssh_material(paths)
         ensure_nginx_tls_material(answers, paths)
-    mapping = build_mapping(profile, answers, paths, deploy_dir)
+
+    # Load extra mounts once, shared by build_mapping (xrootd VO) and
+    # build_compose_volume_overlay (dynamic compose volumes).
+    extra_mount_entries = load_extra_mount_entries(get_str(answers, "extra_mounts_file"))
+    mapping = build_mapping(profile, answers, paths, deploy_dir,
+                            extra_mount_entries=extra_mount_entries)
+
+    # Build dynamic compose overlays (replaces template string injection)
+    volume_overlay = build_compose_volume_overlay(
+        extra_mount_entries=extra_mount_entries,
+        enable_krb5=get_bool(answers, "enable_krb5"),
+        krb5_conf_host_path=get_str(answers, "krb5_conf_host_path", "/etc/krb5.conf").strip(),
+        enable_host_slurm_client=get_bool(answers, "enable_host_slurm_client"),
+        slurm_conf_host_path=get_str(answers, "slurm_conf_host_path", "/etc/slurm/slurm.conf").strip(),
+        munge_socket_dir=get_str(answers, "munge_socket_dir", "/var/run/munge").strip().rstrip("/"),
+        enable_xrootd=get_bool(answers, "enable_xrootd"),
+        enable_local_htcondor=get_bool(answers, "enable_local_htcondor"),
+    )
+    port_overlay = build_compose_port_overlay(
+        enable_nginx=get_bool(answers, "enable_nginx"),
+        host_port=get_int(answers, "host_port", 8000),
+    )
+
     bundle = {
         "config.yml": render_config(profile, mapping, extra_overlays=config_overlay_paths),
         ".env": render_env(mapping),
@@ -711,6 +780,9 @@ def render_bundle(
             get_bool(answers, "enable_nginx"),
             get_bool(answers, "enable_xrootd"),
             extra_overlays=compose_overlay_paths,
+            volume_overlay=volume_overlay,
+            port_overlay=port_overlay,
+            additional_volume_overlay=additional_volume_overlay,
         ),
     }
     if get_bool(answers, "enable_nginx"):
