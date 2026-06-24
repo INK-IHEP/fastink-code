@@ -1,11 +1,7 @@
 """Render utility tests: YAML block generation, deep_merge, profile_chain, etc."""
-from typing import Optional
-
 import pytest
 import yaml
 from deploy.lib.render import (
-    render_volume_block,
-    render_optional_single_volume_block,
     render_yaml_list_block,
     default_jobtype_config_block,
     yaml_string,
@@ -13,31 +9,6 @@ from deploy.lib.render import (
     deep_merge,
     build_xrootd_vo_entries,
 )
-
-
-class TestRenderVolumeBlock:
-    @pytest.mark.parametrize(["entries", "expected"], [
-        ([], ""),
-        (["/a:/b"], '\n      - /a:/b'),
-        (["/a:/b", "/c:/d:ro"], '\n      - /a:/b\n      - /c:/d:ro'),
-    ])
-    def test_output(self, entries: list[str], expected: str) -> None:
-        assert render_volume_block(entries) == expected
-
-    def test_special_chars_use_yaml_quoting(self) -> None:
-        result = render_volume_block(["/path with spaces:/c:ro"])
-        parsed = yaml.safe_load(result.strip())
-        assert parsed == ["/path with spaces:/c:ro"]
-
-
-class TestRenderOptionalSingleVolumeBlock:
-    @pytest.mark.parametrize(["entry", "expected"], [
-        (None, ""),
-        ("", ""),
-        ("/a:/b:ro", '\n      - /a:/b:ro'),
-    ])
-    def test_output(self, entry: Optional[str], expected: str) -> None:
-        assert render_optional_single_volume_block(entry) == expected
 
 
 class TestRenderYamlListBlock:
@@ -90,6 +61,29 @@ class TestDeepMerge:
     def test_list_overwrite(self) -> None:
         # deep_merge overwrites lists (latter wins), it does not append
         assert deep_merge({"a": [1]}, {"a": [2]}) == {"a": [2]}
+
+    def test_list_extend(self) -> None:
+        # list_strategy="extend" concatenates lists
+        assert deep_merge({"a": [1]}, {"a": [2]}, list_strategy="extend") == {"a": [1, 2]}
+
+    def test_list_extend_recursive(self) -> None:
+        # extend strategy propagates through nested dicts
+        base = {"services": {"srv": {"volumes": ["/a:/a"]}}}
+        overlay = {"services": {"srv": {"volumes": ["/b:/b"]}}}
+        result = deep_merge(base, overlay, list_strategy="extend")
+        assert result == {"services": {"srv": {"volumes": ["/a:/a", "/b:/b"]}}}
+
+    def test_list_extend_new_service(self) -> None:
+        # extend with a new key works like regular merge
+        base = {"services": {"srv1": {"volumes": ["/a:/a"]}}}
+        overlay = {"services": {"srv2": {"volumes": ["/b:/b"]}}}
+        result = deep_merge(base, overlay, list_strategy="extend")
+        assert result == {
+            "services": {
+                "srv1": {"volumes": ["/a:/a"]},
+                "srv2": {"volumes": ["/b:/b"]},
+            }
+        }
 
     def test_new_keys_added(self) -> None:
         assert deep_merge({"a": 1}, {"b": 2}) == {"a": 1, "b": 2}

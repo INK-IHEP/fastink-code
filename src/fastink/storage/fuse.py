@@ -164,7 +164,7 @@ async def list_path(
                                 "user": ll[1],
                                 "group": ll[2],
                                 "size": fsize,
-                                "time": parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()),
+                                "time": str(parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()).replace(tzinfo=None)),
                                 "path": ll[6],
                             }
                         )
@@ -177,7 +177,7 @@ async def list_path(
                                 "user": ll[1],
                                 "group": ll[2],
                                 "size": fsize,
-                                "time": parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()),
+                                "time": str(parser.parse(f"{ll[4]} {ll[5]}").replace(tzinfo=tz.tzutc()).astimezone(tz.tzlocal()).replace(tzinfo=None)),
                                 "path": ll[6],
                             }
                         )
