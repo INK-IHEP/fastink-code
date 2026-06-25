@@ -160,7 +160,7 @@ async def connect_common_job(
                 }
             }
         
-        elif job_type == "vnc" or job_type == "asic" or job_type == "ink_special":
+        elif job_type == "vnc" or job_type == "asic" or job_type == "asicbm" or job_type == "ink_special":
             host, port, vnc_url = await connect_vnc_job(job_id=job_id, uid=uid, clusterid=cluster_id)
             return {
                 "status": InkStatus.SUCCESS,
