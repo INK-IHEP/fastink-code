@@ -674,7 +674,6 @@ def render_compose(
     extra_overlays: Optional[list[Path]] = None,
     volume_overlay: Optional[dict] = None,
     port_overlay: Optional[dict] = None,
-    additional_volume_overlay: Optional[dict] = None,
 ) -> str:
     base = render_yaml_template(TEMPLATE_ROOT / "base" / "docker-compose.yml.tpl", mapping)
     merged = base
@@ -706,10 +705,6 @@ def render_compose(
         merged = deep_merge(merged, port_overlay)
     for overlay_path in extra_overlays or []:
         merged = deep_merge(merged, load_yaml_file(overlay_path))
-    # additional_volume_overlay goes AFTER extra_overlays so dev/IHEP
-    # site overlays can replace volumes first, then dev adds its own
-    if additional_volume_overlay:
-        merged = deep_merge(merged, additional_volume_overlay, list_strategy="extend")
     return dump_yaml(merged)
 
 
@@ -742,7 +737,6 @@ def render_bundle(
     *,
     config_overlay_paths: Optional[list[Path]] = None,
     compose_overlay_paths: Optional[list[Path]] = None,
-    additional_volume_overlay: Optional[dict] = None,
     initialize_host_assets: bool = True,
 ) -> dict[str, str]:
     if initialize_host_assets:
@@ -782,7 +776,6 @@ def render_bundle(
             extra_overlays=compose_overlay_paths,
             volume_overlay=volume_overlay,
             port_overlay=port_overlay,
-            additional_volume_overlay=additional_volume_overlay,
         ),
     }
     if get_bool(answers, "enable_nginx"):
