@@ -12,15 +12,18 @@ Options:
 """
 
 import argparse
-import shutil
 import subprocess
 import sys
-from pathlib import Path
 from typing import Optional
 
 from cmd.common import DEPLOY_DIR, load_deploy_answers
 from lib import cli_ui
-from lib.compose import compose_down
+from lib.destroy import (
+    cleanup_deploy_dir,
+    remove_runtime_path,
+    resolve_data_paths,
+    stop_deployment,
+)
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -66,20 +69,47 @@ def main() -> None:
             cli_ui.warning("Aborted.")
             return
 
+    delete_db_data = args.yes
+    if not args.yes:
+        delete_db_data = cli_ui.confirm_prompt("Delete DB data?", False)
+
     # 1. Stop containers
     cli_ui.step("Stop and remove containers")
-    remove_volumes = args.yes
-    if not args.yes:
-        remove_volumes = cli_ui.confirm_prompt("Remove named volumes (database and redis data)", False)
+    remove_volumes = delete_db_data
 
     if compose_file.exists():
         cli_ui.info(f"+ docker compose -p {project_name} -f {compose_file} down" + (" -v" if remove_volumes else ""))
-        compose_down(project_name, compose_file, remove_volumes=remove_volumes)
+        try:
+            stop_deployment(
+                project_name,
+                compose_file,
+                remove_volumes=remove_volumes,
+            )
+        except RuntimeError as exc:
+            cli_ui.error(str(exc))
+            sys.exit(1)
     else:
         cli_ui.warning(f"Compose file not found: {compose_file} — skipping docker compose down")
-    cli_ui.success("Containers stopped" + (" and volumes removed" if remove_volumes else ""))
+    cli_ui.success("Containers stopped" + (" and named volumes removed" if remove_volumes else ""))
 
-    # 2. Remove images
+    # 2. Clean runtime data
+    db_data_dir, redis_data_dir = resolve_data_paths(answers, DEPLOY_DIR)
+    preserved_paths = set()
+    if delete_db_data:
+        remove_runtime_path(db_data_dir)
+        cli_ui.success(f"DB data removed: {db_data_dir}")
+    else:
+        preserved_paths.update({db_data_dir, DEPLOY_DIR / "answers.json"})
+        cli_ui.info(f"DB data preserved: {db_data_dir}")
+        cli_ui.info(f"Deployment answers preserved for DB recovery: {DEPLOY_DIR / 'answers.json'}")
+
+    remove_runtime_path(
+        redis_data_dir,
+        preserve_paths={db_data_dir} if not delete_db_data else set(),
+    )
+    cli_ui.success(f"Redis data removed: {redis_data_dir}")
+
+    # 3. Remove images
     if not args.keep_images:
         remove_images = args.yes
         if not args.yes:
@@ -97,24 +127,18 @@ def main() -> None:
                     cli_ui.warning(f"Failed to remove image {image} (may be in use by other deployments)")
             cli_ui.success("Images removed")
 
-    # 3. Clean .deploy/ directory
+    # 4. Clean .deploy/ directory
     if not args.keep_dot_deploy:
         if args.keep_answers:
-            # Preserve answers.json, delete everything else
-            for item in DEPLOY_DIR.iterdir():
-                if item.name == "answers.json":
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                else:
-                    item.unlink()
-            cli_ui.success("Deployment files cleaned (answers.json preserved)")
-        else:
-            remove_deploy = args.yes
-            if not args.yes:
-                remove_deploy = cli_ui.confirm_prompt("Delete .deploy/ directory entirely", False)
-            if remove_deploy:
-                shutil.rmtree(DEPLOY_DIR)
+            preserved_paths.add(DEPLOY_DIR / "answers.json")
+        clean_deploy = args.yes
+        if not args.yes:
+            clean_deploy = cli_ui.confirm_prompt("Clean generated .deploy/ files?", False)
+        if clean_deploy:
+            cleanup_deploy_dir(DEPLOY_DIR, preserve_paths=preserved_paths)
+            if DEPLOY_DIR.exists():
+                cli_ui.success("Deployment files cleaned; retained DB recovery state")
+            else:
                 cli_ui.success("Deployment directory deleted")
 
     cli_ui.success("Destroy complete")

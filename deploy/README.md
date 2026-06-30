@@ -333,6 +333,11 @@ Typical contents include:
 - `nginx/`
 - `extra-mounts.txt` (optional)
 
+For open-source deployments, `.deploy/` is restricted to mode `0700`.
+Generated files containing credentials or expanded secret values use mode
+`0600`, including `answers.json`, `.env`, `config.yml`, and
+`docker-compose.yml`.
+
 The files that users should normally maintain directly are mainly:
 
 - `answers.json`
@@ -342,6 +347,21 @@ The files that users should normally maintain directly are mainly:
 - `extra-mounts.txt` when extra host paths need to be mounted into the runtime containers
 
 Generated outputs such as `config.yml` and `docker-compose.yml` are better regenerated than edited long-term by hand.
+
+## Destroy And Data Retention
+
+`fastinkctl destroy` separates durable DB state from disposable runtime state:
+
+- `Delete DB data?` controls whether the configured DB data directory is removed.
+- the default answer is `No`
+- Redis data is treated as disposable and removed during destroy
+- when DB data is retained, `answers.json` is also retained so the DB credentials
+  and deployment settings needed for recovery remain available
+- if `docker compose down` fails, destroy stops before removing images or files
+- `fastinkctl destroy --yes` performs full cleanup, including DB data
+
+`--keep-dot-deploy` keeps the generated deployment files, but does not override
+the DB-data choice or the cleanup of disposable Redis state.
 
 ## Runtime Materials The User Must Handle
 

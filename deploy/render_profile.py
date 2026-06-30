@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.defaults import normalize_answers, parse_override_value
-from lib.deploy_io import write_file
+from lib.deploy_io import deploy_file_mode, ensure_private_dir, write_file
 from lib.paths import build_runtime_paths
 from lib.render import render_bundle
 
@@ -39,6 +39,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    ensure_private_dir(args.output_dir.resolve())
     answers = load_answers(args.answers_file.resolve())
     for override in args.overrides:
         if "=" not in override:
@@ -74,8 +75,16 @@ def main() -> None:
     )
 
     for relative_path, content in bundle.items():
-        write_file(output_dir / relative_path, content)
-    write_file(output_dir / "answers.json", json.dumps(answers, indent=2, ensure_ascii=False, default=str))
+        write_file(
+            output_dir / relative_path,
+            content,
+            mode=deploy_file_mode(relative_path),
+        )
+    write_file(
+        output_dir / "answers.json",
+        json.dumps(answers, indent=2, ensure_ascii=False, default=str),
+        mode=deploy_file_mode("answers.json"),
+    )
 
 
 if __name__ == "__main__":

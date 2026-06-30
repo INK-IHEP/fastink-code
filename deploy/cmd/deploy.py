@@ -13,7 +13,7 @@ from pathlib import Path
 from cmd.common import DEPLOY_DIR, DEPLOY_PATHS
 from lib import cli_ui
 from lib.defaults import build_health_url, default_answers, required_images
-from lib.deploy_io import write_file
+from lib.deploy_io import deploy_file_mode, ensure_private_dir, write_file
 from lib.host_runtime import check_host_prerequisites
 from lib.render import render_bundle
 from lib.questionnaire import (
@@ -231,6 +231,7 @@ def main() -> None:
     args = parser.parse_args()
 
     cli_ui.ensure_deps(DEPLOY_DIR)
+    ensure_private_dir(DEPLOY_DIR)
     cli_ui.banner()
     check_prerequisites()
 
@@ -295,8 +296,16 @@ def main() -> None:
         initialize_host_assets=False,
     )
     for relative_path, content in bundle.items():
-        write_file(DEPLOY_DIR / relative_path, content)
-    write_file(DEPLOY_DIR / "answers.json", json.dumps(answers, indent=2, default=str))
+        write_file(
+            DEPLOY_DIR / relative_path,
+            content,
+            mode=deploy_file_mode(relative_path),
+        )
+    write_file(
+        DEPLOY_DIR / "answers.json",
+        json.dumps(answers, indent=2, default=str),
+        mode=deploy_file_mode("answers.json"),
+    )
 
     if args.render_only:
         cli_ui.success(f"Render complete. Deployment files written to: {DEPLOY_DIR}")
