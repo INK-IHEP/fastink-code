@@ -30,6 +30,7 @@ setup(
         "htcondor==24.0.20",
         "httpx",
         "influxdb",
+        "jinja2>=3.1",
         "paramiko",
         "pexpect",
         "pycryptodome",
