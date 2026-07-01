@@ -4,15 +4,15 @@ services:
     hostname: fastink-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${db_root_password}
-      MYSQL_DATABASE: ${db_name}
-      MYSQL_USER: ${db_user}
-      MYSQL_PASSWORD: ${db_password}
-      TZ: ${timezone}
+      MYSQL_ROOT_PASSWORD: {{ db_root_password }}
+      MYSQL_DATABASE: {{ db_name }}
+      MYSQL_USER: {{ db_user }}
+      MYSQL_PASSWORD: {{ db_password }}
+      TZ: {{ timezone | to_yaml }}
     volumes:
-      - ${db_data_dir}:/var/lib/mysql
+      - {{ db_data_dir }}:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p${db_root_password}"]
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p{{ db_root_password }}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -22,12 +22,12 @@ services:
     image: redis:7-alpine
     hostname: fastink-redis
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", ${redis_password_yaml}, "--appendonly", "yes"]
+    command: ["redis-server", "--requirepass", {{ redis_password | to_yaml }}, "--appendonly", "yes"]
     volumes:
-      - ${redis_data_dir}:/data
+      - {{ redis_data_dir }}:/data
 
   fastink-server:
-    image: ${server_image}
+    image: {{ server_image }}
     hostname: fastink-server
     restart: unless-stopped
     depends_on:
@@ -37,24 +37,24 @@ services:
         condition: service_started
     environment:
       INK_CONFIG_FILE: /ink/config.yml
-      INK_PRODUCTION: ${ink_production}
-      WORKERS: ${workers}
-      INIT_DATABASE_ON_START: ${init_database}
-      SOURCE_COMMIT_SHA: ${source_commit_sha}
-      SOURCE_COMMIT_DATE: ${source_commit_date}
-      SOURCE_COMMIT_TAG: ${source_commit_tag}
-      PLUGIN_PIP_PACKAGES: ${plugin_pip_packages}
-      PLUGIN_EDITABLE_DIRS: ${plugin_editable_dirs}
-      PRELOAD_SCRIPT_DIRS: ${server_preload_script_dirs}
-      PRELOAD_SCRIPTS: ${server_preload_scripts}
+      INK_PRODUCTION: {{ ink_production }}
+      WORKERS: {{ workers }}
+      INIT_DATABASE_ON_START: {{ init_database }}
+      SOURCE_COMMIT_SHA: {{ source_commit_sha }}
+      SOURCE_COMMIT_DATE: {{ source_commit_date }}
+      SOURCE_COMMIT_TAG: {{ source_commit_tag }}
+      PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages }}
+      PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs }}
+      PRELOAD_SCRIPT_DIRS: {{ server_preload_script_dirs }}
+      PRELOAD_SCRIPTS: {{ server_preload_scripts }}
     volumes:
-      - ${config_path}:/ink/config.yml:ro
-      - ${etc_init_dir}:/etc-init
-      - ${tmp_dir}:/tmp/ink
-      - ${plugins_dir}:/plugins
-      - ${server_ssh_dir_host_path}:${server_ssh_dir_container_path}:ro
-      - ${server_condor_conf_host_path}:/etc/condor/config.d/ink.conf:ro
-      - ${preload_server_dir}:/opt/preload/server:ro
+      - {{ config_path }}:/ink/config.yml:ro
+      - {{ etc_init_dir }}:/etc-init
+      - {{ tmp_dir }}:/tmp/ink
+      - {{ plugins_dir }}:/plugins
+      - {{ server_ssh_dir_host_path }}:{{ server_ssh_dir_container_path }}:ro
+      - {{ server_condor_conf_host_path }}:/etc/condor/config.d/ink.conf:ro
+      - {{ preload_server_dir }}:/opt/preload/server:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/health"]
       interval: 15s

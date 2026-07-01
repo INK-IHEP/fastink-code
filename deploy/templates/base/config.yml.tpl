@@ -10,7 +10,7 @@
 #
 #   Does the value need to be provided by the person running `fastinkctl deploy`?
 #   (e.g. database password, hostname, port number)
-#     YES → 1. Add a $${variable} placeholder here
+#     YES → 1. Add {{ var }} placeholder here
 #            2. Add it to the questionnaire: deploy/lib/questionnaire.py
 #            3. Add a mapping entry: deploy/lib/render.py:build_mapping()
 #     NO  → Just hardcode the default value directly in this file.
@@ -21,25 +21,17 @@
 #
 # LAYERING (deep-merge order)
 # ===========================
-#   this template (after $${variable} substitution)
+#   this template (after rendering)
 #     → + site overlay (e.g. fastink-dev/overlay/config.ihep.yml)
 #       → + dev overlay (e.g. .vscode/.generated/config.dev.overlay.yml)
 #         = final config.yml
 #
 # ⚠  Overlays must ONLY override keys that already exist here.
 #    Never add a new key exclusively in an overlay.
-#
-# Keys not included here (no universal default — code fallback or site-specific):
-#   omat.*                   — external monitoring database (see fastink-dev/redis/omat-config.yml)
-#   graphite.*               — Graphite metrics endpoint
-#   assistant.*              — AI assistant configuration (see assistant-architecture.md)
-#   test.*                   — test credentials (IHEP development only)
-#   service.openclaw_template_dir — computed from package path (openclaw.py fallback)
-#   service.openclaw_container_image — depends on site image path (overridden by IHEP overlay)
 # =============================================================================
 
 common:
-  krb5_enabled: ${krb5_enabled}
+  krb5_enabled: {{ krb5_enabled }}
   security_access: false
   ip_whitelist_access: false
   log_level: INFO
@@ -50,17 +42,17 @@ common:
 database:
   host: fastink-db
   port: 3306
-  user: ${db_user_yaml}
-  password: ${db_password_yaml}
-  dbname: ${db_name_yaml}
+  user: {{ db_user | to_yaml }}
+  password: {{ db_password | to_yaml }}
+  dbname: {{ db_name | to_yaml }}
 
 redis:
   host: fastink-redis
   port: 6379
-  password: ${redis_password_yaml}
+  password: {{ redis_password | to_yaml }}
 
 auth:
-  type: ${auth_type}
+  type: {{ auth_type | to_yaml }}
   issuer: ""
   client_id: null
   client_secret: ""
@@ -83,26 +75,32 @@ security:
     - /version
 
 storage:
-  xrd_host: ${xrd_host}
+  xrd_host: {{ xrd_host | to_yaml }}
   fs_backend: xrootd
   max_file_size: 2147483648
 
 computing:
   site: generic
   cluster_list:
-${cluster_list_block}
+{% for item in cluster_list %}
+    - {{ item | to_yaml }}
+{% endfor %}
   iptables_jobtype: []
   noenv_jobtype:
-${noenv_jobtype_block}
-  schedd_host: ${schedd_host}
-  cm_host: ${cm_host}
+{% for item in noenv_jobtype %}
+    - {{ item | to_yaml }}
+{% endfor %}
+  schedd_host: {{ schedd_host | to_yaml }}
+  cm_host: {{ cm_host | to_yaml }}
   gateway_node: localhost
   cluster_scripts: /ink/src/fastink/computing/scripts
   interactive_job_time_limit: "24:00:00"
-  nginx_node: ${public_base_url_yaml}
+  nginx_node: {{ public_base_url | to_yaml }}
   ink_dir: /home/{username}
   start_keywords:
-${start_keywords_block}
+{% for keyword in start_keywords %}
+    - {{ keyword | to_yaml }}
+{% endfor %}
 
 crond:
   submit_workers: []
@@ -115,7 +113,16 @@ job_time:
   active_idle: 1800
 
 jobtype:
-${jobtype_defaults_block}
+{% for name, config in jobtype_defaults.items() %}
+  {{ name | to_yaml }}:
+    htc:
+      RequestMemory: {{ config.htc.RequestMemory }}
+      RequestCpus: {{ config.htc.RequestCpus }}
+      walltime: "default"
+      schedd_host: {{ config.htc.schedd_host | to_yaml }}
+      cm_host: {{ config.htc.cm_host | to_yaml }}
+      extra_param: true
+{% endfor %}
 
 hooks:
   modules: ""
@@ -133,8 +140,8 @@ service:
   service_node: fastink-rootbrowse
   service_port: 2000
   ink_dir: /home/{username}
-  monitor_url: ${public_base_url_yaml}
-  job_monitor_url: ${public_base_url_yaml}
+  monitor_url: {{ public_base_url | to_yaml }}
+  job_monitor_url: {{ public_base_url | to_yaml }}
   rootbrowse_script: /dev/shm/start-rootbrowse.sh
   rootbrowse_check_script: /dev/shm/check-rootbrowse.sh
   openclaw_user_root: /scratchfs/{experiment_group_lower}/{username}
