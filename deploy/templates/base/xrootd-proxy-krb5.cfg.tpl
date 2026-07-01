@@ -9,18 +9,18 @@ sec.trace all debug
 
 if exec cmsd
     all.role server
-    xrd.port $$cmsdport
+    xrd.port $cmsdport
     all.export / stage
 else
     xrd.localroot /xrootd
     oss.localroot /xrootd
     all.export / stage
     all.role server
-    xrd.port $$xrdport
+    xrd.port $xrdport
     xrootd.seclib libXrdSeckrb5.so
     xrootd.seclib libXrdSec.so
     sec.protocol unix
-    sec.protocol krb5 /etc/xrootd/krb5.keytab ${xrootd_krb5_principal}
+    sec.protocol krb5 /etc/xrootd/krb5.keytab {{ xrootd_krb5_principal }}
     sec.protocol sss -s /etc/xrootd/sss.keytab -c /etc/xrootd/sss.keytab
     sec.protbind * only krb5 unix sss
     acc.audit deny grant

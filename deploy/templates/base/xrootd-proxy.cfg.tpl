@@ -9,14 +9,14 @@ sec.trace all debug
 
 if exec cmsd
     all.role server
-    xrd.port $$cmsdport
+    xrd.port $cmsdport
     all.export / stage
 else
     xrd.localroot /xrootd
     oss.localroot /xrootd
     all.export / stage
     all.role server
-    xrd.port $$xrdport
+    xrd.port $xrdport
     xrootd.seclib libXrdSec.so
     sec.protocol unix
     sec.protocol sss -s /etc/xrootd/sss.keytab -c /etc/xrootd/sss.keytab -r 60 -g -p unix
