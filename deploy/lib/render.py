@@ -364,7 +364,6 @@ def _build_computing_mapping(
     return {
         "schedd_host": schedd_host,
         "cm_host": cm_host,
-        "htcondor_host_name": "fastink-htcondor",
         "htcondor_auth_method": "CLAIMTOBE",
         "htcondor_fs_domain": htcondor_internal_domain,
         "htcondor_uid_domain": htcondor_internal_domain,

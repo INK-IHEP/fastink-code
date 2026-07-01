@@ -15,6 +15,8 @@ from deploy.lib.render import (
     render_compose,
     render_bundle,
     build_compose_port_overlay,
+    build_compose_volume_overlay,
+    render_template_text,
 )
 
 
@@ -273,3 +275,38 @@ class TestRenderBundle:
         assert "vscode" in data["jobtype"]
         assert "jupyter" in data["jobtype"]
         assert data["jobtype"]["vscode"]["htc"]["RequestMemory"] == 6000
+
+
+class TestRenderComposeVolumeOverlay:
+    def test_volume_overlay_extends_existing_volumes(self, sample_answers, sample_paths):
+        mapping = build_mapping("quickstart", sample_answers, sample_paths, Path(tempfile.mkdtemp()))
+        volume_overlay = build_compose_volume_overlay(
+            extra_mount_entries=["/host/data:/container/data:ro"],
+            enable_krb5=False,
+            krb5_conf_host_path="/etc/krb5.conf",
+            enable_host_slurm_client=False,
+            slurm_conf_host_path="/etc/slurm/slurm.conf",
+            munge_socket_dir="/var/run/munge",
+            enable_xrootd=False,
+            enable_local_htcondor=False,
+        )
+        port_overlay = build_compose_port_overlay(enable_nginx=False, host_port=8000)
+        result = render_compose(
+            "quickstart", mapping,
+            enable_nginx=False, enable_xrootd=False,
+            volume_overlay=volume_overlay,
+            port_overlay=port_overlay,
+        )
+        data = yaml.safe_load(result)
+        server_vols = data["services"]["fastink-server"]["volumes"]
+        assert "/container/data:ro" in server_vols[-1]
+        assert len(server_vols) >= 6  # base volumes plus extra mount
+
+
+class TestStrictUndefined:
+    def test_missing_variable_raises_undefined_error(self, tmp_path):
+        tpl = tmp_path / "test.tpl"
+        tpl.write_text("hello {{ name }}")
+        with pytest.raises(Exception) as exc_info:
+            render_template_text(tpl, {"not_name": "world"})
+        assert "name" in str(exc_info.value) or "Undefined" in str(type(exc_info.value).__name__)
