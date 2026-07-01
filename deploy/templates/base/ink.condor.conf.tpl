@@ -1,4 +1,4 @@
-CONDOR_HOST = {{ htcondor_host_name }}
+CONDOR_HOST = {{ cm_host }}
 
 SEC_DEFAULT_AUTHENTICATION_METHODS = {{ htcondor_auth_method }}
 SEC_CLAIMTOBE_INCLUDE_DOMAIN = True

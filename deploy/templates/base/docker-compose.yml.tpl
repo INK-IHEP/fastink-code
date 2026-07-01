@@ -43,10 +43,10 @@ services:
       SOURCE_COMMIT_SHA: {{ source_commit_sha }}
       SOURCE_COMMIT_DATE: {{ source_commit_date }}
       SOURCE_COMMIT_TAG: {{ source_commit_tag }}
-      PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages }}
-      PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs }}
-      PRELOAD_SCRIPT_DIRS: {{ server_preload_script_dirs }}
-      PRELOAD_SCRIPTS: {{ server_preload_scripts }}
+      PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages | to_yaml }}
+      PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs | to_yaml }}
+      PRELOAD_SCRIPT_DIRS: {{ server_preload_script_dirs | to_yaml }}
+      PRELOAD_SCRIPTS: {{ server_preload_scripts | to_yaml }}
     volumes:
       - {{ config_path }}:/ink/config.yml:ro
       - {{ etc_init_dir }}:/etc-init

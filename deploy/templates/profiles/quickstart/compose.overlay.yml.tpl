@@ -24,10 +24,10 @@ services:
       SOURCE_COMMIT_TAG: {{ source_commit_tag }}
       FASTINK_CRON_BASE_DIR: /opt/fastink-cron
       FASTINK_CRON_CONFIG: /opt/fastink-cron/cron.ini
-      PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages }}
-      PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs }}
-      PRELOAD_SCRIPT_DIRS: {{ cron_preload_script_dirs }}
-      PRELOAD_SCRIPTS: {{ cron_preload_scripts }}
+      PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages | to_yaml }}
+      PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs | to_yaml }}
+      PRELOAD_SCRIPT_DIRS: {{ cron_preload_script_dirs | to_yaml }}
+      PRELOAD_SCRIPTS: {{ cron_preload_scripts | to_yaml }}
     volumes:
       - {{ config_path }}:/ink/config.yml:ro
       - {{ etc_init_dir }}:/etc-init
@@ -46,8 +46,8 @@ services:
     environment:
       ROOTBROWSE_PORT: {{ rootbrowse_container_port }}
       AUTHORIZED_KEYS_SOURCE: {{ rootbrowse_authorized_keys_container_path }}
-      PRELOAD_SCRIPT_DIRS: {{ rootbrowse_preload_script_dirs }}
-      PRELOAD_SCRIPTS: {{ rootbrowse_preload_scripts }}
+      PRELOAD_SCRIPT_DIRS: {{ rootbrowse_preload_script_dirs | to_yaml }}
+      PRELOAD_SCRIPTS: {{ rootbrowse_preload_scripts | to_yaml }}
     volumes:
       - {{ etc_init_dir }}:/etc-init
       - {{ rootbrowse_authorized_keys_host_path }}:{{ rootbrowse_authorized_keys_container_path }}:ro
