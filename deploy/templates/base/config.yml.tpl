@@ -10,7 +10,7 @@
 #
 #   Does the value need to be provided by the person running `fastinkctl deploy`?
 #   (e.g. database password, hostname, port number)
-#     YES → 1. Add {{ var }} placeholder here
+#     YES → 1. Add a template variable placeholder here
 #            2. Add it to the questionnaire: deploy/lib/questionnaire.py
 #            3. Add a mapping entry: deploy/lib/render.py:build_mapping()
 #     NO  → Just hardcode the default value directly in this file.
