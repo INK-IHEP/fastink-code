@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import NamedTuple
@@ -65,3 +66,23 @@ def resolve_deploy_paths() -> DeployPaths:
     repo_root = deploy_root.parent                       # fastink-code/
     deploy_dir = repo_root / ".deploy"
     return DeployPaths(deploy_root, repo_root, deploy_dir)
+
+
+def write_bundle(deploy_dir: Path, bundle: dict[str, str], answers: dict) -> None:
+    """Write rendered bundle files and answers.json to deploy_dir.
+
+    Shared by cmd/deploy.py (interactive deploy) and render_profile.py
+    (CI non-interactive render). Ensures consistent file permissions
+    and JSON serialization across both entry points.
+    """
+    for relative_path, content in bundle.items():
+        write_file(
+            deploy_dir / relative_path,
+            content,
+            mode=deploy_file_mode(relative_path),
+        )
+    write_file(
+        deploy_dir / "answers.json",
+        json.dumps(answers, indent=2, ensure_ascii=False, default=str),
+        mode=deploy_file_mode("answers.json"),
+    )

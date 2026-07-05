@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import json
 import shutil
 import ssl
 import subprocess
@@ -13,7 +12,7 @@ from pathlib import Path
 from cmd.common import DEPLOY_DIR, DEPLOY_PATHS
 from lib import cli_ui
 from lib.defaults import build_health_url, default_answers, required_images
-from lib.deploy_io import deploy_file_mode, ensure_private_dir, write_file
+from lib.deploy_io import ensure_private_dir, write_bundle
 from lib.host_runtime import check_host_prerequisites
 from lib.render import render_bundle
 from lib.questionnaire import (
@@ -295,17 +294,7 @@ def main() -> None:
         DEPLOY_DIR,
         initialize_host_assets=False,
     )
-    for relative_path, content in bundle.items():
-        write_file(
-            DEPLOY_DIR / relative_path,
-            content,
-            mode=deploy_file_mode(relative_path),
-        )
-    write_file(
-        DEPLOY_DIR / "answers.json",
-        json.dumps(answers, indent=2, default=str),
-        mode=deploy_file_mode("answers.json"),
-    )
+    write_bundle(DEPLOY_DIR, bundle, answers)
 
     if args.render_only:
         cli_ui.success(f"Render complete. Deployment files written to: {DEPLOY_DIR}")
