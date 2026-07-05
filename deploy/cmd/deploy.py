@@ -73,16 +73,20 @@ def stage_nginx_tls_material(answers: DeployAnswers, paths: dict[str, Path]) -> 
             raise RuntimeError("Both TLS certificate path and private key path must be provided")
         cert_source_path = Path(cert_source).expanduser().resolve()
         key_source_path = Path(key_source).expanduser().resolve()
-        if not cert_source_path.exists():
-            raise FileNotFoundError(f"TLS certificate not found: {cert_source_path}")
-        if not key_source_path.exists():
-            raise FileNotFoundError(f"TLS private key not found: {key_source_path}")
-        shutil.copy2(cert_source_path, cert_target)
-        shutil.copy2(key_source_path, key_target)
-        cert_target.chmod(0o644)
-        key_target.chmod(0o600)
-        notes.append(f"Using user-provided TLS certificate copied into: {cert_target}")
-        notes.append(f"Using user-provided TLS private key copied into: {key_target}")
+        for src, tgt, mode, label in [
+            (cert_source_path, cert_target, 0o644, "TLS certificate"),
+            (key_source_path, key_target, 0o600, "TLS private key"),
+        ]:
+            if src == tgt.resolve():
+                notes.append(f"{label} already staged at: {tgt}")
+            elif not src.exists() and tgt.exists() and tgt.stat().st_size > 0:
+                notes.append(f"{label} source unavailable, reusing previously staged: {tgt}")
+            elif not src.exists():
+                raise FileNotFoundError(f"{label} not found: {src}")
+            else:
+                shutil.copy2(src, tgt)
+                tgt.chmod(mode)
+                notes.append(f"Using user-provided {label.lower()} copied into: {tgt}")
     else:
         notes.append(f"No TLS certificate provided. A self-signed certificate will be created at: {cert_target}")
         notes.append(f"The matching private key will be created at: {key_target}")
