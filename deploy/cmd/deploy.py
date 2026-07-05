@@ -60,8 +60,8 @@ def stage_nginx_tls_material(answers: DeployAnswers, paths: dict[str, Path]) -> 
     if not get_bool(answers, "enable_nginx"):
         return notes
 
-    cert_source = str(answers.pop("nginx_cert_source_path", "") or "").strip()
-    key_source = str(answers.pop("nginx_key_source_path", "") or "").strip()
+    cert_source = str(answers.get("nginx_cert_source_path", "") or "").strip()
+    key_source = str(answers.get("nginx_key_source_path", "") or "").strip()
     cert_target = paths.get("nginx_cert_path")
     key_target = paths.get("nginx_key_path")
     if cert_target is None or key_target is None:
