@@ -121,21 +121,20 @@ def apply_overrides(answers: dict[str, object], overrides: list[str]) -> dict[st
 
 
 def build_paths_from_answers(answers: dict[str, object], deploy_dir: Path) -> dict[str, Path]:
-    """Construct runtime paths dict from normalized answers."""
+    """Construct runtime paths dict from normalized answers.
+
+    Passes None for db_data_dir, redis_data_dir, plugins_dir, keys_dir,
+    and preload_*_dir — these match build_runtime_paths() internal
+    defaults.  etc_init_dir and tmp_dir are explicitly set to
+    data_root-relative paths (not the default output_dir/runtime/).
+    """
     _, paths = build_runtime_paths(
         output_dir=deploy_dir,
         data_root=Path(answers["data_root"]),
         enable_nginx=get_bool(answers, "enable_nginx"),
         enable_xrootd=get_bool(answers, "enable_xrootd"),
-        db_data_dir=Path(answers["data_root"]) / "db",
-        redis_data_dir=Path(answers["data_root"]) / "redis",
         etc_init_dir=Path(answers["data_root"]) / "etc-init",
         tmp_dir=Path(answers["data_root"]) / "tmp",
-        plugins_dir=deploy_dir / "plugins",
-        keys_dir=deploy_dir / "keys",
-        preload_server_dir=deploy_dir / "preload" / "server",
-        preload_cron_dir=deploy_dir / "preload" / "cron",
-        preload_rootbrowse_dir=deploy_dir / "preload" / "rootbrowse",
     )
     annotate_runtime_asset_paths(paths)
     return paths
