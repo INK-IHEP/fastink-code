@@ -778,7 +778,7 @@ def build_openclaw_arguments(
     image_template = get_config(
         "service",
         "openclaw_container_image",
-        fallback="/home/{group_dir}/{username}/container/openclaw_ihep_latest.sif",
+        fallback="/cvmfs/common.ihep.ac.cn/software/ink/soft/openclaw/openclaw_ihep_latest.sif",
     )
     openclaw_user_root = user_root_template.format(
         username=username,
