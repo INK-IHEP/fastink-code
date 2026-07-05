@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from cmd.common import DEPLOY_DIR
 from lib import cli_ui
 from lib.defaults import (
     default_answers,
@@ -32,9 +31,9 @@ from lib.types import get_bool
 # ---------------------------------------------------------------------------
 
 
-def ensure_default_extra_mounts_file() -> Path:
+def ensure_default_extra_mounts_file(deploy_dir: Path) -> Path:
     """Create extra-mounts.txt with the default mount if it doesn't exist."""
-    path = DEPLOY_DIR / "extra-mounts.txt"
+    path = deploy_dir / "extra-mounts.txt"
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_text("/home/:/home/\n", encoding="utf-8")
@@ -50,12 +49,12 @@ def default_htcondor_internal_domain(host_name: str, fallback: str) -> str:
     return suffix or fallback
 
 
-def finalize_mount_answers(answers: dict[str, object]) -> dict[str, object]:
+def finalize_mount_answers(answers: dict[str, object], deploy_dir: Path) -> dict[str, object]:
     """Ensure extra_mounts_file is set when xrootd or local htcondor is enabled."""
     if (
         get_bool(answers, "enable_xrootd") or get_bool(answers, "enable_local_htcondor")
     ) and not str(answers.get("extra_mounts_file") or "").strip():
-        answers["extra_mounts_file"] = str(ensure_default_extra_mounts_file().resolve())
+        answers["extra_mounts_file"] = str(ensure_default_extra_mounts_file(deploy_dir).resolve())
     return answers
 
 
@@ -76,7 +75,7 @@ def annotate_runtime_asset_paths(paths: dict[str, Path]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def load_answers_from_file(path: Path) -> dict[str, object]:
+def load_answers_from_file(path: Path, deploy_dir: Path) -> dict[str, object]:
     """Load and normalize answers from an arbitrary JSON file path."""
     if not path.exists():
         cli_ui.error(f"Answers file not found: {path}")
@@ -86,20 +85,20 @@ def load_answers_from_file(path: Path) -> dict[str, object]:
     except json.JSONDecodeError as exc:
         cli_ui.error(f"Failed to parse answers file {path}: {exc}")
         sys.exit(1)
-    finalize_mount_answers(answers)
+    finalize_mount_answers(answers, deploy_dir)
     profile = str(answers.get("profile", "quickstart"))
-    return normalize_answers(answers, profile=profile, deploy_dir=DEPLOY_DIR)
+    return normalize_answers(answers, profile=profile, deploy_dir=deploy_dir)
 
 
-def load_saved_answers() -> dict[str, object]:
+def load_saved_answers(deploy_dir: Path) -> dict[str, object]:
     """Load and normalize saved answers from .deploy/answers.json."""
-    return load_answers_from_file(DEPLOY_DIR / "answers.json")
+    return load_answers_from_file(deploy_dir / "answers.json", deploy_dir)
 
 
-def try_load_saved_answers() -> Optional[dict[str, object]]:
+def try_load_saved_answers(deploy_dir: Path) -> Optional[dict[str, object]]:
     """Load saved answers, returning None instead of exiting on error."""
     try:
-        return load_saved_answers()
+        return load_saved_answers(deploy_dir)
     except SystemExit:
         return None
 
@@ -121,10 +120,10 @@ def apply_overrides(answers: dict[str, object], overrides: list[str]) -> dict[st
 # ---------------------------------------------------------------------------
 
 
-def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
+def build_paths_from_answers(answers: dict[str, object], deploy_dir: Path) -> dict[str, Path]:
     """Construct runtime paths dict from normalized answers."""
     _, paths = build_runtime_paths(
-        output_dir=DEPLOY_DIR,
+        output_dir=deploy_dir,
         data_root=Path(answers["data_root"]),
         enable_nginx=get_bool(answers, "enable_nginx"),
         enable_xrootd=get_bool(answers, "enable_xrootd"),
@@ -132,11 +131,11 @@ def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
         redis_data_dir=Path(answers["data_root"]) / "redis",
         etc_init_dir=Path(answers["data_root"]) / "etc-init",
         tmp_dir=Path(answers["data_root"]) / "tmp",
-        plugins_dir=DEPLOY_DIR / "plugins",
-        keys_dir=DEPLOY_DIR / "keys",
-        preload_server_dir=DEPLOY_DIR / "preload" / "server",
-        preload_cron_dir=DEPLOY_DIR / "preload" / "cron",
-        preload_rootbrowse_dir=DEPLOY_DIR / "preload" / "rootbrowse",
+        plugins_dir=deploy_dir / "plugins",
+        keys_dir=deploy_dir / "keys",
+        preload_server_dir=deploy_dir / "preload" / "server",
+        preload_cron_dir=deploy_dir / "preload" / "cron",
+        preload_rootbrowse_dir=deploy_dir / "preload" / "rootbrowse",
     )
     annotate_runtime_asset_paths(paths)
     return paths
@@ -147,20 +146,20 @@ def build_paths_from_answers(answers: dict[str, object]) -> dict[str, Path]:
 # ---------------------------------------------------------------------------
 
 
-def print_preparation_notes() -> None:
+def print_preparation_notes(deploy_dir: Path) -> None:
     """Print a summary of items to prepare before the interactive questionnaire."""
-    extra_mounts_path = DEPLOY_DIR / "extra-mounts.txt"
+    extra_mounts_path = deploy_dir / "extra-mounts.txt"
     cli_ui.step("Preparation notes")
     cli_ui.info("Prepare these items before continuing if your deployment needs them:")
     cli_ui.info(f"Optional extra mount list file (one mount per line): {extra_mounts_path}")
     cli_ui.info("  Format: /host/path:/container/path or /host/path:/container/path:ro")
     cli_ui.info("  These mounts are applied to fastink-server, fastink-redis-cron, fastink-rootbrowse, fastink-xrootd, and fastink-htcondor when enabled.")
-    cli_ui.info(f"Optional plugin source or packages under: {DEPLOY_DIR / 'plugins'}")
-    cli_ui.info(f"Optional preload scripts under: {DEPLOY_DIR / 'preload'}")
+    cli_ui.info(f"Optional plugin source or packages under: {deploy_dir / 'plugins'}")
+    cli_ui.info(f"Optional preload scripts under: {deploy_dir / 'preload'}")
     cli_ui.info("Optional existing TLS certificate and private key if you do not want a self-signed certificate.")
     cli_ui.info("If Kerberos is enabled, prepare a host krb5.conf path to mount into containers.")
     cli_ui.info("If both Kerberos and xrootd are enabled, prepare the xrootd service keytab path and xrootd service principal.")
-    if (DEPLOY_DIR / "answers.json").exists():
+    if (deploy_dir / "answers.json").exists():
         cli_ui.info("During the interactive questionnaire, type 'r' to reuse the saved value from .deploy/answers.json.")
 
 
@@ -169,7 +168,7 @@ def print_preparation_notes() -> None:
 # ---------------------------------------------------------------------------
 
 
-def build_quickstart_answers(defaults: dict[str, object]) -> dict[str, object]:
+def build_quickstart_answers(defaults: dict[str, object], deploy_dir: Path) -> dict[str, object]:
     """Build a full answer dict for the quickstart profile (no interactive prompts)."""
     cli_ui.step("Quickstart profile")
     cli_ui.summary_table([
@@ -203,11 +202,11 @@ def build_quickstart_answers(defaults: dict[str, object]) -> dict[str, object]:
         "db_root_password": secrets.token_urlsafe(18),
         "db_password": secrets.token_urlsafe(18),
         "redis_password": secrets.token_urlsafe(18),
-        "extra_mounts_file": str(ensure_default_extra_mounts_file().resolve()),
+        "extra_mounts_file": str(ensure_default_extra_mounts_file(deploy_dir).resolve()),
         "nginx_cert_source_path": "",
         "nginx_key_source_path": "",
     })
-    return normalize_answers(skeleton, profile="quickstart", deploy_dir=DEPLOY_DIR)
+    return normalize_answers(skeleton, profile="quickstart", deploy_dir=deploy_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -215,9 +214,9 @@ def build_quickstart_answers(defaults: dict[str, object]) -> dict[str, object]:
 # ---------------------------------------------------------------------------
 
 
-def collect_answers_custom(previous_answers: Optional[dict[str, object]] = None) -> dict[str, object]:
+def collect_answers_custom(previous_answers: Optional[dict[str, object]], deploy_dir: Path) -> dict[str, object]:
     """Run the interactive questionnaire for the custom profile."""
-    defaults = default_answers("custom", DEPLOY_DIR)
+    defaults = default_answers("custom", deploy_dir)
 
     def r(key: str):
         """Reuse helper — return previous answer value if available."""
@@ -340,10 +339,10 @@ def collect_answers_custom(previous_answers: Optional[dict[str, object]] = None)
 
     nginx_cert_source_path = ""
     nginx_key_source_path = ""
-    extra_mounts_file_default = str((DEPLOY_DIR / "extra-mounts.txt").resolve())
+    extra_mounts_file_default = str((deploy_dir / "extra-mounts.txt").resolve())
     extra_mounts_file = ""
     if cli_ui.confirm_prompt("Use an extra mount list file", False, bool(r("extra_mounts_file")) if r("extra_mounts_file") else None):
-        ensure_default_extra_mounts_file()
+        ensure_default_extra_mounts_file(deploy_dir)
         extra_mounts_file = cli_ui.text_prompt("Extra mount list file path", extra_mounts_file_default, str(r("extra_mounts_file")) if r("extra_mounts_file") else None)
     if enable_nginx and cli_ui.confirm_prompt("Use an existing TLS certificate and key", False, bool(r("nginx_cert_source_path")) if r("nginx_cert_source_path") else None):
         nginx_cert_source_path = cli_ui.text_prompt("TLS certificate path", "", str(r("nginx_cert_source_path")) if r("nginx_cert_source_path") else None)
@@ -398,8 +397,8 @@ def collect_answers_custom(previous_answers: Optional[dict[str, object]] = None)
         "nginx_cert_source_path": nginx_cert_source_path,
         "nginx_key_source_path": nginx_key_source_path,
     })
-    finalize_mount_answers(skeleton)
-    return normalize_answers(skeleton, profile="custom", deploy_dir=DEPLOY_DIR)
+    finalize_mount_answers(skeleton, deploy_dir)
+    return normalize_answers(skeleton, profile="custom", deploy_dir=deploy_dir)
 
 
 # ---------------------------------------------------------------------------

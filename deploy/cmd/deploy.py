@@ -238,15 +238,15 @@ def main() -> None:
     # ---- Determine answers ----
     if args.answers_file:
         cli_ui.step("Load answers from file")
-        answers = load_answers_from_file(args.answers_file.resolve())
+        answers = load_answers_from_file(args.answers_file.resolve(), DEPLOY_DIR)
         answers = apply_overrides(answers, args.overrides)
     elif args.reuse:
         cli_ui.step("Reuse existing deployment")
-        answers = load_saved_answers()
+        answers = load_saved_answers(DEPLOY_DIR)
         answers = apply_overrides(answers, args.overrides)
     else:
-        print_preparation_notes()
-        previous_answers = try_load_saved_answers()
+        print_preparation_notes(DEPLOY_DIR)
+        previous_answers = try_load_saved_answers(DEPLOY_DIR)
 
         if DEPLOY_DIR.exists() and any(
             p for p in DEPLOY_DIR.iterdir() if p.name != ".deps"
@@ -269,7 +269,7 @@ def main() -> None:
 
         if profile == "quickstart":
             defaults = default_answers("quickstart", DEPLOY_DIR)
-            answers = build_quickstart_answers(defaults)
+            answers = build_quickstart_answers(defaults, DEPLOY_DIR)
             answers = apply_overrides(answers, args.overrides)
             if not args.yes:
                 confirmed = cli_ui.confirm_prompt("Proceed with this configuration", True)
@@ -277,11 +277,11 @@ def main() -> None:
                     cli_ui.warning("Aborted.")
                     sys.exit(0)
         else:
-            answers = collect_answers_custom(previous_answers=previous_answers)
+            answers = collect_answers_custom(previous_answers=previous_answers, deploy_dir=DEPLOY_DIR)
             answers = apply_overrides(answers, args.overrides)
 
     # ---- Render ----
-    paths = build_paths_from_answers(answers)
+    paths = build_paths_from_answers(answers, DEPLOY_DIR)
 
     nginx_notes = stage_nginx_tls_material(answers, paths)
     xrootd_notes = build_xrootd_notes(paths) if get_bool(answers, "enable_xrootd") else []
