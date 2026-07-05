@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import json
 import shutil
 import ssl
 import subprocess
@@ -13,7 +12,7 @@ from pathlib import Path
 from cmd.common import DEPLOY_DIR, DEPLOY_PATHS
 from lib import cli_ui
 from lib.defaults import build_health_url, default_answers, required_images
-from lib.deploy_io import deploy_file_mode, ensure_private_dir, write_file
+from lib.deploy_io import ensure_private_dir, write_bundle
 from lib.host_runtime import check_host_prerequisites
 from lib.render import render_bundle
 from lib.questionnaire import (
@@ -60,8 +59,8 @@ def stage_nginx_tls_material(answers: DeployAnswers, paths: dict[str, Path]) -> 
     if not get_bool(answers, "enable_nginx"):
         return notes
 
-    cert_source = str(answers.pop("nginx_cert_source_path", "") or "").strip()
-    key_source = str(answers.pop("nginx_key_source_path", "") or "").strip()
+    cert_source = str(answers.get("nginx_cert_source_path", "") or "").strip()
+    key_source = str(answers.get("nginx_key_source_path", "") or "").strip()
     cert_target = paths.get("nginx_cert_path")
     key_target = paths.get("nginx_key_path")
     if cert_target is None or key_target is None:
@@ -74,16 +73,20 @@ def stage_nginx_tls_material(answers: DeployAnswers, paths: dict[str, Path]) -> 
             raise RuntimeError("Both TLS certificate path and private key path must be provided")
         cert_source_path = Path(cert_source).expanduser().resolve()
         key_source_path = Path(key_source).expanduser().resolve()
-        if not cert_source_path.exists():
-            raise FileNotFoundError(f"TLS certificate not found: {cert_source_path}")
-        if not key_source_path.exists():
-            raise FileNotFoundError(f"TLS private key not found: {key_source_path}")
-        shutil.copy2(cert_source_path, cert_target)
-        shutil.copy2(key_source_path, key_target)
-        cert_target.chmod(0o644)
-        key_target.chmod(0o600)
-        notes.append(f"Using user-provided TLS certificate copied into: {cert_target}")
-        notes.append(f"Using user-provided TLS private key copied into: {key_target}")
+        for src, tgt, mode, label in [
+            (cert_source_path, cert_target, 0o644, "TLS certificate"),
+            (key_source_path, key_target, 0o600, "TLS private key"),
+        ]:
+            if src == tgt.resolve():
+                notes.append(f"{label} already staged at: {tgt}")
+            elif not src.exists() and tgt.exists() and tgt.stat().st_size > 0:
+                notes.append(f"{label} source unavailable, reusing previously staged: {tgt}")
+            elif not src.exists():
+                raise FileNotFoundError(f"{label} not found: {src}")
+            else:
+                shutil.copy2(src, tgt)
+                tgt.chmod(mode)
+                notes.append(f"Using user-provided {label.lower()} copied into: {tgt}")
     else:
         notes.append(f"No TLS certificate provided. A self-signed certificate will be created at: {cert_target}")
         notes.append(f"The matching private key will be created at: {key_target}")
@@ -238,15 +241,15 @@ def main() -> None:
     # ---- Determine answers ----
     if args.answers_file:
         cli_ui.step("Load answers from file")
-        answers = load_answers_from_file(args.answers_file.resolve())
+        answers = load_answers_from_file(args.answers_file.resolve(), DEPLOY_DIR)
         answers = apply_overrides(answers, args.overrides)
     elif args.reuse:
         cli_ui.step("Reuse existing deployment")
-        answers = load_saved_answers()
+        answers = load_saved_answers(DEPLOY_DIR)
         answers = apply_overrides(answers, args.overrides)
     else:
-        print_preparation_notes()
-        previous_answers = try_load_saved_answers()
+        print_preparation_notes(DEPLOY_DIR)
+        previous_answers = try_load_saved_answers(DEPLOY_DIR)
 
         if DEPLOY_DIR.exists() and any(
             p for p in DEPLOY_DIR.iterdir() if p.name != ".deps"
@@ -269,7 +272,7 @@ def main() -> None:
 
         if profile == "quickstart":
             defaults = default_answers("quickstart", DEPLOY_DIR)
-            answers = build_quickstart_answers(defaults)
+            answers = build_quickstart_answers(defaults, DEPLOY_DIR)
             answers = apply_overrides(answers, args.overrides)
             if not args.yes:
                 confirmed = cli_ui.confirm_prompt("Proceed with this configuration", True)
@@ -277,11 +280,11 @@ def main() -> None:
                     cli_ui.warning("Aborted.")
                     sys.exit(0)
         else:
-            answers = collect_answers_custom(previous_answers=previous_answers)
+            answers = collect_answers_custom(previous_answers=previous_answers, deploy_dir=DEPLOY_DIR)
             answers = apply_overrides(answers, args.overrides)
 
     # ---- Render ----
-    paths = build_paths_from_answers(answers)
+    paths = build_paths_from_answers(answers, DEPLOY_DIR)
 
     nginx_notes = stage_nginx_tls_material(answers, paths)
     xrootd_notes = build_xrootd_notes(paths) if get_bool(answers, "enable_xrootd") else []
@@ -295,17 +298,7 @@ def main() -> None:
         DEPLOY_DIR,
         initialize_host_assets=False,
     )
-    for relative_path, content in bundle.items():
-        write_file(
-            DEPLOY_DIR / relative_path,
-            content,
-            mode=deploy_file_mode(relative_path),
-        )
-    write_file(
-        DEPLOY_DIR / "answers.json",
-        json.dumps(answers, indent=2, default=str),
-        mode=deploy_file_mode("answers.json"),
-    )
+    write_bundle(DEPLOY_DIR, bundle, answers)
 
     if args.render_only:
         cli_ui.success(f"Render complete. Deployment files written to: {DEPLOY_DIR}")

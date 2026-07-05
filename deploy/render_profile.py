@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.defaults import normalize_answers, parse_override_value
-from lib.deploy_io import deploy_file_mode, ensure_private_dir, write_file
+from lib.deploy_io import ensure_private_dir, write_bundle
 from lib.paths import build_runtime_paths
 from lib.render import render_bundle
 
@@ -73,18 +73,7 @@ def main() -> None:
         config_overlay_paths=[path.resolve() for path in args.config_overlay],
         compose_overlay_paths=[path.resolve() for path in args.compose_overlay],
     )
-
-    for relative_path, content in bundle.items():
-        write_file(
-            output_dir / relative_path,
-            content,
-            mode=deploy_file_mode(relative_path),
-        )
-    write_file(
-        output_dir / "answers.json",
-        json.dumps(answers, indent=2, ensure_ascii=False, default=str),
-        mode=deploy_file_mode("answers.json"),
-    )
+    write_bundle(output_dir, bundle, answers)
 
 
 if __name__ == "__main__":
