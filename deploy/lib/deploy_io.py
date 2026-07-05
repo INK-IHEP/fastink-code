@@ -68,7 +68,7 @@ def resolve_deploy_paths() -> DeployPaths:
     return DeployPaths(deploy_root, repo_root, deploy_dir)
 
 
-def write_bundle(deploy_dir: Path, bundle: dict[str, str], answers: dict) -> None:
+def write_bundle(deploy_dir: Path, bundle: dict[str, str], answers: dict[str, object]) -> None:
     """Write rendered bundle files and answers.json to deploy_dir.
 
     Shared by cmd/deploy.py (interactive deploy) and render_profile.py
