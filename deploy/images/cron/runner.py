@@ -77,8 +77,8 @@ def merge_jobs(base: dict, overlay: dict) -> list[dict]:
 
 
 def resolve_script(script_name: str, base_dir: Path) -> Path | None:
-    # Reject absolute paths to prevent traversal outside allowed dirs
-    if Path(script_name).is_absolute():
+    # Reject absolute paths and path traversal
+    if Path(script_name).is_absolute() or ".." in Path(script_name).parts:
         return None
     for candidate in [
         base_dir / "overlay" / script_name,
@@ -169,6 +169,9 @@ async def _run_module_function(job: dict) -> None:
         func(*args)
 
 
+_active_procs: list[asyncio.subprocess.Process] = []
+
+
 async def _run_script(job: dict, base_dir: Path) -> None:
     script_path = resolve_script(job["script"], base_dir)
     if script_path is None:
@@ -178,11 +181,19 @@ async def _run_script(job: dict, base_dir: Path) -> None:
         sys.executable, str(script_path),
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        _log(f"[{job['name']}] failed with code={proc.returncode}")
-        if stderr:
-            _log(f"[{job['name']}] stderr: {stderr.decode()[:500]}")
+    _active_procs.append(proc)
+    try:
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            _log(f"[{job['name']}] failed with code={proc.returncode}")
+            if stderr:
+                _log(f"[{job['name']}] stderr: {stderr.decode()[:500]}")
+    except asyncio.CancelledError:
+        proc.kill()
+        await proc.wait()
+        raise
+    finally:
+        _active_procs.remove(proc) if proc in _active_procs else None
 
 
 async def run_job(job: dict, base_dir: Path) -> None:
@@ -224,6 +235,12 @@ async def run_job(job: dict, base_dir: Path) -> None:
 
 def cleanup(signum: int, frame: Any) -> None:
     _log("Stopping container, killing all jobs...")
+    for proc in _active_procs:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    _log("All jobs stopped.")
     sys.exit(0)
 
 
