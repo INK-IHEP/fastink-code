@@ -1,0 +1,58 @@
+# FastINK cron job configuration — base (open-source).
+#
+# Site overlays (cron.overlay.yml) can override intervals, add new jobs,
+# or add script-based jobs. Merge is by job name.
+#
+# Job fields:
+#   name:     unique identifier
+#   module:   Python module path (e.g. fastink.computing.crond.condor_cron)
+#   function: function name in module (async or sync)
+#   args:     optional positional arguments list
+#   script:   alternative to module+function — path to a .py file
+#   interval: seconds between runs
+#   mode:     "fixed" (run once per interval) or "delay" (run, then sleep interval)
+
+jobs:
+  - name: job_queue_renew
+    module: fastink.computing.crond.condor_cron
+    function: update_completed_jobs
+    interval: 600
+    mode: delay
+
+  - name: job_submit
+    module: fastink.computing.crond.condor_cron
+    function: submit_job_from_redis
+    interval: 5
+    mode: delay
+
+  - name: reset_job_time
+    module: fastink.computing.crond.condor_cron
+    function: resert_start_end_time
+    interval: 1800
+    mode: fixed
+
+  - name: refresh_redis_jobs
+    module: fastink.computing.crond.condor_cron
+    function: refresh_redis_job_status
+    interval: 5
+    mode: delay
+
+  - name: slurm_job_submit
+    module: fastink.computing.crond.slurm_cron
+    function: submit_slurm_jobs
+    interval: 5
+    mode: delay
+
+  - name: slurm_update_job_state
+    module: fastink.computing.crond.slurm_cron
+    function: slurm_update_job_state
+    args: ["slurm"]
+    interval: 5
+    mode: delay
+
+  - name: slurm_update_job_time
+    module: fastink.computing.crond.slurm_cron
+    function: slurm_update_job_time
+    args: ["slurm"]
+    interval: 300
+    mode: fixed
