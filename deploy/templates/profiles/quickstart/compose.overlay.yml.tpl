@@ -23,7 +23,7 @@ services:
       SOURCE_COMMIT_DATE: {{ source_commit_date }}
       SOURCE_COMMIT_TAG: {{ source_commit_tag }}
       FASTINK_CRON_BASE_DIR: /opt/fastink-cron
-      FASTINK_CRON_CONFIG: /opt/fastink-cron/cron.ini
+      FASTINK_CRON_CONFIG: /opt/fastink-cron/cron.yaml
       PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages | to_yaml }}
       PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs | to_yaml }}
       PRELOAD_SCRIPT_DIRS: {{ cron_preload_script_dirs | to_yaml }}
