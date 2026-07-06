@@ -59,7 +59,16 @@ def merge_jobs(base: dict, overlay: dict) -> list[dict]:
     for job in overlay.get("jobs", []):
         name = job["name"]
         if name in by_name:
-            by_name[name].update(job)
+            merged = dict(by_name[name])
+            merged.update(job)
+            # module/function and script are mutually exclusive
+            if "script" in job and "module" in merged:
+                merged.pop("module", None)
+                merged.pop("function", None)
+                merged.pop("args", None)
+            if "module" in job and "script" in merged:
+                merged.pop("script", None)
+            by_name[name] = merged
         else:
             by_name[name] = dict(job)
             order.append(name)
@@ -68,12 +77,15 @@ def merge_jobs(base: dict, overlay: dict) -> list[dict]:
 
 
 def resolve_script(script_name: str, base_dir: Path) -> Path | None:
+    # Reject absolute paths to prevent traversal outside allowed dirs
+    if Path(script_name).is_absolute():
+        return None
     for candidate in [
-        base_dir / "jobs" / script_name,
         base_dir / "overlay" / script_name,
+        base_dir / "jobs" / script_name,
         base_dir / script_name,
     ]:
-        if candidate.exists():
+        if candidate.is_file():
             return candidate
     return None
 
@@ -174,7 +186,7 @@ async def _run_script(job: dict, base_dir: Path) -> None:
 
 
 async def run_job(job: dict, base_dir: Path) -> None:
-    name = job["name"]
+    name = job.get("name", "unknown")
     interval = int(job.get("interval", 60))
     mode = job.get("mode", "fixed")
 
@@ -191,7 +203,10 @@ async def run_job(job: dict, base_dir: Path) -> None:
                 else:
                     await _run_module_function(job)
             elif "script" in job:
-                await _run_script(job, base_dir)
+                if mode == "fixed":
+                    await asyncio.wait_for(_run_script(job, base_dir), timeout=interval)
+                else:
+                    await _run_script(job, base_dir)
         except asyncio.TimeoutError:
             _log(f"[{name}] killed by timeout ({interval}s)")
         except Exception as exc:
