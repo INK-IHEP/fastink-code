@@ -41,7 +41,7 @@ def _log(msg: str) -> None:
 
 
 def load_config(path: Path) -> dict:
-    if not path or not path.exists():
+    if not path or not path.is_file():
         return {}
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return data or {}
