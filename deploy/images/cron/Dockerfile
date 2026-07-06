@@ -3,9 +3,9 @@ FROM ${BASE_IMAGE}
 
 WORKDIR /opt/fastink-cron
 
+COPY deploy/images/cron/runner.py /opt/fastink-cron/runner.py
+COPY deploy/images/cron/cron.yaml /opt/fastink-cron/cron.yaml
 COPY deploy/images/cron/entrypoint.sh /usr/local/bin/fastink-cron-entrypoint.sh
-COPY deploy/images/cron/cron.ini /opt/fastink-cron/cron.ini
-COPY deploy/images/cron/jobs /opt/fastink-cron/jobs
 
 RUN pip3.12 install --no-cache-dir \
     aiohttp \
@@ -18,7 +18,8 @@ RUN pip3.12 install --no-cache-dir \
 RUN chmod +x /usr/local/bin/fastink-cron-entrypoint.sh
 
 ENV FASTINK_CRON_BASE_DIR=/opt/fastink-cron
-ENV FASTINK_CRON_CONFIG=/opt/fastink-cron/cron.ini
+ENV FASTINK_CRON_CONFIG=/opt/fastink-cron/cron.yaml
+ENV FASTINK_CRON_CONFIG_OVERLAY=
 ENV FASTINK_CRON_LOG_DIR=/var/log/fastink-cron
 
 ENTRYPOINT ["/usr/local/bin/fastink-cron-entrypoint.sh"]
