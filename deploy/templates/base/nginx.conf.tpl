@@ -1,3 +1,5 @@
+include /etc/nginx/conf.d/ink-servers/*.conf;
+
 server {
     listen 443 ssl;
     server_name _;
@@ -6,11 +8,12 @@ server {
     ssl_certificate_key /etc/nginx/ssl/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    location / {
-        proxy_pass http://fastink-server:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https;
-    }
+    client_max_body_size 20000M;
+
+    include /etc/nginx/conf.d/ink-snippets/*.conf;
+
+    resolver {{ nginx_resolver }} valid=300s;
+
+    include /etc/nginx/conf.d/ink-locations/*.conf;
+    include /etc/nginx/conf.d/ink-locations-overlay/*.conf;
 }

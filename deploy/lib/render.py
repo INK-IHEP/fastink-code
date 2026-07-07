@@ -190,18 +190,21 @@ def _build_network_mapping(
     enable_nginx: bool,
 ) -> dict[str, str]:
     """Network-related template variables (nginx, ports, host)."""
-    nginx_conf_path = deploy_dir / "nginx" / "default.conf"
+    nginx_conf_dir = deploy_dir / "nginx"
     return {
         "enable_nginx": str(enable_nginx).lower(),
         "host_name": get_str(answers, "host_name"),
         "host_port": get_str(answers, "host_port"),
         "rootbrowse_port": get_str(answers, "rootbrowse_port"),
         "public_base_url": get_str(answers, "public_base_url"),
-        "nginx_conf_path": str(nginx_conf_path.resolve()),
+        "nginx_conf_path": str((nginx_conf_dir / "default.conf").resolve()),
+        "nginx_conf_dir": str(nginx_conf_dir.resolve()),
         "nginx_cert_host_path": str(Path(paths.get("nginx_cert_path", deploy_dir / "nginx" / "cert.pem")).resolve()),
         "nginx_key_host_path": str(Path(paths.get("nginx_key_path", deploy_dir / "nginx" / "key.pem")).resolve()),
         "nginx_cert_container_path": "/etc/nginx/ssl/cert.pem",
         "nginx_key_container_path": "/etc/nginx/ssl/key.pem",
+        "nginx_resolver": get_str(answers, "nginx_resolver", "127.0.0.1"),
+        "nginx_cors_origins": get_str(answers, "nginx_cors_origins", ""),
         "rootbrowse_container_port": "2000",
     }
 
@@ -599,8 +602,16 @@ def render_env(mapping: dict[str, str]) -> str:
     return render_template_text(TEMPLATE_ROOT / "base" / "env.tpl", mapping)
 
 
-def render_nginx_conf(mapping: dict[str, str]) -> str:
-    return render_template_text(TEMPLATE_ROOT / "base" / "nginx.conf.tpl", mapping)
+def render_nginx_conf(mapping: dict[str, str]) -> dict[str, str]:
+    """Render the nginx skeleton and all modular nginx files."""
+    bundle: dict[str, str] = {}
+
+    nginx_template_dir = TEMPLATE_ROOT / "base" / "nginx"
+    for f in sorted(nginx_template_dir.rglob("*.conf")):
+        rel = f.relative_to(nginx_template_dir)
+        bundle[f"nginx/{rel.as_posix()}"] = render_template_text(f, mapping)
+
+    return bundle
 
 
 def render_xrootd_conf(mapping: dict[str, str]) -> str:
@@ -666,7 +677,12 @@ def render_bundle(
         ),
     }
     if get_bool(answers, "enable_nginx"):
-        bundle["nginx/default.conf"] = render_nginx_conf(mapping)
+        bundle["nginx/default.conf"] = render_template_text(
+            TEMPLATE_ROOT / "base" / "nginx.conf.tpl", mapping
+        )
+        bundle.update(render_nginx_conf(mapping))
+        # Ensure overlay extension-point directory exists on host
+        bundle["nginx/locations-overlay/.gitkeep"] = ""
     if get_bool(answers, "enable_xrootd"):
         bundle["xrootd/xrootd-proxy.cfg"] = render_xrootd_conf(mapping)
         bundle["xrootd/vo-list.cfg"] = str(mapping.get("xrootd_vo_list_content", ""))
