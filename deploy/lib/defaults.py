@@ -85,6 +85,8 @@ COMMON_DEFAULTS = {
     "cron_preload_scripts": "",
     "rootbrowse_preload_script_dirs": "/opt/preload/rootbrowse",
     "rootbrowse_preload_scripts": "",
+    "nginx_resolver": "127.0.0.1",
+    "nginx_cors_origins": "",
 }
 
 PROFILE_DEFAULTS = {
