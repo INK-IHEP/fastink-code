@@ -1,0 +1,6 @@
+[epel]
+name=epel
+baseurl=http://202.122.33.67/yum/epel/9/Everything/$basearch
+enabled=1
+gpgcheck=0
+priority=40

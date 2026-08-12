@@ -1,0 +1,63 @@
+services:
+  fastink-redis-cron:
+    image: {{ cron_image }}
+    hostname: fastink-redis-cron
+    restart: unless-stopped
+    depends_on:
+      fastink-redis:
+        condition: service_started
+      fastink-server:
+        condition: service_healthy
+    environment:
+      TZ: {{ timezone | to_yaml }}
+      REDIS_HOST: fastink-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: {{ redis_password | to_yaml }}
+      MySQL_HOST: fastink-db
+      MySQL_PORT: 3306
+      MySQL_USER: {{ db_user | to_yaml }}
+      MySQL_PASSWORD: {{ db_password | to_yaml }}
+      MySQL_DATABASE: {{ db_name | to_yaml }}
+      INK_CONFIG_FILE: /ink/config.yml
+      SOURCE_COMMIT_SHA: {{ source_commit_sha }}
+      SOURCE_COMMIT_DATE: {{ source_commit_date }}
+      SOURCE_COMMIT_TAG: {{ source_commit_tag }}
+      FASTINK_CRON_BASE_DIR: /opt/fastink-cron
+      FASTINK_CRON_CONFIG: /opt/fastink-cron/cron.yaml
+      PLUGIN_PIP_PACKAGES: {{ plugin_pip_packages | to_yaml }}
+      PLUGIN_EDITABLE_DIRS: {{ plugin_editable_dirs | to_yaml }}
+      PRELOAD_SCRIPT_DIRS: {{ cron_preload_script_dirs | to_yaml }}
+      PRELOAD_SCRIPTS: {{ cron_preload_scripts | to_yaml }}
+    volumes:
+      - {{ config_path }}:/ink/config.yml:ro
+      - {{ etc_init_dir }}:/etc-init
+      - {{ plugins_dir }}:/plugins
+      - {{ server_ssh_dir_host_path }}:{{ server_ssh_dir_container_path }}:ro
+      - {{ preload_cron_dir }}:/opt/preload/cron:ro
+      - {{ cron_condor_conf_host_path }}:/etc/condor/config.d/ink.conf:ro
+
+  fastink-rootbrowse:
+    image: {{ rootbrowse_image }}
+    hostname: fastink-rootbrowse
+    restart: unless-stopped
+    depends_on:
+      fastink-server:
+        condition: service_healthy
+    environment:
+      ROOTBROWSE_PORT: {{ rootbrowse_container_port }}
+      AUTHORIZED_KEYS_SOURCE: {{ rootbrowse_authorized_keys_container_path }}
+      PRELOAD_SCRIPT_DIRS: {{ rootbrowse_preload_script_dirs | to_yaml }}
+      PRELOAD_SCRIPTS: {{ rootbrowse_preload_scripts | to_yaml }}
+    volumes:
+      - {{ etc_init_dir }}:/etc-init
+      - {{ rootbrowse_authorized_keys_host_path }}:{{ rootbrowse_authorized_keys_container_path }}:ro
+      - {{ preload_rootbrowse_dir }}:/opt/preload/rootbrowse:ro
+    ports:
+      - "{{ rootbrowse_port }}:{{ rootbrowse_container_port }}"
+    tmpfs:
+      - /dev/shm:rw,exec,nosuid,nodev,size=1g
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/container-healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      retries: 1
