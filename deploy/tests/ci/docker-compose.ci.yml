@@ -1,0 +1,64 @@
+# Throwaway stack for MR test runs. Open-source clean: public images only.
+#
+# Started by the `test` job in .gitlab-ci.yml on merge-request pipelines:
+#   docker compose -f deploy/tests/ci/docker-compose.ci.yml -p test-$CI_PIPELINE_ID \
+#     up --build --abort-on-container-exit --exit-code-from fastink-test
+# and torn down (with volumes) in the job's after_script via `down -v`.
+#
+# fastink-test builds the MR's own code into a throwaway image and runs
+# pytest inside it; --exit-code-from surfaces the pytest result as the
+# compose exit code. Kerberos-dependent and real-infrastructure tests
+# self-skip (see config.ci.yml), so only the portable layer must pass.
+
+services:
+  fastink-db:
+    image: mariadb:10.5
+    hostname: fastink-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpasswd
+      MYSQL_DATABASE: inkdb
+      MYSQL_USER: inkdbuser
+      MYSQL_PASSWORD: ink;good!
+      TZ: Asia/Shanghai
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -prootpasswd"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  fastink-redis:
+    image: redis:7-alpine
+    hostname: fastink-redis
+    command: ["redis-server", "--requirepass", "ink-redis-password"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ink-redis-password ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  fastink-test:
+    # Build the MR's code into a throwaway image and run the test suite in it.
+    build:
+      context: ../../../
+      dockerfile: deploy/images/server/Dockerfile
+    image: fastink-ci-test:${CI_PIPELINE_ID:-local}
+    hostname: fastink-test
+    depends_on:
+      fastink-db:
+        condition: service_healthy
+      fastink-redis:
+        condition: service_healthy
+    environment:
+      INK_CONFIG_FILE: /run/ci/config.yml
+      INK_PRODUCTION: "false"
+    # The server image only ships src/tests/tools/bin (no deploy/), so the CI
+    # config and the CI DB-init script are bind-mounted in rather than read
+    # from image paths.
+    volumes:
+      - ./config.ci.yml:/run/ci/config.yml:ro
+      - ./init_ci_db.py:/run/ci/init_ci_db.py:ro
+    # The server image's CMD starts uvicorn; override it to create the schema
+    # + minimal seed, then run pytest once and exit so compose can collect
+    # the exit code. Kerberos-dependent tests self-skip (no KDC in CI).
+    command: ["bash", "-lc", "cd /ink && python /run/ci/init_ci_db.py && python -m pytest tests/ -q"]
