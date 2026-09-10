@@ -1,0 +1,8 @@
+# IHEP-built Slurm packages; no upstream equivalent exists for EL9.
+# Do not switch to a public mirror — this is the authoritative source.
+[slurm]
+name=IHEP Slurm 25.11.6 EL9 x86_64
+baseurl=http://mirror.ihep.ac.cn/yum/slurm/9/25.11.6/x86_64/
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
