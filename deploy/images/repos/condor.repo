@@ -1,0 +1,7 @@
+[condor]
+name=HTCondor 24.0 LTS
+baseurl=https://research.cs.wisc.edu/htcondor/repo/24.0/el9/$basearch/release
+enabled=1
+gpgcheck=1
+gpgkey=https://research.cs.wisc.edu/htcondor/repo/keys/HTCondor-24.0-Key
+priority=20

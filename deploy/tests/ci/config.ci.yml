@@ -1,0 +1,64 @@
+# Minimal FastINK config for CI test runs.
+#
+# Open-source clean: no IHEP hosts, no internal services, no plugins.
+# Used by deploy/tests/ci/docker-compose.ci.yml. Points at the throwaway
+# MariaDB/Redis containers started alongside the test runner.
+#
+# auth.type=krb5 (the project's real type) but CI has no KDC, so Kerberos
+# probes fail and krb5- and real-infrastructure-dependent tests self-skip
+# via their TOKEN_AVAILABLE / AUTH_TYPE guards; only the portable test layer
+# (auth, database, path matching, site strategy, status page, etc.) runs.
+
+common:
+  krb5_enabled: false
+  security_access: false
+  ip_whitelist_access: false
+  log_level: info
+  log_path: /ink/ink.log
+
+database:
+  host: fastink-db
+  port: 3306
+  user: inkdbuser
+  password: ink;good!
+  dbname: inkdb
+
+redis:
+  host: fastink-redis
+  port: 6379
+  password: ink-redis-password
+
+auth:
+  # krb5 is the project's real auth type; in CI there is no KDC, so the
+  # Kerberos probes fail and krb5-dependent tests self-skip gracefully via
+  # their TOKEN_AVAILABLE / AUTH_TYPE guards.
+  type: krb5
+  # headers.auth_request reads issuer/client_id/client_secret for OIDC-style
+  # backends; the keys must exist even when unused here.
+  issuer: ""
+  client_id: null
+  client_secret: null
+
+# storage_init() runs at import time and requires a non-empty xrd_host and
+# max_file_size. The portable tests never open a real storage connection, so
+# these are inert placeholders that only satisfy the import-time read.
+storage:
+  xrd_host: root://localhost:1094
+  fs_backend: xrootd
+  max_file_size: 21737418240
+
+security:
+  ip_whitelist:
+    - 127.0.0.1
+  ip_controlled_routers: []
+  skip_routers:
+    - /api/v1/
+
+test:
+  # Standard project test username. The password is an inert placeholder: CI
+  # has no KDC, so it is never used to authenticate (krb5 tests self-skip).
+  # Never put a real credential here.
+  username: guochaoqi
+  password: ci-placeholder-not-a-real-password
+
+# No unified_plugins section: no plugins are loaded in CI.

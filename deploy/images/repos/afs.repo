@@ -1,0 +1,8 @@
+# IHEP-built OpenAFS packages; no upstream equivalent exists for EL9.
+# Do not switch to a public mirror — this is the authoritative source.
+[afs]
+name=afs
+baseurl=http://202.122.33.67/yum/afs/9.8/$basearch/
+enabled=1
+gpgcheck=0
+priority=20
